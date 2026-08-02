@@ -10,6 +10,7 @@ from ofx.runner.matrix_utils import (
     generate_matrix_combinations,
 )
 
+
 class TestMatrixCombinationBuilder:
     def test_empty_matrix(self):
         assert generate_matrix_combinations(None) == []
@@ -111,6 +112,7 @@ from ofx.runner.services.credential_store import (
     store_from_typed_outputs,
 )
 
+
 class TestShouldStoreCreds:
     def test_step_explicit_true(self):
         assert should_store_creds(True) is True
@@ -157,8 +159,8 @@ from ofx.runner.step_descriptors import (
     step_timeline_params,
     step_type_label,
 )
-from ofx.runner.step_output import save_output_file
 from ofx.runner.step_output import log_output, save_output_file
+
 
 class TestLogOutput:
     def test_empty_content_skipped(self):
@@ -277,7 +279,7 @@ class TestSaveOutputFile:
         assert ">> script (base64):" in content
 
 class TestStepDescriptors:
-    def test_public_descriptor_helpers_cover_non_command_cases(self):
+    def test_public_descriptor_helpers_cover_non_command_cases(self, tmp_path):
         task_step = SimpleNamespace(
             task="nmap",
             pipe=None,
@@ -295,6 +297,7 @@ class TestStepDescriptors:
             run=None,
         )
         command_step = SimpleNamespace(
+            name="command",
             run="echo hi",
             uses=None,
             script_file=None,
@@ -303,6 +306,7 @@ class TestStepDescriptors:
             pipe=None,
         )
         script_file_step = SimpleNamespace(
+            name="script-file",
             run=None,
             uses=None,
             script_file="worker.py",

@@ -1287,7 +1287,7 @@ wheels = [
 
 [[package]]
 name = "ofx"
-version = "0.1.0"
+version = "0.10.4"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },

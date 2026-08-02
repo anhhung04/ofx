@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import fnmatch
 import os
 import sys
@@ -8,53 +7,6 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import pytest
-
-
-# -- built-in async test runner (no pytest-asyncio dependency) -----------------
-_shared_loop: asyncio.AbstractEventLoop | None = None
-
-
-def pytest_sessionstart(session):
-    """Create one event loop for the entire test session."""
-    global _shared_loop
-    _shared_loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(_shared_loop)
-
-
-def pytest_sessionfinish(session, exitstatus):
-    """Clean up the shared event loop."""
-    global _shared_loop
-    if _shared_loop is None:
-        return
-    try:
-        tasks = asyncio.all_tasks(_shared_loop)
-        for task in tasks:
-            task.cancel()
-        _shared_loop.run_until_complete(
-            asyncio.gather(*tasks, return_exceptions=True)
-        )
-    except Exception:
-        pass
-    _shared_loop.close()
-    asyncio.set_event_loop(None)
-    _shared_loop = None
-
-
-def pytest_pyfunc_call(pyfuncitem):
-    """Run ``async def`` test functions through the shared event loop.
-
-    Only fixtures the test function *explicitly* requests are passed in;
-    autouse fixtures (``_mock_registry_backends``) are filtered out.
-    """
-    if not asyncio.iscoroutinefunction(pyfuncitem.obj):
-        return None
-
-    import inspect
-
-    sig = inspect.signature(pyfuncitem.obj)
-    kwargs = {k: v for k, v in pyfuncitem.funcargs.items() if k in sig.parameters}
-    _shared_loop.run_until_complete(pyfuncitem.obj(**kwargs))
-    return True
 
 
 def _is_free_threaded() -> bool:

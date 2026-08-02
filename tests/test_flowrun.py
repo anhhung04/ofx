@@ -6,9 +6,10 @@ from types import SimpleNamespace
 import pytest
 import yaml
 
-from ofx.runner import RunContext, RunnerStatus, WorkflowRunner
 from ofx.models.workflow import Workflow
+from ofx.runner import RunContext, RunnerStatus, WorkflowRunner
 from ofx.utils.workflow_utils import find_workflow
+
 
 def _workflow_from_yaml(yaml_str: str, workflow_path: Path) -> Workflow:
     workflow = Workflow.model_validate(yaml.safe_load(yaml_str))
@@ -416,8 +417,13 @@ class TestFlowRun:
 
         loop = _Loop()
         thread = object()
-        monkeypatch.setattr("threading.current_thread", lambda: thread)
-        monkeypatch.setattr("threading.main_thread", lambda: thread)
+        monkeypatch.setattr(
+            "ofx.runner.api.threading",
+            SimpleNamespace(
+                current_thread=lambda: thread,
+                main_thread=lambda: thread,
+            ),
+        )
         monkeypatch.setattr("ofx.runner.api.asyncio.get_running_loop", lambda: loop)
 
         async def _build_runner(*args, **kwargs):
@@ -472,8 +478,13 @@ class TestFlowRun:
             return (_Runner(), tmp_path)
 
         monkeypatch.setattr("ofx.runner.api._build_run_runner", _build_runner)
-        monkeypatch.setattr("threading.current_thread", lambda: object())
-        monkeypatch.setattr("threading.main_thread", lambda: object())
+        monkeypatch.setattr(
+            "ofx.runner.api.threading",
+            SimpleNamespace(
+                current_thread=lambda: object(),
+                main_thread=lambda: object(),
+            ),
+        )
         monkeypatch.setattr("ofx.runner.channels.close_channel_store", lambda: None)
         monkeypatch.setattr("ofx.runner.api.remove_empty_dirs", lambda path: cleanup_calls.append(path))
         monkeypatch.setattr("ofx.runner.api.TEMP_DIR", tmp_path / "missing-temp-dir")
@@ -520,8 +531,13 @@ class TestFlowRun:
 
         cleanup_calls: list[Path] = []
         loop_thread = object()
-        monkeypatch.setattr("threading.current_thread", lambda: loop_thread)
-        monkeypatch.setattr("threading.main_thread", lambda: loop_thread)
+        monkeypatch.setattr(
+            "ofx.runner.api.threading",
+            SimpleNamespace(
+                current_thread=lambda: loop_thread,
+                main_thread=lambda: loop_thread,
+            ),
+        )
         monkeypatch.setattr("ofx.runner.channels.close_channel_store", lambda: None)
         monkeypatch.setattr("ofx.runner.api.remove_empty_dirs", lambda path: cleanup_calls.append(path))
         monkeypatch.setattr("ofx.runner.api.TEMP_DIR", tmp_path / "missing-temp-dir")

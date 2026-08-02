@@ -84,6 +84,9 @@ class LifecycleManager:
         self._event_emitter = event_emitter or EventEmitter(runner)
         self._checkpoint_manager = CheckpointManager(runner)
 
+    def checkpoint_id(self) -> str:
+        return self._checkpoint_manager.checkpoint_id()
+
     async def execute(self) -> RunResult:
         self.mark_start()
         self._event_emitter.emit("runner_start")

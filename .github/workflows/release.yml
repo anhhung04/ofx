@@ -79,11 +79,13 @@ jobs:
             --output type=local,dest=dist \
             .
 
-      - name: Upload wheel
+      - name: Upload packages
         uses: actions/upload-artifact@v4
         with:
           name: python-wheel-${{ matrix.type }}-py${{ matrix.python }}-${{ matrix.platform == 'linux/arm64' && 'arm64' || matrix.platform == 'linux/amd64' && 'amd64' || 'pure' }}
-          path: dist/*.whl
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
 
   release:
     needs: [build-wheel]
@@ -102,7 +104,7 @@ jobs:
       - name: Prepare release files
         run: |
           mkdir -p release
-          find artifacts -type f -name "*.whl" \
+          find artifacts -type f \( -name "*.whl" -o -name "*.tar.gz" \) \
             -exec cp {} release/ \;
           ls -la release/
 

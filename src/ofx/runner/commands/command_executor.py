@@ -16,8 +16,8 @@ from typing import Any
 
 from ofx.models.command import Command
 from ofx.runner.commands.shell_functions import get_shell_functions
-from ofx.utils.file_cleanup import remove_file
 from ofx.settings import settings
+from ofx.utils.file_cleanup import remove_file
 
 logger = logging.getLogger("ofx")
 
@@ -140,14 +140,18 @@ def _kill_process_tree(proc: asyncio.subprocess.Process) -> None:
     _reap_process_group(pgid)
 
 def _process_group_id(proc: asyncio.subprocess.Process) -> int | None:
-    pid = proc.pid
-    if pid is None:
+    pid = getattr(proc, "pid", None)
+    if type(pid) is not int or pid <= 1:
         return None
 
     try:
-        return os.getpgid(pid)
+        pgid = os.getpgid(pid)
     except (OSError, ProcessLookupError):
         return None
+
+    # start_new_session=True makes the child its group leader. Never signal a
+    # shared group, especially the test runner or its parent agent.
+    return pgid if pgid == pid and pgid != os.getpgrp() else None
 
 class CommandExecutor:
     """Handles subprocess execution for CommandRunner."""
@@ -194,12 +198,11 @@ class CommandExecutor:
             raise RuntimeError(
                 f"Command timed out after {self._command.timeout_minutes} minutes"
             ) from te
+        except asyncio.CancelledError:
+            _kill_process_tree(proc)
+            await proc.wait()
+            raise
         finally:
-            pgid = _process_group_id(proc)
-            if pgid is not None:
-                with suppress(OSError, ProcessLookupError):
-                    os.killpg(pgid, signal.SIGTERM)
-
             transport = getattr(proc, "_transport", None)
             if transport is not None:
                 try:

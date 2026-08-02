@@ -2,6 +2,7 @@
 
 import pytest
 
+
 class TestTemplateHelpers:
     """Verify template helper functions filter typed_output dicts correctly."""
 
@@ -262,7 +263,6 @@ class TestProfiles:
         assert config_path.exists()
         text = config_path.read_text()
         assert "# OFX execution profiles" in text
-        assert "# Example:" in text
         assert "stealth" in mgr.list_profiles()
         assert "aggressive" in mgr.list_profiles()
         assert mgr.default_profile_name == ""

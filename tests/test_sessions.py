@@ -8,13 +8,13 @@ import os
 import shutil
 import tarfile
 import textwrap
-import yaml
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+import yaml
 
 import ofx.settings as _settings_mod
 from ofx.cloud.sessions.encryption import decrypt_results, derive_key, encrypt_results
@@ -22,6 +22,13 @@ from ofx.cloud.sessions.models import Session, SessionStatus, SessionTarget
 from ofx.cloud.sessions.script_builder import build_session_script
 from ofx.cloud.sessions.store import SessionStore
 from ofx.models.step import Step
+
+
+@pytest.fixture(autouse=True)
+def _restore_workflow_dirs():
+    original = list(_settings_mod.DEFAULT_WORKFLOWS_DIRS)
+    yield
+    _settings_mod.DEFAULT_WORKFLOWS_DIRS = original
 
 class TestSessionModel:
     def test_create_minimal(self):
@@ -462,15 +469,6 @@ class TestSessionManagerLocal:
 
     These tests use real subprocesses but no SSH/cloud — fully local.
     """
-
-    @pytest.fixture(autouse=True)
-    def _restore_workflow_dirs(self):
-        """Restore DEFAULT_WORKFLOWS_DIRS after each test to prevent pollution."""
-        import ofx.settings as settings_mod
-
-        original = list(settings_mod.DEFAULT_WORKFLOWS_DIRS)
-        yield
-        settings_mod.DEFAULT_WORKFLOWS_DIRS = original
 
     def _create_test_workflow(self, tmp_path: Path) -> Path:
         """Write a minimal workflow YAML that echoes output."""
@@ -1136,8 +1134,9 @@ class TestSessionInputInjection:
 
     def test_start_cloud_remote_submit_raises_on_input_upload_failure(self, tmp_path):
         """Cloud submit startup must fail fast on upload errors."""
-        from ofx.cloud.sessions import SessionManager
         from types import SimpleNamespace
+
+        from ofx.cloud.sessions import SessionManager
 
         store = SessionStore(base_dir=tmp_path / "sessions")
         mgr = SessionManager(store=store)
@@ -1362,8 +1361,9 @@ class TestSessionSubmitHelpers:
         assert "wf-name" in prepared.script_content
 
     def test_start_cloud_remote_submit_merges_uploaded_input_overrides_once(self, tmp_path):
-        from ofx.cloud.sessions import SessionManager
         from types import SimpleNamespace
+
+        from ofx.cloud.sessions import SessionManager
 
         store = SessionStore(base_dir=tmp_path / "sessions")
         mgr = SessionManager(store=store)
@@ -1445,8 +1445,9 @@ class TestSessionSubmitHelpers:
         assert result.remote_tmux_session == ""
 
     def test_start_cloud_remote_submit_tmux_launcher_quotes_remote_paths(self, tmp_path):
-        from ofx.cloud.sessions import SessionManager
         from types import SimpleNamespace
+
+        from ofx.cloud.sessions import SessionManager
 
         store = SessionStore(base_dir=tmp_path / "sessions")
         mgr = SessionManager(store=store)
@@ -1500,8 +1501,9 @@ class TestSessionSubmitHelpers:
         assert remote.run.mock_calls[5] == (("tmux list-panes -t ofx-ses-cloudtmux -F '#{pane_pid}' 2>/dev/null | head -n1",), {})
 
     def test_start_cloud_remote_submit_windows_uses_start_process_launcher(self, tmp_path):
-        from ofx.cloud.sessions import SessionManager
         from types import SimpleNamespace
+
+        from ofx.cloud.sessions import SessionManager
 
         store = SessionStore(base_dir=tmp_path / "sessions")
         mgr = SessionManager(store=store)

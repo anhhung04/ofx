@@ -1,6 +1,6 @@
 [project]
 name = "ofx"
-version = "0.1.0"
+version = "0.10.4"
 description = "Offensive Flow Executor — red team automation toolkit for composing complex attack chains with YAML workflows"
 readme = "README.md"
 license = { text = "MIT" }
@@ -151,6 +151,7 @@ ignore = [
 markers = [
     "asyncio: mark test as async (deselect with '-m \"not asyncio\"')",
 ]
+asyncio_mode = "auto"
 addopts = "-v"
 filterwarnings = [
   "ignore:This process .* is multi-threaded, use of fork\\(\\) may lead to deadlocks in the child\\.:DeprecationWarning",

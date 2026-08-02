@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import base64
 import asyncio
+import base64
 import os
 import signal
 import tempfile
@@ -23,6 +23,7 @@ from ofx.runner.commands.command_executor import (
     parse_outputs_file,
     prepare_outputs_file_env,
 )
+
 
 def _make_executor(
     cmd: str = "echo hello",
@@ -525,7 +526,7 @@ class TestCommandExecutionHelpers:
 
         monkeypatch.setattr(
             "ofx.runner.commands.command_executor.os.getpgid",
-            lambda pid: pid + 1,
+            lambda pid: pid,
         )
 
         def _killpg(pgid, sig):
@@ -543,7 +544,7 @@ class TestCommandExecutionHelpers:
 
         _kill_process_tree(proc)
 
-        assert signals == [(124, signal.SIGTERM)]
+        assert signals == [(123, signal.SIGTERM)]
 
     def test_process_group_id_returns_none_for_missing_or_unresolvable_process(self, monkeypatch):
         assert _process_group_id(SimpleNamespace(pid=None)) is None
@@ -555,34 +556,62 @@ class TestCommandExecutionHelpers:
 
         assert _process_group_id(SimpleNamespace(pid=123)) is None
 
+    @pytest.mark.parametrize("pid", [None, 0, 1, True, MagicMock()])
+    def test_process_group_id_rejects_unsafe_pid_values(self, pid, monkeypatch):
+        getpgid = MagicMock()
+        monkeypatch.setattr(
+            "ofx.runner.commands.command_executor.os.getpgid",
+            getpgid,
+        )
+
+        assert _process_group_id(SimpleNamespace(pid=pid)) is None
+        getpgid.assert_not_called()
+
+    def test_process_group_id_rejects_shared_or_unexpected_groups(self, monkeypatch):
+        monkeypatch.setattr("ofx.runner.commands.command_executor.os.getpgrp", lambda: 50)
+        monkeypatch.setattr(
+            "ofx.runner.commands.command_executor.os.getpgid", lambda _pid: 50
+        )
+        assert _process_group_id(SimpleNamespace(pid=50)) is None
+
+        monkeypatch.setattr(
+            "ofx.runner.commands.command_executor.os.getpgid", lambda _pid: 124
+        )
+        assert _process_group_id(SimpleNamespace(pid=123)) is None
+
     @pytest.mark.asyncio
-    async def test_await_with_timeout_signals_group_and_closes_transport(self, monkeypatch):
-        calls: list[tuple[str, object]] = []
+    async def test_await_with_timeout_closes_transport_after_success(self):
+        calls: list[str] = []
 
         class _Transport:
             def close(self):
-                calls.append(("close", None))
+                calls.append("close")
 
         proc = SimpleNamespace(pid=123, _transport=_Transport())
-
-        monkeypatch.setattr(
-            "ofx.runner.commands.command_executor.os.getpgid",
-            lambda pid: pid + 1,
-        )
-        monkeypatch.setattr(
-            "ofx.runner.commands.command_executor.os.killpg",
-            lambda pgid, sig: calls.append(("kill", (pgid, sig))),
-        )
-
         executor = _make_executor(timeout_minutes=1)
 
         result = await executor._await_with_timeout(proc, asyncio.sleep(0, result="ok"))
 
         assert result == "ok"
-        assert calls == [
-            ("kill", (124, signal.SIGTERM)),
-            ("close", None),
-        ]
+        assert calls == ["close"]
+
+    @pytest.mark.asyncio
+    async def test_await_with_timeout_kills_and_waits_on_cancellation(self):
+        executor = _make_executor(timeout_minutes=1)
+        proc = MagicMock()
+        proc.wait = AsyncMock()
+
+        with patch("ofx.runner.commands.command_executor._kill_process_tree") as mock_kill:
+            task = asyncio.create_task(
+                executor._await_with_timeout(proc, asyncio.Event().wait())
+            )
+            await asyncio.sleep(0)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+
+        mock_kill.assert_called_once_with(proc)
+        proc.wait.assert_awaited_once()
 
 class TestCaptureOutputsFile:
     """Output file parsing tests."""
@@ -724,9 +753,13 @@ class TestTimeout:
         proc = MagicMock()
         proc.wait = AsyncMock()
 
-        with patch("ofx.runner.commands.command_executor._kill_process_tree") as mock_kill:
+        with (
+            patch("ofx.runner.commands.command_executor._kill_process_tree") as mock_kill,
+            patch("ofx.runner.commands.command_executor.os.killpg") as mock_killpg,
+        ):
             with pytest.raises(RuntimeError, match="timed out"):
                 await executor._await_with_timeout(proc, asyncio.sleep(0.01))
 
         mock_kill.assert_called_once_with(proc)
+        mock_killpg.assert_not_called()
         proc.wait.assert_awaited_once()

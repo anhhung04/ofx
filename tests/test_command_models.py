@@ -37,7 +37,7 @@ class TestCommandModel:
         """Test Command __str__ command"""
         cmd = Command(cmd="echo hello")
         result = str(cmd)
-        assert "Command(cmd=" in result
+        assert "cmd='echo hello'" in result
         assert "echo" in result
 
     def test_command_model_dump(self):
@@ -99,7 +99,7 @@ class TestScriptModel:
     def test_script_str_short(self):
         """Test Script __str__ with short script"""
         script = Script(script="print('test')")
-        assert "Script(inline," in str(script)
+        assert "script=\"print('test')\"" in str(script)
 
     def test_script_model_dump(self):
         """Test Script model_dump"""
