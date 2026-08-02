@@ -147,13 +147,7 @@ name = 'ofx'
 
 # Platform tag
 python_tag = f'cp{sys.version_info.major}{sys.version_info.minor}'
-abi_tag = sysconfig.get_config_var('SOABI') or python_tag
-# Normalize abi tag
-abi_tag = abi_tag.replace('-', '_').replace('.', '_')
-if not abi_tag.startswith('cpython'):
-    abi_tag = python_tag
-else:
-    abi_tag = abi_tag.replace('cpython_', 'cp')
+abi_tag = python_tag
 platform_tag = sysconfig.get_platform().replace('-', '_').replace('.', '_')
 if platform_tag.startswith('linux_'):
     platform_tag = 'manylinux_2_17_' + platform_tag.removeprefix('linux_')

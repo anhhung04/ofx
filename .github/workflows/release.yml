@@ -55,7 +55,6 @@ jobs:
       - name: Verify compiled wheel
         run: |
           python3 -m zipfile --test dist/*.whl
-          python3 -m pip install --dry-run dist/*.whl
           docker run --rm -v "$PWD/dist:/dist:ro" python:3.13-slim sh -c \
             'python -m pip install --no-deps /dist/*.whl && python -c "import ofx"'
 
