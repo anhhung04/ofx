@@ -1,6 +1,6 @@
 [project]
 name = "ofx"
-version = "0.9.9"
+version = "0.10.0"
 description = "Offensive Flow Executor — red team automation toolkit for composing complex attack chains with YAML workflows"
 readme = "README.md"
 license = { text = "MIT" }
@@ -29,11 +29,6 @@ classifiers = [
     "Typing :: Typed",
 ]
 
-[project.urls]
-Homepage = "https://github.com/anhhung04/ofx"
-Documentation = "https://anhhung04.github.io/ofx-docs/"
-Repository = "https://github.com/anhhung04/ofx"
-Issues = "https://github.com/anhhung04/ofx/issues"
 dependencies = [
   "aiofiles>=23.2.1,<25",
   "cryptography>=46.0.7,<48",
@@ -51,6 +46,12 @@ dependencies = [
   "tabulate>=0.9.0,<1",
   "typer>=0.16.0,<1",
 ]
+
+[project.urls]
+Homepage = "https://github.com/anhhung04/ofx"
+Documentation = "https://anhhung04.github.io/ofx-docs/"
+Repository = "https://github.com/anhhung04/ofx"
+Issues = "https://github.com/anhhung04/ofx/issues"
 
 [project.optional-dependencies]
 test = [
