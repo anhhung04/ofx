@@ -2,7 +2,7 @@ name: Tests and Coverage
 
 on:
   push:
-    branches: [master, main, develop, 'feat/*']
+    branches: [master, main, develop, "feat/*"]
   pull_request:
     branches: [master, main, develop]
   workflow_call:
