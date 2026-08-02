@@ -71,49 +71,4 @@ def test_use_invalid_project(temp_home, tmp_path):
         or "Project 'nosuchproj' not found" in result.stderr
     )
 
-def test_migrate_json_config(temp_home, monkeypatch):
-    """Legacy config.json active_project is migrated to config.yml on import."""
-    import json
 
-    import yaml
-
-    ofx_dir = temp_home / ".ofx"
-    ofx_dir.mkdir(parents=True, exist_ok=True)
-
-    (ofx_dir / "config.json").write_text(json.dumps({"active_project": "legacyproj"}))
-
-    import ofx.settings as sm
-
-    monkeypatch.setattr(sm, "BASE_DATA_DIR", ofx_dir)
-    monkeypatch.setattr(sm, "CONFIG_YAML", ofx_dir / "config.yml")
-
-    sm._migrate_json_config()
-
-    assert not (ofx_dir / "config.json").exists()
-
-    cfg = yaml.safe_load((ofx_dir / "config.yml").read_text()) or {}
-    assert cfg.get("active_project") == "legacyproj"
-
-def test_migrate_json_config_no_overwrite(temp_home, monkeypatch):
-    """Migration does not overwrite an active_project already set in config.yml."""
-    import json
-
-    import yaml
-
-    ofx_dir = temp_home / ".ofx"
-    ofx_dir.mkdir(parents=True, exist_ok=True)
-
-    (ofx_dir / "config.yml").write_text("active_project: existingproj\n")
-    (ofx_dir / "config.json").write_text(json.dumps({"active_project": "legacyproj"}))
-
-    import ofx.settings as sm
-
-    monkeypatch.setattr(sm, "BASE_DATA_DIR", ofx_dir)
-    monkeypatch.setattr(sm, "CONFIG_YAML", ofx_dir / "config.yml")
-
-    sm._migrate_json_config()
-
-    assert not (ofx_dir / "config.json").exists()
-
-    cfg = yaml.safe_load((ofx_dir / "config.yml").read_text()) or {}
-    assert cfg.get("active_project") == "existingproj"

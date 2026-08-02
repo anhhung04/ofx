@@ -1287,7 +1287,7 @@ wheels = [
 
 [[package]]
 name = "ofx"
-version = "0.10.3"
+version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
@@ -1310,6 +1310,29 @@ dependencies = [
 [package.optional-dependencies]
 ai = [
     { name = "openai" },
+]
+all = [
+    { name = "aiomcache" },
+    { name = "boto3" },
+    { name = "cython" },
+    { name = "etcd3" },
+    { name = "faker" },
+    { name = "hypothesis" },
+    { name = "mkdocs" },
+    { name = "mkdocs-git-revision-date-localized-plugin" },
+    { name = "mkdocs-material" },
+    { name = "mkdocs-minify-plugin" },
+    { name = "openai" },
+    { name = "paramiko" },
+    { name = "pycryptodomex" },
+    { name = "pydo" },
+    { name = "pymdown-extensions" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "pywinrm" },
+    { name = "redis" },
+    { name = "setuptools" },
 ]
 aws = [
     { name = "boto3" },
@@ -1386,6 +1409,7 @@ requires-dist = [
     { name = "mkdocs-git-revision-date-localized-plugin", marker = "extra == 'docs'", specifier = ">=1.5.1" },
     { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.5.0" },
     { name = "mkdocs-minify-plugin", marker = "extra == 'docs'", specifier = ">=0.8.0" },
+    { name = "ofx", extras = ["test", "docs", "redis", "memcached", "etcd", "interactsh", "digitalocean", "aws", "cloud", "winrm", "ssh", "ai", "compile"], marker = "extra == 'all'" },
     { name = "openai", marker = "extra == 'ai'", specifier = ">=1.0.0" },
     { name = "paramiko", specifier = ">=4.0.0,<5" },
     { name = "paramiko", marker = "extra == 'ssh'", specifier = ">=4.0.0" },
@@ -1408,7 +1432,7 @@ requires-dist = [
     { name = "tabulate", specifier = ">=0.9.0,<1" },
     { name = "typer", specifier = ">=0.16.0,<1" },
 ]
-provides-extras = ["test", "docs", "redis", "memcached", "etcd", "interactsh", "digitalocean", "aws", "cloud", "winrm", "ssh", "ai", "compile"]
+provides-extras = ["test", "docs", "redis", "memcached", "etcd", "interactsh", "digitalocean", "aws", "cloud", "winrm", "ssh", "ai", "compile", "all"]
 
 [package.metadata.requires-dev]
 dev = [

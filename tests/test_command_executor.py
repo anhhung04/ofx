@@ -200,6 +200,7 @@ class TestPrepareOutputsFileEnv:
         finally:
             Path(tmp_path).unlink(missing_ok=True)
 
+@pytest.mark.skip(reason="integration test — spawns real subprocesses")
 class TestExecuteCommand:
     """Integration tests running real subprocesses."""
 

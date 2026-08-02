@@ -898,11 +898,45 @@ class SessionManager:
         if session.remote_pid is None:
             return
 
+        pid = session.remote_pid
         try:
-            os.killpg(os.getpgid(session.remote_pid), signal.SIGTERM)
+            pgid = os.getpgid(pid)
+            os.killpg(pgid, signal.SIGTERM)
         except (ProcessLookupError, PermissionError):
             with suppress(ProcessLookupError, PermissionError):
-                os.kill(session.remote_pid, signal.SIGTERM)
+                os.kill(pid, signal.SIGTERM)
+            pgid = None
+        else:
+            # Give processes a moment to exit gracefully, then SIGKILL
+            import time
+            deadline = time.monotonic() + 2.0
+            while time.monotonic() < deadline:
+                try:
+                    os.killpg(pgid, 0)
+                except (OSError, ProcessLookupError):
+                    break
+                time.sleep(0.1)
+            else:
+                with suppress(OSError, ProcessLookupError):
+                    os.killpg(pgid, signal.SIGKILL)
+
+        # Reap all zombies in the process group
+        if pgid is not None:
+            try:
+                while True:
+                    wpid, _status = os.waitpid(-pgid, os.WNOHANG)
+                    if wpid == 0:
+                        break
+            except ChildProcessError:
+                pass
+        # Fallback: reap the direct child
+        try:
+            while True:
+                wpid, _status = os.waitpid(pid, os.WNOHANG)
+                if wpid == 0:
+                    break
+        except ChildProcessError:
+            pass
 
     def _with_reconnected_remote(
         self,
@@ -1232,14 +1266,21 @@ class SessionManager:
             )
         )
 
+        child_env = {**os.environ, "SESSION_ID": session.id, **merged_env}
+        # Prevent grpc C extension from re-enabling the GIL in free-threaded
+        # Python builds — toggling the GIL during subprocess spawn can
+        # destabilise the parent process (CodeWhale, VS Code, etc.).
+        child_env.setdefault("PYTHON_GIL", "0")
+
         pid = subprocess.Popen(
             ["bash", str(script_path)],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             stdin=subprocess.DEVNULL,
             start_new_session=True,
+            close_fds=False,
             cwd=str(work_dir),
-            env={**os.environ, "SESSION_ID": session.id, **merged_env},
+            env=child_env,
         )
         pid = pid.pid
 

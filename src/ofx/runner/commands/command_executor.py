@@ -83,6 +83,22 @@ def prepare_outputs_file_env(
 
     return outputs_file
 
+def _reap_process_group(pgid: int) -> None:
+    """Reap all zombie processes in a process group to prevent orphans.
+
+    After killing a process group, child processes remain as zombies
+    until the parent calls ``waitpid()``.  This function reaps them
+    with ``WNOHANG`` so the call never blocks.
+    """
+    try:
+        while True:
+            wpid, _status = os.waitpid(-pgid, os.WNOHANG)
+            if wpid == 0:
+                break
+    except ChildProcessError:
+        pass
+
+
 def _kill_process_tree(proc: asyncio.subprocess.Process) -> None:
     """Send SIGTERM to the process group, then SIGKILL if still alive.
 
@@ -90,6 +106,9 @@ def _kill_process_tree(proc: asyncio.subprocess.Process) -> None:
     child becomes the session leader.  Sending a signal to the negative
     PID targets the entire process group so that grandchildren (e.g.
     nmap spawned by bash) are also cleaned up.
+
+    After every kill, zombie processes are reaped so the process table
+    stays clean and no orphans are left behind.
     """
     pgid = _process_group_id(proc)
     if pgid is None:
@@ -105,15 +124,20 @@ def _kill_process_tree(proc: asyncio.subprocess.Process) -> None:
         try:
             os.killpg(pgid, 0)
         except (OSError, ProcessLookupError):
+            _reap_process_group(pgid)
             return
         time.sleep(0.1)
+
     try:
         os.killpg(pgid, 0)
     except (OSError, ProcessLookupError):
+        _reap_process_group(pgid)
         return
 
     with suppress(OSError, ProcessLookupError):
         os.killpg(pgid, signal.SIGKILL)
+
+    _reap_process_group(pgid)
 
 def _process_group_id(proc: asyncio.subprocess.Process) -> int | None:
     pid = proc.pid

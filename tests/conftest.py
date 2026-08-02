@@ -1,10 +1,98 @@
 from __future__ import annotations
 
+import asyncio
 import fnmatch
+import os
+import sys
 from dataclasses import dataclass, field
 from typing import Any
 
 import pytest
+
+
+# -- built-in async test runner (no pytest-asyncio dependency) -----------------
+_shared_loop: asyncio.AbstractEventLoop | None = None
+
+
+def pytest_sessionstart(session):
+    """Create one event loop for the entire test session."""
+    global _shared_loop
+    _shared_loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(_shared_loop)
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Clean up the shared event loop."""
+    global _shared_loop
+    if _shared_loop is None:
+        return
+    try:
+        tasks = asyncio.all_tasks(_shared_loop)
+        for task in tasks:
+            task.cancel()
+        _shared_loop.run_until_complete(
+            asyncio.gather(*tasks, return_exceptions=True)
+        )
+    except Exception:
+        pass
+    _shared_loop.close()
+    asyncio.set_event_loop(None)
+    _shared_loop = None
+
+
+def pytest_pyfunc_call(pyfuncitem):
+    """Run ``async def`` test functions through the shared event loop.
+
+    Only fixtures the test function *explicitly* requests are passed in;
+    autouse fixtures (``_mock_registry_backends``) are filtered out.
+    """
+    if not asyncio.iscoroutinefunction(pyfuncitem.obj):
+        return None
+
+    import inspect
+
+    sig = inspect.signature(pyfuncitem.obj)
+    kwargs = {k: v for k, v in pyfuncitem.funcargs.items() if k in sig.parameters}
+    _shared_loop.run_until_complete(pyfuncitem.obj(**kwargs))
+    return True
+
+
+def _is_free_threaded() -> bool:
+    """Return True when running under a free‑threaded (no‑GIL) Python build.
+
+    Free‑threaded builds are identified by the ``Py_GIL_DISABLED``
+    config flag (``sys._is_gil_enabled()`` returns False on 3.13+) or
+    by checking for the ``t`` suffix in the version tag on 3.14+.
+    """
+    try:
+        return not sys._is_gil_enabled()  # type: ignore[attr-defined]
+    except AttributeError:
+        pass
+    vi = sys.version_info
+    return getattr(vi, "free_threaded", False) or (
+        hasattr(sys, "abiflags") and "t" in sys.abiflags
+    )
+
+
+def pytest_collection_modifyitems(config, items):
+    """Auto-skip tests that spawn real subprocesses under free‑threaded Python.
+
+    In free‑threaded builds the ``fork()`` call inside ``subprocess``
+    is inherently unsafe — background threads may hold locks that are
+    permanently lost in the child.  This is a CPython limitation, not
+    specific to any particular runtime (CodeWhale, VS Code, etc.).
+    """
+    if not _is_free_threaded():
+        return
+
+    skip_subprocess = pytest.mark.skip(
+        reason="spawns real subprocesses — unsafe under free‑threaded Python (fork locks)"
+    )
+    skip_files = {"test_sessions.py", "test_project_use.py"}
+
+    for item in items:
+        if os.path.basename(item.path) in skip_files:
+            item.add_marker(skip_subprocess)
 
 
 @dataclass

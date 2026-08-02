@@ -151,7 +151,6 @@ ignore = [
 markers = [
     "asyncio: mark test as async (deselect with '-m \"not asyncio\"')",
 ]
-asyncio_mode = "auto"
 addopts = "-v"
 filterwarnings = [
   "ignore:This process .* is multi-threaded, use of fork\\(\\) may lead to deadlocks in the child\\.:DeprecationWarning",
