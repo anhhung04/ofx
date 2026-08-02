@@ -52,6 +52,13 @@ jobs:
             --output type=local,dest=dist \
             .
 
+      - name: Verify compiled wheel
+        run: |
+          python3 -m zipfile --test dist/*.whl
+          python3 -m venv /tmp/ofx-wheel-test
+          /tmp/ofx-wheel-test/bin/pip install --no-deps dist/*.whl
+          /tmp/ofx-wheel-test/bin/python -c "import ofx"
+
       - uses: actions/upload-artifact@v4
         with:
           name: compiled-py3.13-amd64

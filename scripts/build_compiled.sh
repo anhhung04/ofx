@@ -164,7 +164,7 @@ print(f'  Wheel: {wheel_name}.whl')
 
 # Collect files
 records = []
-with zipfile.ZipFile(wheel_path, 'w', zipfile.ZIP_DEFLATED) as whl:
+with zipfile.ZipFile(wheel_path, 'w', zipfile.ZIP_STORED, allowZip64=True) as whl:
     # Package files from staging
     src_ofx = staging / 'src' / 'ofx'
     for fpath in sorted(src_ofx.rglob('*')):
