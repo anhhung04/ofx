@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -62,23 +64,34 @@ class WorkflowExecutor(Executor):
         runner._log_debug(
             f"Resolved workflow: {runner.model.model_dump(exclude={'jobs'})}"
         )
+
+        # Set up run directory — use project runs/ dir if active, otherwise temp
         output_path = runner.ctx.output_path
         if output_path:
             output_path.mkdir(parents=True, exist_ok=True)
 
-        # Use project run directory if active, otherwise temp dir
         try:
             from ofx.commands.project.project_manager import ProjectManager
             wf_name = runner.model.name or "workflow"
             project_run_dir = ProjectManager.get_run_dir(wf_name)
             if project_run_dir is not None:
                 runner._run_dir = project_run_dir
-                runner._log_info(f"Using project run dir: {project_run_dir}")
             else:
                 runner._run_dir = Path(tempfile.mkdtemp(prefix="ofx_run_"))
         except Exception:
             runner._run_dir = Path(tempfile.mkdtemp(prefix="ofx_run_"))
+
+        # Create organized subdirectories
+        runner._run_dir.mkdir(parents=True, exist_ok=True)
+        (runner._run_dir / "outputs").mkdir(parents=True, exist_ok=True)
+        (runner._run_dir / "logs").mkdir(parents=True, exist_ok=True)
+
+        # Set output_path to run dir only if not explicitly set by caller
+        if runner.ctx.output_path is None:
+            runner.ctx.output_path = runner._run_dir
+
         runner.update_env({"OFX_RUN_DIR": str(runner._run_dir)})
+        logger.debug("Run directory: %s", runner._run_dir)
         runner.update_vars(
             {"working_directory": runner.model.defaults.run.working_directory}
         )
@@ -209,18 +222,57 @@ class WorkflowExecutor(Executor):
                 await runner.reg_set(RunnerRegistryKeys.OUTPUTS, outputs)
         await self.store_summaries(runner)
         runner._log_debug(f"result: {await runner.get_result()}")
-        remove_tree(
-            getattr(runner, "_run_dir", None),
-            on_error=lambda message: logger.debug(message),
-            label="run dir",
-        )
+
+        # Write summary.json to run directory
+        await self._write_run_summary(runner)
+
+        # Only clean up temp directories, not project run directories
+        if not str(runner._run_dir).startswith(str(Path.home() / ".ofx" / "projects")):
+            remove_tree(
+                runner._run_dir,
+                on_error=lambda message: logger.debug(message),
+                label="run dir",
+            )
 
     async def on_failure(self, runner) -> None:
-        remove_tree(
-            getattr(runner, "_run_dir", None),
-            on_error=lambda message: logger.debug(message),
-            label="run dir",
-        )
+        # Write summary even on failure
+        await self._write_run_summary(runner)
+
+        if not str(runner._run_dir).startswith(str(Path.home() / ".ofx" / "projects")):
+            remove_tree(
+                runner._run_dir,
+                on_error=lambda message: logger.debug(message),
+                label="run dir",
+            )
+
+    async def _write_run_summary(self, runner) -> None:
+        """Write a summary.json to the run directory and expose run_dir."""
+        run_dir = getattr(runner, "_run_dir", None)
+        if run_dir is None or not run_dir.exists():
+            return
+        try:
+            result = await runner.get_result()
+            status = getattr(result, "status", None)
+            status_str = status.value if hasattr(status, "value") else str(status)
+            error = getattr(result, "error", None)
+            outputs = getattr(result, "outputs", {}) or {}
+            summary = {
+                "workflow": runner.model.name,
+                "status": status_str,
+                "error": error,
+                "outputs": outputs,
+                "run_dir": str(run_dir),
+            }
+            summary_path = run_dir / "summary.json"
+            summary_path.write_text(json.dumps(summary, indent=2, default=str))
+            runner._log_debug(f"Summary written to {summary_path}")
+
+            await runner.reg_set(
+                RunnerRegistryKeys.OUTPUTS,
+                {**outputs, "run_dir": str(run_dir)},
+            )
+        except Exception as e:
+            logger.debug("Failed to write run summary: %s", e)
 
     async def process_inputs(
         self,
