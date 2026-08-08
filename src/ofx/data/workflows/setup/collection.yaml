@@ -1,22 +1,19 @@
 name: setup
 version: 1.0.0
-description: >
-  Environment and infrastructure setup workflows — cloud VPS provisioning,
-  Docker security labs, proxy/VPN/tunnel configuration, Git pre-commit
-  secret scanning, C2 redirector deployment, exfiltration channel setup,
-  and penetration testing workstation bootstrapping.
+description: 'Environment and infrastructure setup workflows — cloud VPS provisioning,
+  Docker security labs, proxy/VPN/tunnel configuration, Git pre-commit secret scanning,
+  and security lab environments.
+
+  '
 author: OFX Community
 tags:
-  - setup
-  - infrastructure
-  - cloud
-  - environment
+- setup
+- infrastructure
+- cloud
+- environment
 dependencies: []
 workflows:
-  - cloud-setup.yml
-  - c2-redirector.yml
-  - docker-lab.yml
-  - exfil-channels.yml
-  - git-secrets-guard.yml
-  - pentest-env.yml
-  - proxy-config.yml
+- cloud-setup.yml
+- docker-lab.yml
+- git-secrets-guard.yml
+- proxy-config.yml

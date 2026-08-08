@@ -10,7 +10,7 @@ from typing import Any
 from ofx.runner.context import context_copy
 from ofx.runner.executors import Executor
 from ofx.runner.registry_keys import RunnerRegistryKeys
-from ofx.runner.task_profile_options import (
+from ofx.runner.profile_env import (
     build_profile_env_overrides,
     build_profile_var_overrides,
 )

@@ -16,7 +16,7 @@ class HydraTask(Task):
     cmd = "hydra"
     description = "Network login brute forcer"
     category = "brute/login"
-    install_cmd = "apt install -y hydra"
+    install_cmd = ""
     output_types = [UserAccount]
 
     opts = {

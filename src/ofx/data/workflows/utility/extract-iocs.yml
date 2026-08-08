@@ -1,0 +1,43 @@
+name: extract-iocs
+description: Extract IOCs from scan results — IPs, domains, URLs, hashes, and email
+  addresses.
+tags:
+- utility
+- ioc
+- extract
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: File or directory of scan results
+      alias: t
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+jobs:
+  extract:
+    name: Extract IOCs
+    steps:
+    - name: ips
+      run: "grep -oP \"\b(?:\\d{1,3}\\.){3}\\d{1,3}\b\" {{ inputs.target }} | sort\
+        \ -u > {{ env.OFX_RUN_DIR }}/ioc_ips.txt 2>&1 || true"
+      continue-on-error: true
+    - name: urls
+      run: "grep -oP \"https?://[^\\s<>]+\b\" {{ inputs.target }} | sort -u > {{ env.OFX_RUN_DIR\
+        \ }}/ioc_urls.txt 2>&1 || true"
+      continue-on-error: true
+    - name: domains
+      run: "grep -oP \"\b[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+\\\
+        .?\b\" {{ inputs.target }} | sort -u > {{ env.OFX_RUN_DIR }}/ioc_domains.txt\
+        \ 2>&1 || true"
+      continue-on-error: true
+    - name: emails
+      run: "grep -oP \"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\b\" {{ inputs.target\
+        \ }} | sort -u > {{ env.OFX_RUN_DIR }}/ioc_emails.txt 2>&1 || true"
+      continue-on-error: true
+    - name: hashes
+      run: "grep -oP \"\b[a-fA-F0-9]{32,64}\b\" {{ inputs.target }} | sort -u > {{\
+        \ env.OFX_RUN_DIR }}/ioc_hashes.txt 2>&1 || true"
+      continue-on-error: true

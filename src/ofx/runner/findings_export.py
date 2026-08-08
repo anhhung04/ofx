@@ -34,7 +34,34 @@ from ofx.runner.registry_keys import RunnerRegistryKeys
 from ofx.runner.runner_refs import runner_leaf_descendants
 from ofx.runner.target_paths import sanitize_target_slug
 from ofx.settings import settings
-from ofx.tasks.output_types import OUTPUT_TYPE_DIR_MAP, OUTPUT_TYPE_FILE_MAP
+
+_OUTPUT_TYPE_DIR_MAP: dict[str, str] = {
+    "ip": "hosts",
+    "port": "hosts",
+    "subdomain": "subdomains",
+    "url": "web",
+    "vulnerability": "vulns",
+    "tag": "web",
+    "record": "subdomains",
+    "domain": "osint",
+    "certificate": "certs",
+    "exploit": "vulns",
+    "user_account": "evidence/creds",
+}
+
+_OUTPUT_TYPE_FILE_MAP: dict[str, str] = {
+    "ip": "ips.txt",
+    "port": "ports.txt",
+    "subdomain": "subdomains.txt",
+    "url": "urls.txt",
+    "vulnerability": "vulnerabilities.jsonl",
+    "tag": "tags.txt",
+    "record": "dns-records.txt",
+    "domain": "domains.txt",
+    "certificate": "certificates.jsonl",
+    "exploit": "exploits.jsonl",
+    "user_account": "accounts.jsonl",
+}
 
 if TYPE_CHECKING:
     from ofx.runner.runner import Runner
@@ -96,8 +123,8 @@ def export_typed_outputs(
 
     summaries: list[str] = []
     for (type_name, target_slug), items in sorted(items_by_export_path.items()):
-        subdir = OUTPUT_TYPE_DIR_MAP.get(type_name, "scans")
-        filename = OUTPUT_TYPE_FILE_MAP.get(type_name, f"{type_name}.txt")
+        subdir = _OUTPUT_TYPE_DIR_MAP.get(type_name, "scans")
+        filename = _OUTPUT_TYPE_FILE_MAP.get(type_name, f"{type_name}.txt")
         if prefix:
             filename_path = Path(filename)
             filename = f"{prefix}-{filename_path.stem}{filename_path.suffix}"

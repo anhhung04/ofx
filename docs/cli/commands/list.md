@@ -68,4 +68,4 @@ ofx flow list --builtin --tag recon --tags
 - [Info Command](info.md)
 - [Run Command](run.md)
 - [Collection Command](collection.md)
-- [Built-in Workflows Guide](../../guide/builtin-workflows.md)
+- [Built-in Workflows Guide](../../guide/builtin-workflows/recon.md)

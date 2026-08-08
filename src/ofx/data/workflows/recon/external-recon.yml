@@ -1,0 +1,66 @@
+name: external-recon
+description: External reconnaissance — passive subdomain enumeration, ASN/IP range
+  discovery, and OSINT gathering on a target domain.
+tags:
+- recon
+- osint
+- subdomain
+- asn
+- passive
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target domain (e.g. example.com)
+      alias: t
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+    log_output:
+      type: string
+      default: 'true'
+      description: Enable output logging
+jobs:
+  subdomain-enum:
+    name: Subdomain Enumeration
+    outputs:
+      subdomains: '{{ steps.amass.outputs.stdout }}'
+      subfinder_out: '{{ steps.subfinder.outputs.stdout }}'
+    steps:
+    - name: amass
+      run: amass enum -passive -d {{ inputs.target }} -o {{ env.OFX_RUN_DIR }}/subdomains_amass.txt
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+    - name: subfinder
+      run: subfinder -d {{ inputs.target }} -o {{ env.OFX_RUN_DIR }}/subdomains_subfinder.txt
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+    - name: merge-subs
+      script: "import os\n\nfiles = [\n    os.path.join(os.environ[\"OFX_RUN_DIR\"\
+        ], \"subdomains_amass.txt\"),\n    os.path.join(os.environ[\"OFX_RUN_DIR\"\
+        ], \"subdomains_subfinder.txt\"),\n]\nseen = set()\nall_subs = []\nfor f in\
+        \ files:\n    try:\n        with open(f) as fh:\n            for line in fh:\n\
+        \                line = line.strip()\n                if line and line not\
+        \ in seen:\n                    seen.add(line)\n                    all_subs.append(line)\n\
+        \    except FileNotFoundError:\n        pass\n\nout = os.path.join(os.environ[\"\
+        OFX_RUN_DIR\"], \"all_subdomains.txt\")\nwith open(out, \"w\") as fh:\n  \
+        \  fh.write(\"\\n\".join(sorted(all_subs)))\nprint(f\"Found {len(all_subs)}\
+        \ unique subdomains\")\nadd_outputs(subdomain_count=len(all_subs), subdomain_file=out)"
+  asn-discovery:
+    name: ASN & IP Range Discovery
+    needs:
+    - subdomain-enum
+    outputs:
+      cidr_file: '{{ steps.mapcidr.outputs.stdout }}'
+    steps:
+    - name: asnmap
+      run: asnmap -d {{ inputs.target }} -silent
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+    - name: mapcidr
+      run: cat {{ env.OFX_RUN_DIR }}/all_subdomains.txt | mapcidr -silent -o {{ env.OFX_RUN_DIR
+        }}/cidr_ranges.txt
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'

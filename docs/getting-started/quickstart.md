@@ -110,7 +110,7 @@ ofx flow run recon.yml --output ./runs/recon  # Custom output directory
 
 ## What to read next
 
-- [Tasks](../guide/tasks.md) — Pre-built security tool wrappers
+- [Tasks](../guide/builtin-workflows/recon.md) — Pre-built security tool wrappers
 - [Workflows](../guide/workflows.md) — Workflow structure and features
 - [Jobs & Steps](../guide/jobs-steps.md) — Step types and configuration
 - [Templates](../guide/templates.md) — Jinja2 helpers and functions

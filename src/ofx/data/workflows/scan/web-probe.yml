@@ -1,0 +1,52 @@
+name: web-probe
+description: Web probing — probe discovered hosts for HTTP/HTTPS services, detect
+  technologies, and capture screenshots.
+tags:
+- scan
+- web
+- http
+- probe
+- fingerprint
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target file of hosts/subdomains
+      alias: t
+    ports:
+      type: string
+      default: 80,443,8080,8443,3000,5000,8000,8888,9090
+      description: Ports to probe
+    threads:
+      type: number
+      default: 50
+      description: Concurrent threads
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+jobs:
+  http-probe:
+    name: HTTP Probing
+    steps:
+    - name: httpx-probe
+      run: httpx -l {{ inputs.target }} -ports {{ inputs.ports }} -tech-detect -status-code
+        -title -web-server -content-type -silent -threads {{ inputs.threads }} -o
+        {{ env.OFX_RUN_DIR }}/httpx_results.txt
+      log-command: '{{ inputs.log_command }}'
+    - name: whatweb
+      run: whatweb -i {{ inputs.target }} --log-json={{ env.OFX_RUN_DIR }}/whatweb_results.json
+        --color=never -q 2>&1
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+  screenshots:
+    name: Screenshot Capture
+    needs:
+    - http-probe
+    steps:
+    - name: gowitness
+      run: gowitness file -f {{ env.OFX_RUN_DIR }}/httpx_results.txt --destination
+        {{ env.OFX_RUN_DIR }}/screenshots/ --no-http 2>&1
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'

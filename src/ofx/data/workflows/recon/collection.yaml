@@ -1,25 +1,17 @@
 name: recon
 version: 1.0.0
-description: >
-  Modular reconnaissance workflows for security assessments.
-  Comprehensive data gathering, enumeration, and analysis workflows
-  designed for offensive security engagements.
+description: Reconnaissance workflows — passive and active information gathering,
+  OSINT, subdomain enumeration, DNS analysis, and cloud asset discovery.
 author: OFX Community
 tags:
-  - reconnaissance
-  - enumeration
-  - security
-  - offensive
+- recon
+- osint
+- dns
+- subdomain
+- cloud
 dependencies: []
 workflows:
-  - subdomain-enum.yml
-  - dns-resolve.yml
-  - http-probe.yml
-  - port-scan.yml
-  - service-enum.yml
-  - content-discovery.yml
-  - vuln-scan.yml
-  - osint-gather.yml
-  - js-analysis.yml
-  - data-aggregate.yml
-  - full-recon-modular.yml
+- cloud-enum.yml
+- dns-enum.yml
+- external-recon.yml
+- osint-gather.yml

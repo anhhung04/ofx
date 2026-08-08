@@ -1,0 +1,33 @@
+name: export-results
+description: Export scan findings to JSON, CSV, or Markdown reports for documentation.
+tags:
+- utility
+- export
+- report
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Directory containing scan output files
+      alias: t
+    format:
+      type: string
+      default: markdown
+      description: 'Export format: markdown, json, csv'
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+jobs:
+  export:
+    name: Export Results
+    steps:
+    - name: generate-report
+      run: 'echo "# Scan Results Report" > {{ env.OFX_RUN_DIR }}/report.md && echo
+        "" >> {{ env.OFX_RUN_DIR }}/report.md && echo "Target: {{ inputs.target }}"
+        >> {{ env.OFX_RUN_DIR }}/report.md && echo "Date: 2026-08-08" >> {{ env.OFX_RUN_DIR
+        }}/report.md && echo "" >> {{ env.OFX_RUN_DIR }}/report.md && echo "## Files"
+        >> {{ env.OFX_RUN_DIR }}/report.md && find {{ inputs.target }} -type f | while
+        read f; do echo "-  ( bytes)" >> {{ env.OFX_RUN_DIR }}/report.md; done &&
+        echo "Report generated"'

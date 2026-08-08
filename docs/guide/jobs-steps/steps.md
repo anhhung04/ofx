@@ -59,7 +59,7 @@ If the expression resolves to an invalid value, a default of 60 minutes is used 
 - Use `script:` to run inline Python code
 - Use `script_file:` to execute an existing Python file (resolved relative to the workflow directory)
 - Use `uses:` to call a reusable workflow
-- Use `task:` to run a pre-built security tool wrapper (see [Tasks](../tasks.md))
+- Use `task:` to run a pre-built security tool wrapper (see )
 - Use `pipe:` to declaratively transform data between steps (see [Pipe Steps](#pipe-steps) below)
 - Use `if:` for conditional logic
 
@@ -185,7 +185,7 @@ Task outputs include raw `stdout` and structured `typed_outputs` (Port, Url, Vul
       echo "Vulns: {{ vulns(steps['vuln-scan'].outputs.typed_outputs) | length }}"
 ```
 
-For the full list of available tasks and options, see the [Tasks guide](../tasks.md).
+For the full list of available tasks and options, see the .
 
 ---
 

@@ -3,7 +3,7 @@
 The `ofx.api.ad` module generates command strings for Active Directory enumeration, Kerberos attacks, and lateral movement via credential abuse.
 
 !!! warning
-    All functions return **command strings** — they do not execute anything. Pass the returned strings to a [post runner](post-exploitation/post.md) or run them locally with `subprocess`.
+    All functions return **command strings** — they do not execute anything. Pass the returned strings to a [post runner](#) or run them locally with `subprocess`.
 
 ---
 
@@ -140,4 +140,4 @@ jobs:
 
 - [Recon API](recon.md) — Port scanning and OSINT
 - [Privesc API](privesc.md) — Privilege escalation
-- [Post Runners](post-exploitation/post.md) — Remote execution
+- [Post Runners](#) — Remote execution

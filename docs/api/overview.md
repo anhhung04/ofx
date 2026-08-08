@@ -22,9 +22,9 @@ from ofx.api.file import read_file, write_file
 
 ## Start with these pages
 
-- [Reconnaissance](reconnaissance.md)
-- [Exploitation](exploitation.md)
-- [Post-Exploitation](post-exploitation.md)
+- [Reconnaissance](#)
+- [Exploitation](#)
+- [Post-Exploitation](post-#)
 - [Evasion](evasion.md)
 - [OPSEC](opsec.md)
 - [Privesc](privesc.md)

@@ -30,7 +30,7 @@ from ofx.cloud.runtime import remote_join
 from ofx.cloud.sessions.script_builder import build_session_script
 from ofx.cloud.sessions.store import SessionStore
 from ofx.cloud.temp_upload import upload_temp_content
-from ofx.runner.task_profile_options import build_profile_env_overrides
+from ofx.runner.profile_env import build_profile_env_overrides
 from ofx.utils.file_cleanup import remove_files, remove_tree
 
 logger = logging.getLogger("ofx")

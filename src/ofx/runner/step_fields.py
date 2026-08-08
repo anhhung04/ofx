@@ -19,7 +19,6 @@ RUN_TYPE_TEMPLATE_FIELDS: dict[RunType, list[str]] = {
     RunType.SCRIPT: ["script"],
     RunType.COMMAND: ["run"],
     RunType.SCRIPT_FILE: ["script_file"],
-    RunType.TASK: ["task", "run_with"],
     RunType.PIPE: [],
 }
 

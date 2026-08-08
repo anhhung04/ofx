@@ -118,7 +118,6 @@ class TestFlowInfo:
         from ofx.runner.step_descriptors import step_type_label
         from ofx.models.step import Step
 
-        assert "task: nmap" in step_type_label(Step(task="nmap", name="s"))
         assert "run:" in step_type_label(Step(run="echo hi", name="s"))
         assert "script" == step_type_label(Step(script="print(1)", name="s"))
         assert "uses:" in step_type_label(Step(uses="./other.yml", name="s"))

@@ -10,7 +10,6 @@ from ofx.commands.flow.checkpoint import app as checkpoint_app
 from ofx.commands.flow.collection import app as collection_app
 from ofx.commands.flow.profile_commands import app as profile_cmd_app
 from ofx.commands.flow.schema import app as dump_app
-from ofx.commands.flow.task_commands import app as task_cmd_app
 from ofx.commands.project.project_manager import ProjectManager
 
 logger = logging.getLogger("ofx")
@@ -29,9 +28,6 @@ app.add_typer(dump_app, name="dump", help="Dumping workflow/job/step model schem
 app.add_typer(collection_app, name="collection", help="Manage workflow collections")
 app.add_typer(
     checkpoint_app, name="checkpoint", help="Manage durable execution checkpoints"
-)
-app.add_typer(
-    task_cmd_app, name="tasks", help="List and inspect registered task wrappers"
 )
 app.add_typer(
     profile_cmd_app,

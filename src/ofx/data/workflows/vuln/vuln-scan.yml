@@ -1,0 +1,54 @@
+name: vuln-scan
+description: Vulnerability scanning — run Nuclei templates against targets to detect
+  CVEs, misconfigurations, and exposures.
+tags:
+- vuln
+- scan
+- nuclei
+- cve
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target URL, IP, or host file
+      alias: t
+    severity:
+      type: string
+      default: critical,high,medium
+      description: Minimum severity filter
+    tags:
+      type: string
+      default: ''
+      description: Nuclei template tags (e.g. cve,oast,misconfig)
+    rate_limit:
+      type: number
+      default: 150
+      description: Max requests per second
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+jobs:
+  nuclei-scan:
+    name: Nuclei Vulnerability Scan
+    steps:
+    - name: nuclei
+      run: nuclei -l {{ inputs.target }} -severity {{ inputs.severity }}{% if inputs.tags
+        %} -tags {{ inputs.tags }}{% endif %} -rate-limit {{ inputs.rate_limit }}
+        -silent -jsonl -o {{ env.OFX_RUN_DIR }}/nuclei_results.jsonl -stats -stats-interval
+        30 2>&1
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+      timeout: 120
+    - name: summarize
+      script: "import os, json\n\nf = os.path.join(os.environ[\"OFX_RUN_DIR\"], \"\
+        nuclei_results.jsonl\")\nseverity_count = {\"critical\": 0, \"high\": 0, \"\
+        medium\": 0, \"low\": 0, \"info\": 0}\ntry:\n    with open(f) as fh:\n   \
+        \     for line in fh:\n            try:\n                item = json.loads(line)\n\
+        \                sev = item.get(\"info\", {}).get(\"severity\", \"info\").lower()\n\
+        \                severity_count[sev] = severity_count.get(sev, 0) + 1\n  \
+        \          except:\n                pass\n    total = sum(severity_count.values())\n\
+        \    print(f\"Total findings: {total}\")\n    for k, v in severity_count.items():\n\
+        \        if v:\n            print(f\"  {k}: {v}\")\nexcept FileNotFoundError:\n\
+        \    print(\"No nuclei results found\")"

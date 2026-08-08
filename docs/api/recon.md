@@ -3,7 +3,7 @@
 The `ofx.api.recon` module provides active and passive reconnaissance helpers: async TCP port scanning, OSINT data gathering, and web fingerprinting.
 
 !!! note
-    For internet-wide asset discovery using search engines (Shodan, FOFA, ZoomEye), see the [Reconnaissance APIs](reconnaissance.md) section.
+    For internet-wide asset discovery using search engines (Shodan, FOFA, ZoomEye), see the [Reconnaissance APIs](#) section.
 
 ---
 
@@ -129,5 +129,5 @@ jobs:
 
 ## See Also
 
-- [Reconnaissance APIs](reconnaissance.md) — Shodan, FOFA, ZoomEye, OOB testing
+- [Reconnaissance APIs](#) — Shodan, FOFA, ZoomEye, OOB testing
 - [AD API](ad.md) — Active Directory enumeration

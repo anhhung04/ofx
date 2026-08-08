@@ -99,12 +99,8 @@ ssh = [
 ai = [
   "openai>=1.0.0",
 ]
-compile = [
-  "cython>=3.0.0",
-  "setuptools>=69.0.0",
-]
 all = [
-  "ofx[test,docs,redis,memcached,etcd,interactsh,digitalocean,aws,cloud,winrm,ssh,ai,compile]",
+  "ofx[test,docs,redis,memcached,etcd,interactsh,digitalocean,aws,cloud,winrm,ssh,ai]",
 ]
 
 [project.scripts]

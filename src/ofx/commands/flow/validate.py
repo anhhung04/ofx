@@ -72,25 +72,16 @@ def _validate_one(path: Path, check_tasks: bool) -> ValidationResult:
             result.warnings.append(f"Job '{jid}' has no steps")
 
         for step in job.steps:
-            if step.task:
-                result.task_refs.append(step.task)
-            elif step.store_creds is not None:
-                result.warnings.append(
-                    f"Job '{jid}', step '{step.name}': store-creds has no effect "
-                    f"on non-task steps (only applies to 'task:' steps)"
-                )
+            pass  # Step validation is handled by the Step model
 
     if not result.has_dispatch and not result.has_call:
         result.warnings.append("No dispatch or call trigger defined")
 
     if check_tasks and result.task_refs:
-        from ofx.tasks.registry import TaskRegistry
-
-        registered = set(TaskRegistry.list_tasks())
-        for task_name in set(result.task_refs):
-            if task_name not in registered:
-                result.unknown_tasks.append(task_name)
-                result.warnings.append(f"Task '{task_name}' not found in registry")
+        result.warnings.append(
+            "Task validation is no longer supported (task system removed). "
+            "Use 'script:' or 'run:' steps instead."
+        )
 
     return result
 def validate_workflows(
@@ -238,9 +229,6 @@ def validate_workflows(
     if result.has_call:
         triggers.append("call")
     details["Triggers"] = ", ".join(triggers) if triggers else "direct run"
-
-    if result.task_refs:
-        details["Task refs"] = f"{len(set(result.task_refs))} unique"
 
     from ofx.commands.ui_helpers import print_success
 

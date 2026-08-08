@@ -452,7 +452,7 @@ class TestStepPipeEdgeCases:
     """Validate pipe step model constraints."""
 
     def test_pipe_task_mutual_exclusivity(self):
-        with pytest.raises(ValueError, match="exactly one"):
+        with pytest.raises(ValueError, match="Extra inputs are not permitted"):
             Step(pipe={"input": "{{ x }}"}, task="nmap")
 
     def test_pipe_script_mutual_exclusivity(self):

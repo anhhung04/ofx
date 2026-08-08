@@ -192,10 +192,6 @@ class TestStepValidation:
         step = Step.model_validate({"script": "print('hi')"})
         assert step.script == "print('hi')"
 
-    def test_valid_task_step(self):
-        step = Step.model_validate({"task": "nmap", "with": {"target": "127.0.0.1"}})
-        assert step.task == "nmap"
-
     def test_both_run_and_script_raises(self):
         with pytest.raises(ValidationError, match="exactly one"):
             Step.model_validate({"run": "echo hi", "script": "print('hi')"})

@@ -1,0 +1,39 @@
+name: container-scan
+description: Container image scanning — vulnerability assessment for Docker images
+  and container registries.
+tags:
+- vuln
+- container
+- docker
+- trivy
+- grype
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Container image name (e.g. nginx:latest)
+      alias: t
+    severity:
+      type: string
+      default: CRITICAL,HIGH,MEDIUM
+      description: Minimum severity filter
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+jobs:
+  image-scan:
+    name: Image Vulnerability Scan
+    steps:
+    - name: trivy
+      run: trivy image --severity {{ inputs.severity }} -f json -o {{ env.OFX_RUN_DIR
+        }}/trivy_results.json {{ inputs.target }} 2>&1
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+      timeout: 120
+    - name: grype
+      run: grype {{ inputs.target }} -o json --file {{ env.OFX_RUN_DIR }}/grype_results.json
+        2>&1
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'

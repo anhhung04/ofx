@@ -16,7 +16,7 @@ class HashcatTask(Task):
     cmd = "hashcat"
     description = "GPU-accelerated password and hash cracking"
     category = "crack/password"
-    install_cmd = "apt install -y hashcat"
+    install_cmd = ""
     output_types = [UserAccount]
 
     opts = {

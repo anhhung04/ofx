@@ -1,0 +1,67 @@
+name: port-scan
+description: Port scanning — discover open ports and services using fast SYN scan
+  followed by targeted service detection.
+tags:
+- scan
+- port
+- nmap
+- rustscan
+- naabu
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target IP, CIDR, or host file
+      alias: t
+    ports:
+      type: string
+      default: top-1000
+      description: Ports to scan (top-100, top-1000, 1-65535, or custom)
+    rate:
+      type: number
+      default: 1000
+      description: Packets per second for fast scanners
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+jobs:
+  fast-scan:
+    name: Fast Port Discovery
+    steps:
+    - name: naabu
+      run: naabu -host {{ inputs.target }} -p {{ inputs.ports }} -rate {{ inputs.rate
+        }} -silent -o {{ env.OFX_RUN_DIR }}/open_ports_naabu.txt
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+    - name: rustscan
+      run: rustscan -a {{ inputs.target }} --range {{ inputs.ports }} -b 500 --accessible
+        --greppable 2>&1 | tee {{ env.OFX_RUN_DIR }}/open_ports_rustscan.txt
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+  service-detect:
+    name: Service Detection
+    needs:
+    - fast-scan
+    steps:
+    - name: nmap-svc
+      run: nmap -iL {{ env.OFX_RUN_DIR }}/open_ports_naabu.txt -sV -sC -O -oA {{ env.OFX_RUN_DIR
+        }}/nmap_scan --stylesheet https://raw.githubusercontent.com/honze-net/nmap-bootstrap-xsl/main/nmap-bootstrap.xsl
+        2>&1
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+      timeout: 120
+    - name: parse-nmap
+      script: "import os, xml.etree.ElementTree as ET\n\nxml_file = os.path.join(os.environ[\"\
+        OFX_RUN_DIR\"], \"nmap_scan.xml\")\ntry:\n    tree = ET.parse(xml_file)\n\
+        \    root = tree.getroot()\n    hosts = []\n    for host in root.findall(\"\
+        host\"):\n        addr = host.find(\"address\")\n        if addr is not None:\n\
+        \            ip = addr.get(\"addr\", \"\")\n            ports = []\n     \
+        \       for port in host.findall(\"ports/port\"):\n                pid = port.get(\"\
+        portid\", \"\")\n                svc = port.find(\"service\")\n          \
+        \      svc_name = svc.get(\"name\", \"\") if svc is not None else \"\"\n \
+        \               ports.append(f\"{pid}/{svc_name}\")\n            hosts.append(f\"\
+        {ip}: {\", \".join(ports)}\")\n    print(f\"Found {len(hosts)} hosts with\
+        \ open ports\")\n    for h in hosts:\n        print(h)\nexcept FileNotFoundError:\n\
+        \    print(\"No nmap results found\")"

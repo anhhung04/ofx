@@ -1,28 +1,32 @@
 name: cloud-setup
-description: |
-  Provision authorized attack infrastructure for security testing using
+description: 'Provision authorized attack infrastructure for security testing using
+
   AWS EC2 and DigitalOcean droplets. Creates instances, configures SSH
+
   access, emits connection details, and optionally bootstraps a minimal
+
   toolchain for subsequent OFX workflows.
+
+  '
 tags:
-  - setup
-  - cloud
-  - infrastructure
-  - aws
-  - digitalocean
+- setup
+- cloud
+- infrastructure
+- aws
+- digitalocean
 dispatch:
   inputs:
     log_command:
       type: string
-      default: "true"
+      default: 'true'
       description: Enable command log entries for steps when set to true/false.
     log_output:
       type: string
-      default: "true"
+      default: 'true'
       description: Enable stdout output log files for steps when set to true/false.
     target:
       type: string
-      default: "ofx-attack-infra"
+      default: ofx-attack-infra
       description: Instance name/tag to create
       alias: t
     provider:
@@ -43,11 +47,11 @@ dispatch:
       description: AWS AMI ID or DigitalOcean image slug
     ssh_key_name:
       type: string
-      default: ""
+      default: ''
       description: SSH key name/fingerprint to attach
     security_group:
       type: string
-      default: ""
+      default: ''
       description: AWS security group ID/name to use
     dry_run:
       type: boolean
@@ -58,212 +62,162 @@ dispatch:
       default: true
       description: Add cloud-init bootstrap for baseline tools
 defaults:
-    store-creds: true
-
+  store-creds: true
 jobs:
   validate:
     name: Validate Provisioning Inputs
     outputs:
-      provider: "{{ steps.normalize.outputs.provider | default('', true) }}"
-      instance_name: "{{ steps.normalize.outputs.instance_name | default('', true) }}"
+      provider: '{{ steps.normalize.outputs.provider | default('''', true) }}'
+      instance_name: '{{ steps.normalize.outputs.instance_name | default('''', true)
+        }}'
     steps:
-      - name: normalize
-        script: |
-          provider = "{{ inputs.provider }}".strip().lower()
-          if provider in {"do", "digitalocean", "digital-ocean"}:
-              provider = "digitalocean"
-          elif provider != "aws":
-              raise SystemExit(f"Unsupported provider: {provider}")
-
-          name = "{{ inputs.target }}".strip() or "ofx-attack-infra"
-          add_outputs(provider=provider, instance_name=name)
-          print(f"Provider: {provider}")
-          print(f"Instance name: {name}")
-        retry: 1
-        retry-delay: 5
-        continue-on-error: true
-
+    - name: normalize
+      script: "provider = \"{{ inputs.provider }}\".strip().lower()\nif provider in\
+        \ {\"do\", \"digitalocean\", \"digital-ocean\"}:\n    provider = \"digitalocean\"\
+        \nelif provider != \"aws\":\n    raise SystemExit(f\"Unsupported provider:\
+        \ {provider}\")\n\nname = \"{{ inputs.target }}\".strip() or \"ofx-attack-infra\"\
+        \nadd_outputs(provider=provider, instance_name=name)\nprint(f\"Provider: {provider}\"\
+        )\nprint(f\"Instance name: {name}\")\n"
+      retry: 1
+      retry-delay: 5
+      continue-on-error: true
   aws-provision:
     name: Provision AWS EC2
-    needs: [validate]
-    run_if: "{{ jobs['validate'].outputs.provider == 'aws' }}"
+    needs:
+    - validate
+    run_if: '{{ jobs[''validate''].outputs.provider == ''aws'' }}'
     outputs:
-      instance_id: "{{ steps.aws-run.outputs.instance_id | default('', true) }}"
-      public_ip: "{{ steps.aws-run.outputs.public_ip | default('', true) }}"
-      ssh_command: "{{ steps.aws-run.outputs.ssh_command | default('', true) }}"
+      instance_id: '{{ steps.aws-run.outputs.instance_id | default('''', true) }}'
+      public_ip: '{{ steps.aws-run.outputs.public_ip | default('''', true) }}'
+      ssh_command: '{{ steps.aws-run.outputs.ssh_command | default('''', true) }}'
     steps:
-      - name: generate cloud-init
-        script: |
-          from pathlib import Path
-
-          bootstrap = "{{ inputs.bootstrap_tools }}" == "true"
-          content = "#cloud-config\n"
-          if bootstrap:
-              content += """
-          package_update: true
-          packages:
-            - git
-            - curl
-            - wget
-            - unzip
-            - jq
-            - python3
-            - python3-pip
-            - nmap
-            - nginx
-          runcmd:
-            - mkdir -p /opt/ofx
-            - echo 'OFX cloud bootstrap complete' > /opt/ofx/bootstrap.log
-          """
-          else:
-              content += "packages: []\n"
-
-          path = Path("/tmp/ofx-cloud-init.yml")
-          path.write_text(content)
-          add_outputs(user_data=str(path))
-          print(f"Cloud-init written: {path}")
-        retry: 1
-        retry-delay: 5
-        continue-on-error: true
-
-      - name: aws-run
-        log-command: "{{ inputs.log_command | default(true) }}"
-        run: |
-          set -euo pipefail
-          NAME="{{ jobs['validate'].outputs.instance_name }}"
-          REGION="{{ inputs.region }}"
-          IMAGE="{{ inputs.image }}"
-          SIZE="{{ inputs.size }}"
-          KEY="{{ inputs.ssh_key_name }}"
-          SG="{{ inputs.security_group }}"
-          DRY="{{ inputs.dry_run }}"
-
-          if [ -z "$IMAGE" ] || [ "$IMAGE" = "ubuntu-22-04-x64" ]; then
-            echo "ERROR: AWS provisioning requires an AMI ID in --image"
-            echo "Example: ami-0abcdef1234567890"
-            exit 0
-          fi
-
-          CMD="aws ec2 run-instances --region $REGION --image-id $IMAGE --instance-type $SIZE --tag-specifications ResourceType=instance,Tags=[{Key=Name,Value=$NAME}] --user-data file:///tmp/ofx-cloud-init.yml"
-          if [ -n "$KEY" ]; then CMD="$CMD --key-name $KEY"; fi
-          if [ -n "$SG" ]; then CMD="$CMD --security-group-ids $SG"; fi
-
-          echo "AWS command: $CMD"
-          if [ "$DRY" = "true" ]; then
-            echo "Dry run enabled; not provisioning"
-            echo "instance_id=" >> "$OFX_OUTPUTS"
-            echo "public_ip=" >> "$OFX_OUTPUTS"
-            echo "ssh_command=ssh ubuntu@PUBLIC_IP" >> "$OFX_OUTPUTS"
-            exit 0
-          fi
-
-          OUT=$(eval "$CMD")
-          IID=$(printf '%s' "$OUT" | jq -r '.Instances[0].InstanceId // empty')
-          echo "instance_id=$IID" >> "$OFX_OUTPUTS"
-          echo "Instance ID: $IID"
-
-          if [ -n "$IID" ]; then
-            aws ec2 wait instance-running --region "$REGION" --instance-ids "$IID"
-            IP=$(aws ec2 describe-instances --region "$REGION" --instance-ids "$IID" --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
-            echo "public_ip=$IP" >> "$OFX_OUTPUTS"
-            echo "ssh_command=ssh ubuntu@$IP" >> "$OFX_OUTPUTS"
-            echo "Public IP: $IP"
-          fi
-        log-stdout: "{{ inputs.log_output | default(true) }}"
-        retry: 2
-        retry-delay: 15
-        continue-on-error: true
-
+    - name: generate cloud-init
+      script: "from pathlib import Path\n\nbootstrap = \"{{ inputs.bootstrap_tools\
+        \ }}\" == \"true\"\ncontent = \"#cloud-config\\n\"\nif bootstrap:\n    content\
+        \ += \"\"\"\npackage_update: true\npackages:\n  - git\n  - curl\n  - wget\n\
+        \  - unzip\n  - jq\n  - python3\n  - python3-pip\n  - nmap\n  - nginx\nruncmd:\n\
+        \  - mkdir -p /opt/ofx\n  - echo 'OFX cloud bootstrap complete' > /opt/ofx/bootstrap.log\n\
+        \"\"\"\nelse:\n    content += \"packages: []\\n\"\n\npath = Path(\"/tmp/ofx-cloud-init.yml\"\
+        )\npath.write_text(content)\nadd_outputs(user_data=str(path))\nprint(f\"Cloud-init\
+        \ written: {path}\")\n"
+      retry: 1
+      retry-delay: 5
+      continue-on-error: true
+    - name: aws-run
+      log-command: '{{ inputs.log_command | default(true) }}'
+      log-stdout: '{{ inputs.log_output | default(true) }}'
+      retry: 2
+      retry-delay: 15
+      continue-on-error: true
+      script: "import subprocess, tempfile, os\nresult = subprocess.run('set -euo\
+        \ pipefail NAME=\"{{ jobs[\\'validate\\'].outputs.instance_name }}\" REGION=\"\
+        {{ inputs.region }}\" IMAGE=\"{{ inputs.image }}\" SIZE=\"{{ inputs.size }}\"\
+        \ KEY=\"{{ inputs.ssh_key_name }}\" SG=\"{{ inputs.security_group }}\" DRY=\"\
+        {{ inputs.dry_run }}\" if [ -z \"$IMAGE\" ] || [ \"$IMAGE\" = \"ubuntu-22-04-x64\"\
+        \ ]; then echo \"ERROR: AWS provisioning requires an AMI ID in --image\" echo\
+        \ \"Example: ami-0abcdef1234567890\" exit 0 fi CMD=\"aws ec2 run-instances\
+        \ --region $REGION --image-id $IMAGE --instance-type $SIZE --tag-specifications\
+        \ ResourceType=instance,Tags=[{Key=Name,Value=$NAME}] --user-data file:///tmp/ofx-cloud-init.yml\"\
+        \ if [ -n \"$KEY\" ]; then CMD=\"$CMD --key-name $KEY\"; fi if [ -n \"$SG\"\
+        \ ]; then CMD=\"$CMD --security-group-ids $SG\"; fi echo \"AWS command: $CMD\"\
+        \ if [ \"$DRY\" = \"true\" ]; then echo \"Dry run enabled; not provisioning\"\
+        \ echo \"instance_id=\" echo \"public_ip=\" echo \"ssh_command=ssh ubuntu@PUBLIC_IP\"\
+        \ exit 0 fi OUT=$(eval \"$CMD\") IID=$(printf \\'%s\\' \"$OUT\" | jq -r \\\
+        '.Instances[0].InstanceId // empty\\') echo \"instance_id=$IID\" echo \"Instance\
+        \ ID: $IID\" if [ -n \"$IID\" ]; then aws ec2 wait instance-running --region\
+        \ \"$REGION\" --instance-ids \"$IID\" IP=$(aws ec2 describe-instances --region\
+        \ \"$REGION\" --instance-ids \"$IID\" --query \\'Reservations[0].Instances[0].PublicIpAddress\\\
+        ' --output text) echo \"public_ip=$IP\" echo \"ssh_command=ssh ubuntu@$IP\"\
+        \ echo \"Public IP: $IP\" fi', shell=True, capture_output=True, text=True)\n\
+        print(result.stdout)\nif result.stderr:\n    print(result.stderr, file=__import__(\"\
+        sys\").stderr)"
   digitalocean-provision:
     name: Provision DigitalOcean Droplet
-    needs: [validate]
-    run_if: "{{ jobs['validate'].outputs.provider == 'digitalocean' }}"
+    needs:
+    - validate
+    run_if: '{{ jobs[''validate''].outputs.provider == ''digitalocean'' }}'
     outputs:
-      droplet_id: "{{ steps.do-run.outputs.droplet_id | default('', true) }}"
-      public_ip: "{{ steps.do-run.outputs.public_ip | default('', true) }}"
-      ssh_command: "{{ steps.do-run.outputs.ssh_command | default('', true) }}"
+      droplet_id: '{{ steps.do-run.outputs.droplet_id | default('''', true) }}'
+      public_ip: '{{ steps.do-run.outputs.public_ip | default('''', true) }}'
+      ssh_command: '{{ steps.do-run.outputs.ssh_command | default('''', true) }}'
     steps:
-      - name: do-run
-        log-command: "{{ inputs.log_command | default(true) }}"
-        run: |
-          set -euo pipefail
-          NAME="{{ jobs['validate'].outputs.instance_name }}"
-          REGION="{{ inputs.region }}"
-          SIZE="{{ inputs.size }}"
-          IMAGE="{{ inputs.image }}"
-          KEY="{{ inputs.ssh_key_name }}"
-          DRY="{{ inputs.dry_run }}"
-
-          if [ "$SIZE" = "t3.small" ]; then SIZE="s-1vcpu-1gb"; fi
-
-          CMD="doctl compute droplet create $NAME --region $REGION --size $SIZE --image $IMAGE --wait --format ID,PublicIPv4 --no-header"
-          if [ -n "$KEY" ]; then CMD="$CMD --ssh-keys $KEY"; fi
-          if [ "{{ inputs.bootstrap_tools }}" = "true" ]; then
-            cat > /tmp/ofx-do-cloud-init.yml <<'EOF'
-          package_update: true
-          packages:
-            - git
-            - curl
-            - wget
-            - unzip
-            - jq
-            - python3
-            - python3-pip
-            - nmap
-          runcmd:
-            - mkdir -p /opt/ofx
-            - echo 'OFX DigitalOcean bootstrap complete' > /opt/ofx/bootstrap.log
-          EOF
-            CMD="$CMD --user-data-file /tmp/ofx-do-cloud-init.yml"
-          fi
-
-          echo "DigitalOcean command: $CMD"
-          if [ "$DRY" = "true" ]; then
-            echo "Dry run enabled; not provisioning"
-            echo "droplet_id=" >> "$OFX_OUTPUTS"
-            echo "public_ip=" >> "$OFX_OUTPUTS"
-            echo "ssh_command=ssh root@PUBLIC_IP" >> "$OFX_OUTPUTS"
-            exit 0
-          fi
-
-          OUT=$(eval "$CMD")
-          DID=$(printf '%s' "$OUT" | awk '{print $1}')
-          IP=$(printf '%s' "$OUT" | awk '{print $2}')
-          echo "droplet_id=$DID" >> "$OFX_OUTPUTS"
-          echo "public_ip=$IP" >> "$OFX_OUTPUTS"
-          echo "ssh_command=ssh root@$IP" >> "$OFX_OUTPUTS"
-          echo "Droplet ID: $DID"
-          echo "Public IP: $IP"
-        log-stdout: "{{ inputs.log_output | default(true) }}"
-        retry: 2
-        retry-delay: 15
-        continue-on-error: true
-
+    - name: do-run
+      log-command: '{{ inputs.log_command | default(true) }}'
+      log-stdout: '{{ inputs.log_output | default(true) }}'
+      retry: 2
+      retry-delay: 15
+      continue-on-error: true
+      script: "import subprocess, tempfile, os\nresult = subprocess.run('set -euo\
+        \ pipefail NAME=\"{{ jobs[\\'validate\\'].outputs.instance_name }}\" REGION=\"\
+        {{ inputs.region }}\" SIZE=\"{{ inputs.size }}\" IMAGE=\"{{ inputs.image }}\"\
+        \ KEY=\"{{ inputs.ssh_key_name }}\" DRY=\"{{ inputs.dry_run }}\" if [ \"$SIZE\"\
+        \ = \"t3.small\" ]; then SIZE=\"s-1vcpu-1gb\"; fi CMD=\"doctl compute droplet\
+        \ create $NAME --region $REGION --size $SIZE --image $IMAGE --wait --format\
+        \ ID,PublicIPv4 --no-header\" if [ -n \"$KEY\" ]; then CMD=\"$CMD --ssh-keys\
+        \ $KEY\"; fi if [ \"{{ inputs.bootstrap_tools }}\" = \"true\" ]; then cat\
+        \ <<\\'EOF\\' package_update: true packages: - git - curl - wget - unzip -\
+        \ jq - python3 - python3-pip - nmap runcmd: - mkdir -p /opt/ofx - echo \\\
+        'OFX DigitalOcean bootstrap complete\\' EOF CMD=\"$CMD --user-data-file /tmp/ofx-do-cloud-init.yml\"\
+        \ fi echo \"DigitalOcean command: $CMD\" if [ \"$DRY\" = \"true\" ]; then\
+        \ echo \"Dry run enabled; not provisioning\" echo \"droplet_id=\" echo \"\
+        public_ip=\" echo \"ssh_command=ssh root@PUBLIC_IP\" exit 0 fi OUT=$(eval\
+        \ \"$CMD\") DID=$(printf \\'%s\\' \"$OUT\" | awk \\'{print $1}\\') IP=$(printf\
+        \ \\'%s\\' \"$OUT\" | awk \\'{print $2}\\') echo \"droplet_id=$DID\" echo\
+        \ \"public_ip=$IP\" echo \"ssh_command=ssh root@$IP\" echo \"Droplet ID: $DID\"\
+        \ echo \"Public IP: $IP\"', shell=True, capture_output=True, text=True)\n\
+        print(result.stdout)\nif result.stderr:\n    print(result.stderr, file=__import__(\"\
+        sys\").stderr)"
   summary:
     name: Cloud Setup Summary
-    needs: [validate, aws-provision, digitalocean-provision]
+    needs:
+    - validate
+    - aws-provision
+    - digitalocean-provision
     steps:
-      - name: report
-        run: |
-          echo "=== CLOUD SETUP REPORT ==="
-          echo "Provider: {{ jobs['validate'].outputs.provider }}"
-          echo "Instance Name: {{ jobs['validate'].outputs.instance_name }}"
-          echo "Region: {{ inputs.region }}"
-          echo "Size: {{ inputs.size }}"
-          echo "Dry Run: {{ inputs.dry_run }}"
-          echo ""
-          echo "AWS Instance ID: {{ jobs['aws-provision'].outputs.instance_id | default('', true) }}"
-          echo "AWS Public IP: {{ jobs['aws-provision'].outputs.public_ip | default('', true) }}"
-          echo "AWS SSH: {{ jobs['aws-provision'].outputs.ssh_command | default('', true) }}"
-          echo ""
-          echo "DigitalOcean Droplet ID: {{ jobs['digitalocean-provision'].outputs.droplet_id | default('', true) }}"
-          echo "DigitalOcean Public IP: {{ jobs['digitalocean-provision'].outputs.public_ip | default('', true) }}"
-          echo "DigitalOcean SSH: {{ jobs['digitalocean-provision'].outputs.ssh_command | default('', true) }}"
-        log-stdout: "{{ inputs.log_output | default(true) }}"
+    - name: report
+      run: 'echo "=== CLOUD SETUP REPORT ==="
 
+        echo "Provider: {{ jobs[''validate''].outputs.provider }}"
+
+        echo "Instance Name: {{ jobs[''validate''].outputs.instance_name }}"
+
+        echo "Region: {{ inputs.region }}"
+
+        echo "Size: {{ inputs.size }}"
+
+        echo "Dry Run: {{ inputs.dry_run }}"
+
+        echo ""
+
+        echo "AWS Instance ID: {{ jobs[''aws-provision''].outputs.instance_id | default('''',
+        true) }}"
+
+        echo "AWS Public IP: {{ jobs[''aws-provision''].outputs.public_ip | default('''',
+        true) }}"
+
+        echo "AWS SSH: {{ jobs[''aws-provision''].outputs.ssh_command | default('''',
+        true) }}"
+
+        echo ""
+
+        echo "DigitalOcean Droplet ID: {{ jobs[''digitalocean-provision''].outputs.droplet_id
+        | default('''', true) }}"
+
+        echo "DigitalOcean Public IP: {{ jobs[''digitalocean-provision''].outputs.public_ip
+        | default('''', true) }}"
+
+        echo "DigitalOcean SSH: {{ jobs[''digitalocean-provision''].outputs.ssh_command
+        | default('''', true) }}"
+
+        '
+      log-stdout: '{{ inputs.log_output | default(true) }}'
 outputs:
-  provider: "{{ jobs['validate'].outputs.provider }}"
-  aws_instance_id: "{{ jobs['aws-provision'].outputs.instance_id | default('', true) }}"
-  aws_public_ip: "{{ jobs['aws-provision'].outputs.public_ip | default('', true) }}"
-  digitalocean_droplet_id: "{{ jobs['digitalocean-provision'].outputs.droplet_id | default('', true) }}"
-  digitalocean_public_ip: "{{ jobs['digitalocean-provision'].outputs.public_ip | default('', true) }}"
+  provider: '{{ jobs[''validate''].outputs.provider }}'
+  aws_instance_id: '{{ jobs[''aws-provision''].outputs.instance_id | default('''',
+    true) }}'
+  aws_public_ip: '{{ jobs[''aws-provision''].outputs.public_ip | default('''', true)
+    }}'
+  digitalocean_droplet_id: '{{ jobs[''digitalocean-provision''].outputs.droplet_id
+    | default('''', true) }}'
+  digitalocean_public_ip: '{{ jobs[''digitalocean-provision''].outputs.public_ip |
+    default('''', true) }}'

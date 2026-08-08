@@ -15,7 +15,7 @@ class NmapTask(Task):
     cmd = "nmap"
     description = "Network port scanner and service detector"
     category = "port/scan"
-    install_cmd = "apt install -y nmap"
+    install_cmd = ""
     output_types = [Ip, Port, Vulnerability]
 
     opts = {

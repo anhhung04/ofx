@@ -1,0 +1,16 @@
+name: utility
+version: 1.0.0
+description: Utility workflows — target parsing, IOC extraction, and results export
+  for reporting.
+author: OFX Community
+tags:
+- utility
+- parse
+- ioc
+- export
+- report
+dependencies: []
+workflows:
+- export-results.yml
+- extract-iocs.yml
+- parse-targets.yml

@@ -91,15 +91,6 @@ def _lint_workflow(path: Path) -> LintResult:
                     )
                 )
 
-            if step.task and step.timeout == 1440:
-                result.issues.append(
-                    LintIssue(
-                        "info",
-                        f"Task step '{step.name}' uses default 24h timeout",
-                        location=jid,
-                    )
-                )
-
             if step.run and len(step.run) > 500:
                 result.issues.append(
                     LintIssue(

@@ -16,7 +16,7 @@ class SslscanTask(Task):
     cmd = "sslscan"
     description = "SSL/TLS configuration and cipher scanner"
     category = "ssl/scan"
-    install_cmd = "apt install -y sslscan"
+    install_cmd = ""
     output_types = [Certificate, Vulnerability]
 
     opts = {

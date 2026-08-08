@@ -16,7 +16,7 @@ class JohnTask(Task):
     cmd = "john"
     description = "CPU-based password and hash cracking"
     category = "crack/password"
-    install_cmd = "apt install -y john"
+    install_cmd = ""
     output_types = [UserAccount]
 
     opts = {

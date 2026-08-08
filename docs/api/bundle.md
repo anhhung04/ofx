@@ -337,4 +337,4 @@ jobs:
 
 - [OPSEC API](opsec.md) — Traffic blending and cleanup
 - [Evasion API](evasion.md) — Payload obfuscation techniques
-- [Post Runners](post-exploitation/post.md) — SSH, WinRM, web shell runners
+- [Post Runners](#) — SSH, WinRM, web shell runners

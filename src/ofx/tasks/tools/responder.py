@@ -16,7 +16,7 @@ class ResponderTask(Task):
     cmd = "responder"
     description = "LLMNR/NBT-NS/mDNS poisoner for credential capture"
     category = "ad/poison"
-    install_cmd = "apt install -y responder"
+    install_cmd = ""
     output_types = [UserAccount]
 
     opts = {

@@ -1,0 +1,26 @@
+name: parse-targets
+description: Parse and aggregate targets — normalize IPs, CIDRs, domains, and URLs
+  from input sources into clean target lists.
+tags:
+- utility
+- parse
+- target
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Input file with mixed targets
+      alias: t
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+jobs:
+  parse:
+    name: Parse Targets
+    steps:
+    - name: parse
+      run: cat {{ inputs.target }} | grep -E "^[0-9]" | sort -u > {{ env.OFX_RUN_DIR
+        }}/ips.txt; cat {{ inputs.target }} | grep -vE "^[0-9]" | sort -u > {{ env.OFX_RUN_DIR
+        }}/domains.txt; echo Done

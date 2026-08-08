@@ -3,7 +3,7 @@
 The `ofx.api.privesc` module generates command strings for local privilege escalation checks and exploitation on Linux and Windows systems.
 
 !!! warning
-    All functions return **command strings** — nothing is executed locally. Pass them to a [post runner](post-exploitation/post.md) or your own execution mechanism.
+    All functions return **command strings** — nothing is executed locally. Pass them to a [post runner](#) or your own execution mechanism.
 
 ---
 
@@ -155,4 +155,4 @@ jobs:
 
 - [AD API](ad.md) — Domain privilege escalation
 - [Persistence API](persistence.md) — Establish footholds after escalation
-- [Post Runners](post-exploitation/post.md) — Remote execution
+- [Post Runners](#) — Remote execution

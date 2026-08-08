@@ -1,4 +1,4 @@
-.PHONY: help install dev test clean docs coverage coverage-html coverage-report compile dist-compiled
+.PHONY: help install dev test clean docs coverage coverage-html coverage-report
 
 help:
 	@echo "OFX Makefile Commands:"
@@ -11,11 +11,6 @@ help:
 	@echo "  make coverage-html   - Run tests and generate HTML coverage report"
 	@echo "  make clean           - Remove build artifacts"
 	@echo "  make docs            - Build documentation"
-	@echo ""
-	@echo "Compilation (requires standard CPython, not free-threaded):"
-	@echo "  make compile         - Compile .py → .so with Cython (in-place)"
-	@echo "  make dist-compiled   - Build compiled wheel (stripped .py sources)"
-	@echo ""
 
 install:
 	uv sync --no-dev
@@ -57,11 +52,3 @@ docs:
 	@echo "Documentation built successfully in: src/ofx/data/site/"
 	@echo "To serve locally, run: uv run ofx docs serve"
 
-compile:
-	@echo "Compiling OFX with Cython..."
-	uv run --extra compile setup_cython.py build_ext --inplace
-	@echo "Done. Compiled .so files are in-place under src/ofx/"
-
-dist-compiled:
-	@echo "Building compiled distribution..."
-	./scripts/build_compiled.sh

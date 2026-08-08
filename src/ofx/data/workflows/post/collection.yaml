@@ -1,0 +1,22 @@
+name: post
+version: 1.0.0
+description: Post-exploitation workflows — privilege escalation, lateral movement,
+  credential dumping, persistence, and data exfiltration.
+author: OFX Community
+tags:
+- post
+- privesc
+- lateral
+- credential
+- persistence
+- exfil
+dependencies: []
+workflows:
+- credential-dump.yml
+- exfil.yml
+- lateral-movement.yml
+- opsec-cleanup.yml
+- persistence.yml
+- pivot.yml
+- privesc.yml
+- situational-awareness.yml

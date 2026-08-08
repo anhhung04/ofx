@@ -1,0 +1,39 @@
+name: ssl-audit
+description: SSL/TLS audit — analyze TLS certificates, cipher suites, and discover
+  subdomains via certificate transparency.
+tags:
+- scan
+- ssl
+- tls
+- certificate
+- cipher
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target domain or host:port
+      alias: t
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+jobs:
+  tls-scan:
+    name: TLS Analysis
+    steps:
+    - name: tlsx
+      run: tlsx -u {{ inputs.target }} -san -cn -silent -json -o {{ env.OFX_RUN_DIR
+        }}/tls_certs.jsonl
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+    - name: sslscan
+      run: sslscan {{ inputs.target }} --no-colour --xml={{ env.OFX_RUN_DIR }}/sslscan_results.xml
+        2>&1
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+    - name: testssl
+      run: testssl.sh --jsonfile {{ env.OFX_RUN_DIR }}/testssl_results.json {{ inputs.target
+        }} 2>&1
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'

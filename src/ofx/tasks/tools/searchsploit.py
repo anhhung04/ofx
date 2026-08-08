@@ -14,7 +14,7 @@ class SearchsploitTask(Task):
     cmd = "searchsploit"
     description = "Search Exploit-DB from the command line"
     category = "exploit/recon"
-    install_cmd = "apt install -y exploitdb"
+    install_cmd = ""
     output_types = [Exploit]
 
     opts = {

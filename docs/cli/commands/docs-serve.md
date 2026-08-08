@@ -194,7 +194,7 @@ Documentation is available for:
 ## See Also
 
 - [API Overview](../../api/overview.md)
-- [Webshell API](../../api/exploitation/webshell.md)
-- [HTTP API](../../api/exploitation/http.md)
+- [Webshell API](../../api/overview.md)
+- [HTTP API](../../api/overview.md)
 - [Workflows Guide](../../guide/workflows.md)
 - [Secrets and Inputs](../../guide/secrets-inputs.md)

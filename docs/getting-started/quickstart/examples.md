@@ -173,7 +173,7 @@ You can also run tasks directly from the CLI without a workflow:
 ofx flow tasks run nmap 10.10.10.5 --opt top_ports=100 --opt version_detection
 ```
 
-Available tasks: `nmap`, `nuclei`, `httpx`, `subfinder`, `ffuf`, `feroxbuster`, `katana`, and [many more](../../guide/tasks.md).
+Available tasks: `nmap`, `nuclei`, `httpx`, `subfinder`, `ffuf`, `feroxbuster`, `katana`, and [many more](../../guide/builtin-workflows/recon.md).
 
 ---
 

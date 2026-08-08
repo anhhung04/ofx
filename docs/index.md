@@ -1,16 +1,15 @@
 # OFX: Offensive Flow Executor
 
-OFX is an async-first workflow engine for red-team automation.
-
-It lets you define operations as YAML workflows, run jobs in parallel, wrap 90+ security tools with structured output parsing, execute remotely on cloud infrastructure, and keep outputs organized per run.
+OFX is a workflow engine for red team operations — define attack chains as YAML, run jobs in parallel, execute remotely on cloud infrastructure, and keep outputs organized per engagement.
 
 ## Why OFX
 
-- **Workflow-driven execution** with dependency-aware parallel scheduling.
-- **90+ built-in task wrappers** — nmap, nuclei, httpx, subfinder, and more — with structured typed outputs.
-- **Reusable templates** with Jinja context (`inputs`, `secrets`, `matrix`, `ctx`).
-- **Cloud and fleet execution** with profile-based provisioning.
-- **Detached sessions** for long-running jobs.
+- **Workflow-driven** — YAML-defined jobs with dependency-aware parallel scheduling.
+- **Cross-platform** — runs on Linux, macOS, and Windows; supports arm64 and amd64.
+- **Two step types** — `run:` for shell commands, `script:` for Python logic.
+- **Jinja2 templating** — access `inputs`, `secrets`, `env`, `matrix`, and `ctx` in your workflows.
+- **Cloud execution** — provision AWS/DigitalOcean instances and run workflows remotely.
+- **Detached sessions** — long-running background jobs with status polling.
 
 ## Quick Example
 
@@ -19,59 +18,56 @@ name: recon
 jobs:
   scan:
     steps:
-      - task: nmap
-        name: port-scan
-        with:
-          target: "{{ inputs.target }}"
-          ports: "80,443,8080"
-      - task: nuclei
-        with:
-          target: "{{ inputs.target }}"
-          severity: "critical,high"
+      - name: port-scan
+        run: nmap -sV -sC {{ inputs.target }} -oA {{ env.OFX_RUN_DIR }}/nmap
+      - name: web-probe
+        run: httpx -l {{ env.OFX_RUN_DIR }}/nmap.xml -tech-detect -silent
 ```
 
 ```bash
 ofx flow run recon.yml --input target=10.10.10.5
 ```
 
-Or run a single task directly — no YAML needed:
-
-```bash
-ofx flow tasks run nmap 10.10.10.5 --opt ports=1-1000
-```
-
 ## Install
 
 ```bash
-# uv (recommended)
-uv tool install ofx
+uv tool install ofx        # recommended
+pip install ofx             # or pip
+ofx --version               # verify
+```
 
-# or pip
-pip install ofx
+## Workflow Collections
 
-# verify
-ofx --version
+OFX ships with **34 built-in workflows** organized by pentest phase:
+
+| Collection | Workflows | Purpose |
+|---|---|---|
+| **recon/** | 4 | OSINT, subdomain enum, DNS, cloud discovery |
+| **scan/** | 4 | Host discovery, port scan, web probe, SSL audit |
+| **vuln/** | 5 | Nuclei, web app scan, secrets, SAST, containers |
+| **exploit/** | 6 | AD attacks, credentials, hash cracking, C2, payloads |
+| **post/** | 8 | Priv esc, lateral, credential dump, persistence, exfil, OPSEC |
+| **utility/** | 3 | Target parsing, IOC extraction, results export |
+| **setup/** | 4 | Cloud infra, Docker lab, Git guard, proxy config |
+
+## Step Types
+
+```yaml
+steps:
+  - name: cli-tool
+    run: nmap -sV {{ inputs.target }}              # shell command
+
+  - name: python-logic
+    script: |
+      import os, json
+      data = json.load(open("results.json"))
+      print(f"Found {len(data)} items")
 ```
 
 ## Start Here
 
 - [Installation](getting-started/installation.md)
 - [Quick Start](getting-started/quickstart.md)
-- [Tasks Guide](guide/tasks.md) — 90+ built-in security tools
 - [Workflows Guide](guide/workflows.md)
+- [Built-in Workflows](guide/builtin-workflows/recon.md)
 - [CLI Commands](cli/commands.md)
-- [API Overview](api/overview.md)
-
-## Typical Workflow Lifecycle
-
-1. Define workflow YAML (`jobs`, `steps`, `task`, `inputs`, `secrets`).
-2. Validate schema and structure (`ofx flow validate`).
-3. Execute locally or on cloud runners.
-4. Inspect logs/artifacts in the run output path.
-5. Reuse/compose workflows via collections.
-
-## Next Steps
-
-If you are new, continue with the [Quick Start](getting-started/quickstart.md).
-
-If you already run workflows, jump to [Advanced topics](advanced/llm-agent-guide.md) and [Performance](advanced/performance.md).

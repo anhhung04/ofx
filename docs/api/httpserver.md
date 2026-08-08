@@ -233,6 +233,6 @@ exfil_server.stop()
 
 ## See Also
 
-- [Reconnaissance APIs](reconnaissance.md) - Network scanning and discovery
-- [Exploitation APIs](exploitation.md) - Exploit development tools
+- [Reconnaissance APIs](#) - Network scanning and discovery
+- [Exploitation APIs](#) - Exploit development tools
 - [CLI Commands](../cli/commands.md) - Command-line interface reference

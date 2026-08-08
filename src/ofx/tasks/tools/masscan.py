@@ -16,7 +16,7 @@ class MasscanTask(Task):
     cmd = "masscan"
     description = "Ultra-fast internet port scanner"
     category = "port/scan"
-    install_cmd = "apt install -y masscan"
+    install_cmd = ""
     output_types = [Port, Ip]
 
     opts = {

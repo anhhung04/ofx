@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 _STEP_SOURCE_FIELDS: tuple[tuple[str, str], ...] = (
-    ("task", "task"),
     ("uses", "workflow"),
     ("script", "script"),
     ("script_file", "script_file"),
@@ -13,7 +12,6 @@ _STEP_SOURCE_FIELDS: tuple[tuple[str, str], ...] = (
 )
 
 _STEP_LABEL_PREFIXES: dict[str, str] = {
-    "task": "task: ",
     "workflow": "uses: ",
     "script_file": "script_file: ",
     "pipe": "pipe: → ",
@@ -23,7 +21,6 @@ _STEP_HEADER_PREFIXES: dict[str, str] = {
     "command": ">> command: ",
     "workflow": ">> workflow: ",
     "script_file": ">> script_file: ",
-    "task": ">> task: ",
 }
 
 _TIMELINE_COMMAND_PREFIXES: dict[str, str] = {
@@ -73,13 +70,6 @@ def step_timeline_params(
         command = str(value or "")
         tool = ""
         target = ""
-    elif kind == "task":
-        task_name = str(value or "")
-        command = str(outputs.get("command", f"task:{task_name}"))
-        tool = task_name
-        from ofx.runner.task_step import extract_task_target_and_opts
-
-        target, _ = extract_task_target_and_opts(getattr(step, "run_with", {}))
     elif kind in _TIMELINE_COMMAND_PREFIXES:
         if kind in {"script", "pipe"}:
             suffix = getattr(step, "name", None) or "inline"

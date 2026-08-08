@@ -12,7 +12,6 @@ from collections.abc import Callable
 
 from ofx.cloud.script_runtime import is_python_step_run_type
 from ofx.cloud.sessions.python_steps import step_bundle_filename
-from ofx.cloud.task_runtime import build_task_command_from_step
 from ofx.models.step import RunType, Step
 from ofx.utils.shell import bash_dquote_escape
 
@@ -241,8 +240,6 @@ def _step_command_for_session_script(
         suffix = step.run or ""
     elif is_python_step_run_type(run_type):
         suffix = python_command
-    elif run_type == RunType.TASK:
-        suffix = build_task_command_from_step(step, profile=profile)
     elif run_type == RunType.PIPE:
         return pipe_command
     else:

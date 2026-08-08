@@ -109,7 +109,6 @@ class TestMatrixCombinationBuilder:
 
 from ofx.runner.services.credential_store import (
     should_store_creds,
-    store_from_typed_outputs,
 )
 
 
@@ -135,25 +134,6 @@ class TestShouldStoreCreds:
     def test_step_overrides_parent(self):
         parent = SimpleNamespace(defaults=SimpleNamespace(store_creds=True))
         assert should_store_creds(False, parent) is False
-
-class TestStoreFromTypedOutputs:
-    def test_empty_list(self):
-        assert store_from_typed_outputs([]) == 0
-
-    def test_no_user_accounts(self):
-        assert store_from_typed_outputs(["not an account", 42]) == 0
-
-    def test_import_error_graceful(self):
-        """When ExegolHistoryDB is unavailable, returns 0 without raising."""
-        from ofx.tasks.output_types import UserAccount
-
-        account = UserAccount(username="admin", password="pass123")
-        logs = []
-
-        with patch.dict("sys.modules", {"ofx.api.creds.exegol_history": None}):
-            result = store_from_typed_outputs([account], log_fn=logs.append)
-        assert result == 0
-        assert any("unavailable" in m for m in logs)
 
 from ofx.runner.step_descriptors import (
     step_timeline_params,
@@ -206,20 +186,6 @@ class TestSaveOutputFile:
         content = result.read_text()
         assert ">> command: echo hello" in content
         assert "hello world" in content
-
-    def test_save_with_task_header(self, tmp_path):
-        step = SimpleNamespace(
-            name="scan",
-            step_index=1,
-            run=None,
-            uses=None,
-            script_file=None,
-            script=None,
-            task="nmap",
-        )
-        result = save_output_file(tmp_path, "job2", step, "output data")
-        content = result.read_text()
-        assert ">> task: nmap" in content
 
     def test_save_with_metadata_flags(self, tmp_path):
         step = SimpleNamespace(
@@ -315,7 +281,6 @@ class TestStepDescriptors:
             pipe=None,
         )
 
-        assert step_type_label(task_step) == "task: nmap"
         assert step_type_label(pipe_step) == "pipe: → yaml"
         command_log = save_output_file(tmp_path, "job", command_step, "ok")
         script_file_log = save_output_file(tmp_path, "job", script_file_step, "ok")
@@ -337,24 +302,6 @@ class TestStepDescriptors:
 
         assert result is not None
         assert result.read_text().startswith(">> workflow: ./child.yml\n>>===<<\nok")
-
-    def test_step_timeline_params_for_task(self):
-        step = SimpleNamespace(
-            run=None,
-            uses=None,
-            script_file=None,
-            script=None,
-            task="nmap",
-            pipe=None,
-            run_with={"targets": ["a", "b"], "ports": "80"},
-            name="scan",
-        )
-
-        assert step_timeline_params(step, outputs={}) == {
-            "command": "task:nmap",
-            "tool": "nmap",
-            "target": "a,b",
-        }
 
     def test_step_timeline_params_for_pipe(self):
         step = SimpleNamespace(

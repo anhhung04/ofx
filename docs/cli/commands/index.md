@@ -9,8 +9,8 @@ Complete reference for all OFX command-line interface commands.
 - **[flow list](list.md)** - List available workflows from user, built-in, and collections
 - **[flow validate](validate.md)** - Validate workflow syntax
 - **[flow visualize](visualize.md)** - Visualize workflow dependencies
-- **[flow tasks](tasks.md)** - List, inspect, and run registered tasks
-- **[flow tools](tools.md)** - Manage workflow tools
+- **** - List, inspect, and run registered tasks
+- **** - Manage workflow tools
 - **[flow schema](schema.md)** - Inspect workflow/job/step model schemas
 - **[flow collection](collection.md)** - Install and manage workflow collections
 

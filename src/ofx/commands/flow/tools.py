@@ -91,7 +91,6 @@ class ToolsInstallHandler:
         import yaml
 
         from ofx.models.workflow import Workflow
-        from ofx.tasks.registry import TaskRegistry
         from ofx.utils.workflow_utils import find_workflow
 
         resolved = workflow_path.resolve()
@@ -121,12 +120,6 @@ class ToolsInstallHandler:
 
             for job in workflow.jobs.values():
                 for step in job.steps:
-                    if step.task:
-                        task_cls = TaskRegistry.get(step.task)
-                        if task_cls and task_cls.install_cmd and task_cls.cmd:
-                            all_tools[task_cls.cmd] = task_cls.install_cmd
-
-                    if step.uses:
                         try:
                             sub_wf = find_workflow(step.uses, tuple(search_dirs))
                             if sub_wf.workflow_path:

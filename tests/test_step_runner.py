@@ -183,54 +183,6 @@ def test_command_handler_honors_explicit_step_shell():
 
     assert runner.model.shell == "/bin/zsh"
 
-
-def test_task_handler_uses_resolved_shell():
-    store_creds_calls: list[tuple[object, object]] = []
-    step_runner = SimpleNamespace(
-        model=Step(task="httpx", run_with={"target": "example.com"}),
-        ctx=RunContext(),
-        parent=SimpleNamespace(
-            model=SimpleNamespace(
-                defaults=SimpleNamespace(run=SimpleNamespace(shell="/bin/sh"))
-            )
-        ),
-        _child_context=lambda update=None: RunContext(),
-        _resolve_working_dir=lambda: Path.cwd(),
-        _log_warning=lambda _message: None,
-    )
-
-    with pytest.MonkeyPatch.context() as monkeypatch:
-        monkeypatch.setattr(
-            "ofx.runner.services.credential_store.should_store_creds",
-            lambda step_store_creds, parent_model: store_creds_calls.append((step_store_creds, parent_model)) or False,
-        )
-        runner = registry.get(RunType.TASK)(step_runner)
-
-    assert runner.model.shell == "/bin/sh"
-    assert store_creds_calls == [(None, step_runner.parent.model)]
-
-
-def test_task_handler_joins_target_list():
-    step_runner = SimpleNamespace(
-        model=Step(task="httpx", run_with={"targets": ["a", "b"], "threads": 2}),
-        ctx=RunContext(),
-        parent=None,
-        _child_context=lambda update=None: RunContext(),
-        _resolve_working_dir=lambda: Path.cwd(),
-        _log_warning=lambda _message: None,
-    )
-
-    with pytest.MonkeyPatch.context() as monkeypatch:
-        monkeypatch.setattr(
-            "ofx.runner.services.credential_store.should_store_creds",
-            lambda step_store_creds, parent_model: False,
-        )
-        runner = registry.get(RunType.TASK)(step_runner)
-
-    assert runner.model.target == "a,b"
-    assert runner.model.opts == {"threads": 2}
-
-
 def test_script_handler_uses_resolved_shell():
     step_runner = SimpleNamespace(
         model=Step(script="print('hi')"),

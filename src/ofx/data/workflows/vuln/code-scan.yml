@@ -1,0 +1,38 @@
+name: code-scan
+description: Static code analysis — SAST scanning for security vulnerabilities in
+  source code repositories.
+tags:
+- vuln
+- code
+- sast
+- semgrep
+- bandit
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Path to codebase or repository URL
+      alias: t
+    languages:
+      type: string
+      default: python,javascript,go,java
+      description: Languages to scan
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+jobs:
+  sast:
+    name: Static Analysis
+    steps:
+    - name: semgrep
+      run: semgrep --config auto --json -o {{ env.OFX_RUN_DIR }}/semgrep_results.json
+        {{ inputs.target }} 2>&1
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+      timeout: 120
+    - name: gitleaks
+      run: gitleaks detect --source {{ inputs.target }} --no-git -v 2>&1
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'

@@ -38,7 +38,6 @@ class TestRunType:
         assert RunType.COMMAND.value == "command"
         assert RunType.WORKFLOW.value == "workflow"
         assert RunType.SCRIPT_FILE.value == "script_file"
-        assert RunType.TASK.value == "task"
         assert RunType.PIPE.value == "pipe"
 
     def test_run_type_equality(self):

@@ -15,7 +15,7 @@ class WhoisTask(Task):
     cmd = "whois"
     description = "Domain WHOIS registration lookup"
     category = "domain/info"
-    install_cmd = "apt install -y whois"
+    install_cmd = ""
     output_types = [Domain]
 
     opts = {}

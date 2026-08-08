@@ -15,7 +15,7 @@ class WhatwebTask(Task):
     cmd = "whatweb"
     description = "Web fingerprinting and technology identification"
     category = "url/fingerprint"
-    install_cmd = "apt install -y whatweb"
+    install_cmd = ""
     output_types = [Tag]
 
     opts = {

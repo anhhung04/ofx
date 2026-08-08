@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
 from typing import Any
 
 from ofx.settings import settings
 
 logger = logging.getLogger(settings.app_branding)
+
 
 def should_store_creds(
     step_store_creds: bool | None,
@@ -28,75 +28,22 @@ def should_store_creds(
         return global_default
     return settings.auto_store_creds
 
-def store_from_typed_outputs(
-    typed_outputs: list[Any] | Sequence[Any],
-    *,
-    log_fn: Any | None = None,
-) -> int:
-    """Store [`UserAccount`](src/ofx/tasks/output_types.py:1) outputs in the credential DB."""
-
-    from ofx.tasks.output_types import UserAccount
-
-    debug = log_fn or logger.debug
-    accounts = [
-        item
-        for item in typed_outputs
-        if isinstance(item, UserAccount) and item.username
-    ]
-    if not accounts:
-        return 0
-
-    try:
-        from ofx.api.creds.exegol_history import ExegolHistoryDB
-
-        db = ExegolHistoryDB(
-            db_path=settings.credential_db_path,
-            key_path=settings.credential_key_path,
-        )
-    except (ImportError, FileNotFoundError) as exc:
-        debug(f"Credential store unavailable: {exc}")
-        return 0
-
-    stored = 0
-    for account in accounts:
-        try:
-            cred = account.to_credential()
-            existing = db.get_credential(cred.username)
-            if bool(
-                existing
-                and existing.password == cred.password
-                and existing.hash == cred.hash
-                and existing.domain == cred.domain
-            ):
-                debug(f"Credential already exists: {cred.username}")
-                continue
-            db.add_credential(
-                username=cred.username,
-                password=cred.password,
-                hash_value=cred.hash,
-                domain=cred.domain,
-                comment=cred.comment,
-            )
-            stored += 1
-        except Exception as exc:
-            debug(f"Failed to store credential for {account.username}: {exc}")
-    return stored
 
 def store_and_log_typed_outputs(
-    typed_outputs: list[Any] | Sequence[Any],
+    typed_outputs: list[Any],
     *,
     debug_fn: Any | None = None,
     info_fn: Any | None = None,
-) -> int:
-    """Store credential outputs and emit the standard success log once."""
+) -> None:
+    """Log typed outputs (credential store disabled)."""
+    debug = debug_fn or logger.debug
+    if not typed_outputs:
+        debug("No typed outputs to store")
+        return
+    debug(f"Typed outputs: {len(typed_outputs)} items (credential store disabled)")
 
-    stored = store_from_typed_outputs(typed_outputs, log_fn=debug_fn)
-    if stored and info_fn is not None:
-        info_fn(f"Stored {stored} credential(s) in credential store")
-    return stored
 
 __all__ = [
     "should_store_creds",
     "store_and_log_typed_outputs",
-    "store_from_typed_outputs",
 ]

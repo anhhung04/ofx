@@ -109,6 +109,6 @@ jobs:
 
 ## See Also
 
-- [OOB Testing](reconnaissance/oob.md) — Capture DNS/HTTP callbacks
+- [OOB Testing](#) — Capture DNS/HTTP callbacks
 - [Loot API](loot.md) — Discover artefacts to exfiltrate
 - [Bundle API](bundle.md) — Deliver scripts with embedded modules

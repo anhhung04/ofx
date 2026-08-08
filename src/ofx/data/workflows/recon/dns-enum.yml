@@ -1,0 +1,39 @@
+name: dns-enum
+description: DNS enumeration — resolve A/AAAA/CNAME/MX/NS/TXT records for discovered
+  subdomains.
+tags:
+- recon
+- dns
+- enumeration
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Domain or file of subdomains
+      alias: t
+    resolvers:
+      type: string
+      default: ''
+      description: Custom resolver file
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+jobs:
+  dns-resolve:
+    name: DNS Resolution
+    steps:
+    - name: dnsx-resolve
+      run: dnsx -l {{ inputs.target }} -a -aaaa -cname -mx -ns -txt -soa -silent -o
+        {{ env.OFX_RUN_DIR }}/dns_records.txt{% if inputs.resolvers %} -r {{ inputs.resolvers
+        }}{% endif %}
+      log-command: '{{ inputs.log_command }}'
+    - name: parse-results
+      script: "import os, json\n\nrecords = {\"A\": [], \"AAAA\": [], \"CNAME\": [],\
+        \ \"MX\": [], \"NS\": [], \"TXT\": [], \"SOA\": []}\nout = os.path.join(os.environ[\"\
+        OFX_RUN_DIR\"], \"dns_records.txt\")\ntry:\n    with open(out) as f:\n   \
+        \     for line in f:\n            line = line.strip()\n            if not\
+        \ line:\n                continue\n            parts = line.split()\n    \
+        \        print(line)\nexcept FileNotFoundError:\n    print(\"No DNS records\
+        \ found\")\nadd_outputs(dns_file=out)"

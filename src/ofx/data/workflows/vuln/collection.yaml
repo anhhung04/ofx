@@ -1,0 +1,20 @@
+name: vuln
+version: 1.0.0
+description: Vulnerability assessment workflows — CVE scanning, web application testing,
+  secret discovery, SAST code analysis, and container image scanning.
+author: OFX Community
+tags:
+- vuln
+- scan
+- cve
+- web
+- secret
+- code
+- container
+dependencies: []
+workflows:
+- code-scan.yml
+- container-scan.yml
+- secret-scan.yml
+- vuln-scan.yml
+- web-scan.yml

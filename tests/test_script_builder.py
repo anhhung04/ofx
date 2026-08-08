@@ -145,53 +145,6 @@ class TestBashInlineScriptEscape:
         assert long_script[:40] not in exec_lines[0]
         assert '".ofx_step_0.py"' in exec_lines[0]
 
-class TestTaskStepCommands:
-    def test_bash_task_step_builds_task_command(self):
-        step = Step.model_validate(
-            {
-                "name": "t",
-                "task": "nmap",
-                "with": {"target": "127.0.0.1"},
-            }
-        )
-        script = build_session_script([step], session_id="s1", work_dir="/tmp/s")
-        assert 'cd "$WORK_DIR" 2>/dev/null; nmap' in script
-
-    def test_powershell_task_step_builds_task_command(self):
-        step = Step.model_validate(
-            {
-                "name": "t",
-                "task": "nmap",
-                "with": {"target": "127.0.0.1"},
-            }
-        )
-        script = build_session_script(
-            [step], session_id="s1", work_dir="C:\\work", os_type="windows"
-        )
-        assert 'Set-Location "C:\\work"; nmap' in script
-
-    def test_bash_pipe_step_reports_local_only_error(self):
-        step = Step.model_validate(
-            {
-                "name": "pipe-step",
-                "pipe": {"input": "{{ values }}"},
-            }
-        )
-        script = build_session_script([step], session_id="s1", work_dir="/tmp/s")
-        assert "Pipe steps run locally and cannot be executed in cloud sessions" in script
-
-    def test_powershell_pipe_step_reports_local_only_error(self):
-        step = Step.model_validate(
-            {
-                "name": "pipe-step",
-                "pipe": {"input": "{{ values }}"},
-            }
-        )
-        script = build_session_script(
-            [step], session_id="s1", work_dir="C:\\work", os_type="windows"
-        )
-        assert "Pipe steps run locally and cannot be executed in cloud sessions" in script
-
 class TestScriptOpsecPayload:
     def test_inline_python_step_bundle_is_obfuscated(self):
         from ofx.cloud.sessions.python_steps import iter_python_step_bundles

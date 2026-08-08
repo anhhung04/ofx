@@ -17,7 +17,6 @@ from ofx.cloud.script_runtime import (
     build_python_step_payload,
     is_python_step_run_type,
 )
-from ofx.cloud.task_runtime import build_task_command_from_step
 from ofx.cloud.temp_upload import upload_temp_content
 from ofx.models.step import RunType
 from ofx.runner.context import (
@@ -30,7 +29,7 @@ from ofx.runner.run_defaults import model_field_is_explicitly_set
 from ofx.runner.runner import Runner
 from ofx.runner.step_fields import BASE_STEP_TEMPLATE_FIELDS, RUN_TYPE_TEMPLATE_FIELDS
 from ofx.runner.step_mixin import StepRunnerMixin
-from ofx.runner.task_profile_options import build_profile_env_overrides
+from ofx.runner.profile_env import build_profile_env_overrides
 from ofx.utils.shell import bash_dquote_escape
 
 if TYPE_CHECKING:
@@ -74,8 +73,6 @@ class _RemoteHandlerRunner:
             timeout=timeout_seconds + _NETWORK_GRACE_SECONDS,
         )
         outputs_dict: dict[str, Any] = {"stdout": output}
-        if run_type == RunType.TASK and self._outer.model.task:
-            outputs_dict["typed_outputs"] = self._outer._parse_task_output(output)
         await self._outer.reg_set(
             RunnerRegistryKeys.OUTPUTS,
             outputs_dict,
@@ -249,9 +246,6 @@ class CloudStepRunner(StepRunnerMixin, Runner):
         command: str | None = None
         if run_type == RunType.COMMAND:
             command = self.model.run
-        elif run_type == RunType.TASK:
-            profile = self.ctx.vars.get("profile_model")
-            command = build_task_command_from_step(self.model, profile=profile)
 
         if command is not None:
             return await asyncio.to_thread(
@@ -278,34 +272,6 @@ class CloudStepRunner(StepRunnerMixin, Runner):
 
     def _create_runner(self) -> _RemoteHandlerRunner:
         return _RemoteHandlerRunner(self)
-
-    def _parse_task_output(self, stdout: str) -> list[dict]:
-        """Parse stdout through the registered task's parser."""
-        try:
-            from ofx.tasks.registry import TaskRegistry
-            from ofx.runner.services.credential_store import (
-                should_store_creds,
-                store_and_log_typed_outputs,
-            )
-
-            task_cls = TaskRegistry.get(self.model.task)
-            if task_cls is None:
-                return []
-
-            results = task_cls().parse_output(stdout=stdout, stderr="")
-            if results and should_store_creds(
-                self.model.store_creds,
-                self.parent.model if self.parent else None,
-            ):
-                store_and_log_typed_outputs(
-                    results,
-                    debug_fn=self._log_debug,
-                    info_fn=self._log_info,
-                )
-            return [item.to_dict() for item in results]
-        except Exception as e:
-            self._log_debug(f"Failed to parse task output for '{self.model.task}': {e}")
-            return []
 
     def _resolve_remote_work_dir(self) -> str:
         """Resolve the working directory for remote execution.

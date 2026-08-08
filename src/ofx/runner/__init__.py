@@ -10,7 +10,6 @@ from ofx.runner.executors.job import JobExecutor
 from ofx.runner.executors.matrix import MatrixExecutor
 from ofx.runner.executors.pipe import PipeExecutor
 from ofx.runner.executors.step import StepExecutor
-from ofx.runner.executors.task import TaskExecutor
 from ofx.runner.executors.workflow import WorkflowExecutor
 from ofx.runner.handlers import HandlerRegistry
 from ofx.runner.job import JobRunner, MatrixJobRunner
@@ -60,7 +59,6 @@ __all__ = [
     "StepExecutor",
     "StepRunner",
     "StructuredLogger",
-    "TaskExecutor",
     "ToolInstallerRunner",
     "WorkflowExecutor",
     "WorkflowExecutionManager",

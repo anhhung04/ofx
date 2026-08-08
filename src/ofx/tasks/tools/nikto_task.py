@@ -14,7 +14,7 @@ class NiktoTask(Task):
     cmd = "nikto"
     description = "Web server vulnerability scanner"
     category = "vuln/scan/web"
-    install_cmd = "apt install -y nikto"
+    install_cmd = ""
     output_types = [Vulnerability]
 
     opts = {

@@ -47,7 +47,7 @@ Each step executes exactly **one** action:
 | `script` | Inline Python code |
 | `script_file` | Python file path |
 | `uses` | Reusable workflow reference |
-| `task` | Pre-built security tool wrapper (see [Tasks](tasks.md)) |
+| `task` | Pre-built security tool wrapper (see ) |
 | `pipe` | Declarative ETL pipeline (see [Pipe Steps](jobs-steps/steps.md#pipe-steps)) |
 
 
@@ -165,7 +165,7 @@ Task outputs are parsed into **typed objects** (Port, Url, Vulnerability, etc.) 
       echo "Vulns found: {{ vulns(steps['vuln-scan'].outputs.typed_outputs) | length }}"
 ```
 
-See the [Tasks guide](tasks.md) for the full list of available tools and options.
+See the  for the full list of available tools and options.
 
 ---
 

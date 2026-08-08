@@ -16,7 +16,7 @@ class FpingTask(Task):
     cmd = "fping"
     description = "ICMP ping sweep for host discovery"
     category = "ip/recon"
-    install_cmd = "apt install -y fping"
+    install_cmd = ""
     output_types = [Ip]
 
     success_codes = [0, 1]
