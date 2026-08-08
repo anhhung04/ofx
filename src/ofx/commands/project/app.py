@@ -161,6 +161,64 @@ def list_projects():
 
     console.print(table)
 
+@app.command(name="info")
+def project_info(
+    name: Annotated[str, typer.Argument(help="Project name (optional, uses active)")] = "",
+):
+    """Show project workspace structure and details"""
+    console = get_console()
+    from .project_manager import ProjectManager, PROJECT_DIRS
+
+    if name:
+        project_path = Path(ProjectManager.resolve_path(name))
+    else:
+        project_path = ProjectManager.get_active_path()
+        if project_path is None:
+            error_exit("No Project", "No active project. Use 'ofx project use <name>' or specify a project name.")
+
+    if not project_path.exists():
+        error_exit("Not Found", f"Project not found: {project_path}")
+
+    console.print(f"\n[bold cyan]Project:[/] {project_path.name}")
+    console.print(f"[dim]Location:[/] {project_path}")
+    console.print()
+
+    # Show workspace structure
+    table = Table(title="Workspace Structure", show_header=True, header_style="bold cyan")
+    table.add_column("Directory", style="cyan")
+    table.add_column("Purpose", style="dim")
+    table.add_column("Status")
+
+    for dir_name in PROJECT_DIRS:
+        dir_path = project_path / dir_name
+        if dir_path.exists():
+            file_count = sum(1 for _ in dir_path.rglob("*") if _.is_file())
+            status = f"[green]{file_count} files[/]"
+        else:
+            status = "[red]missing[/]"
+        table.add_row(f"{dir_name}/", _DIR_PURPOSE.get(dir_name, ""), status)
+
+    console.print(table)
+
+    # Show recent runs
+    runs_dir = project_path / "runs"
+    if runs_dir.exists():
+        console.print("\n[bold]Recent Runs:[/]")
+        runs = sorted(runs_dir.iterdir(), key=lambda p: p.name, reverse=True)[:5]
+        for run in runs:
+            if run.is_dir():
+                console.print(f"  [dim]{run.name}/[/]")
+
+_DIR_PURPOSE = {
+    "workflows": "Custom workflows for this engagement",
+    "targets": "Target lists (IPs, domains, URLs)",
+    "runs": "Workflow run outputs",
+    "evidence": "Screenshots, collected data",
+    "loot": "Exfiltrated data",
+    "reports": "Generated reports",
+    "notes": "Engagement notes",
+}
+
 @app.command(name="remove")
 @app.command(name="rm", hidden=True)
 def remove(name: Annotated[str, typer.Argument(help="Project name to delete")]):

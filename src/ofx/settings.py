@@ -50,13 +50,28 @@ CHANNELS_DIR = TEMP_DIR / "channels"
 ALLOWED_WORKFLOW_FILE_EXTENSIONS = (".yml", ".yaml")
 
 def get_workflow_search_dirs() -> list[Path]:
-    """Return all workflow search directories including installed collections.
+    """Return all workflow search directories including project and collections.
 
-    Combines ``DEFAULT_WORKFLOWS_DIRS`` with paths of every installed
-    collection that exists on disk.  Called lazily so that collections
-    installed after process start are still found.
+    Search order (first match wins):
+    1. Active project's ``workflows/`` directory
+    2. Current working directory
+    3. User workflows directory (``~/.ofx/workflows/``)
+    4. Built-in workflows directory (``src/ofx/data/workflows/``)
+    5. Installed collection directories
     """
-    dirs = list(DEFAULT_WORKFLOWS_DIRS)
+    dirs: list[Path] = []
+
+    # Active project workflows
+    try:
+        from ofx.commands.project.project_manager import ProjectManager
+        project_wf_dir = ProjectManager.get_project_workflow_dir()
+        if project_wf_dir is not None and project_wf_dir.is_dir():
+            dirs.append(project_wf_dir)
+    except Exception:
+        pass
+
+    dirs.extend(DEFAULT_WORKFLOWS_DIRS)
+
     collections_dir = COLLECTIONS_DIR
     if collections_dir.is_dir():
         for child in sorted(collections_dir.iterdir()):

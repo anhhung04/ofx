@@ -65,7 +65,19 @@ class WorkflowExecutor(Executor):
         output_path = runner.ctx.output_path
         if output_path:
             output_path.mkdir(parents=True, exist_ok=True)
-        runner._run_dir = Path(tempfile.mkdtemp(prefix="ofx_run_"))
+
+        # Use project run directory if active, otherwise temp dir
+        try:
+            from ofx.commands.project.project_manager import ProjectManager
+            wf_name = runner.model.name or "workflow"
+            project_run_dir = ProjectManager.get_run_dir(wf_name)
+            if project_run_dir is not None:
+                runner._run_dir = project_run_dir
+                runner._log_info(f"Using project run dir: {project_run_dir}")
+            else:
+                runner._run_dir = Path(tempfile.mkdtemp(prefix="ofx_run_"))
+        except Exception:
+            runner._run_dir = Path(tempfile.mkdtemp(prefix="ofx_run_"))
         runner.update_env({"OFX_RUN_DIR": str(runner._run_dir)})
         runner.update_vars(
             {"working_directory": runner.model.defaults.run.working_directory}
