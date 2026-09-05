@@ -429,6 +429,24 @@ class TestFlowValidate:
         assert "Workflow Validation" in output
         assert "test-workflow" in output
 
+class TestWorkflowNames:
+    def test_list_available_workflows_preserves_category(self, tmp_path: Path):
+        from ofx.utils.workflow_utils import list_available_workflows
+
+        workflow_root = tmp_path / "workflows"
+        (workflow_root / "recon").mkdir(parents=True)
+        (workflow_root / "scan").mkdir()
+        (workflow_root / "recon" / "dns-enum.yml").write_text("name: dns-enum")
+        (workflow_root / "scan" / "host-discovery.yml").write_text(
+            "name: host-discovery"
+        )
+
+        assert list_available_workflows((workflow_root,)) == [
+            "recon/dns-enum",
+            "scan/host-discovery",
+        ]
+
+
 class TestFlowRunSuggestions:
     def test_suggest_similar_workflows_uses_module_workflow_lister(self, monkeypatch):
         import importlib

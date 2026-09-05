@@ -213,10 +213,8 @@ def list_available_workflows(search_dirs: tuple[str | Path, ...]) -> list[str]:
         d = Path(d)
         if not d.is_dir():
             continue
-        for f in d.rglob("*.yml"):
-            workflows.append(f.stem)
-        for f in d.rglob("*.yaml"):
-            workflows.append(f.stem)
+        for f in (*d.rglob("*.yml"), *d.rglob("*.yaml")):
+            workflows.append(f.relative_to(d).with_suffix("").as_posix())
     return sorted(set(workflows))
 
 def find_all_workflows(search_dirs: list[Path]) -> list[Path]:
