@@ -10,7 +10,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from ofx.models.config import DurableRunConfig
-from ofx.settings import DEFAULT_WORKFLOWS_DIRS
+from ofx.settings import get_workflow_search_dirs
 from ofx.utils.env import populate_env
 
 class RunnerStatus(Enum):
@@ -51,7 +51,7 @@ class RunContext(BaseModel):
         description="Whether interactive mode is allowed (single job in stage)",
     )
     workflow_dirs: list[Path] = Field(
-        default=DEFAULT_WORKFLOWS_DIRS,
+        default_factory=get_workflow_search_dirs,
         description="Directories to search for workflow files",
     )
     durable: DurableRunConfig | None = Field(

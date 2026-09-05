@@ -10,8 +10,8 @@ from pathlib import Path
 from ofx.settings import (
     ALLOWED_WORKFLOW_FILE_EXTENSIONS,
     BUILTIN_WORKFLOWS_DIR,
-    DEFAULT_WORKFLOWS_DIRS,
     get_console,
+    get_workflow_search_dirs,
 )
 
 logger = logging.getLogger("ofx")
@@ -149,12 +149,13 @@ def lint_workflows(all_workflows: bool = False, workflow_name: str = "") -> None
             from ofx.utils.workflow_utils import find_workflow as workflow_finder
 
         with suppress(RuntimeError):
-            wf = workflow_finder(workflow_name, tuple(DEFAULT_WORKFLOWS_DIRS))
+            dirs = get_workflow_search_dirs()
+            wf = workflow_finder(workflow_name, tuple(dirs))
             if wf.workflow_path:
                 files = [wf.workflow_path]
 
         if not files:
-            for directory in DEFAULT_WORKFLOWS_DIRS:
+            for directory in dirs:
                 if not directory.is_dir():
                     continue
                 for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:

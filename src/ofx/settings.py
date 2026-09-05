@@ -53,13 +53,25 @@ def get_workflow_search_dirs() -> list[Path]:
     """Return all workflow search directories including project and collections.
 
     Search order (first match wins):
-    1. Active project's ``workflows/`` directory
-    2. Current working directory
-    3. User workflows directory (``~/.ofx/workflows/``)
-    4. Built-in workflows directory (``src/ofx/data/workflows/``)
-    5. Installed collection directories
+    1. Exegol workspace ``workflows/`` directory, when configured
+    2. Shared Exegol resource workflows, when configured
+    3. Active project's ``workflows/`` directory
+    4. Current working directory
+    5. User workflows directory (``~/.ofx/workflows/``)
+    6. Built-in workflows directory (``src/ofx/data/workflows/``)
+    7. Installed collection directories
     """
     dirs: list[Path] = []
+
+    # Exegol integration is opt-in and workspace-local state stays outside
+    # Exegol's own control-plane metadata.
+    workspace = os.getenv("EXEGOL_WORKSPACE_ROOT") or os.getenv("EXEGOL_WORKSPACE")
+    if workspace:
+        workspace_path = Path(workspace).expanduser()
+        dirs.append(workspace_path / "workflows")
+    resources = os.getenv("EXEGOL_RESOURCES")
+    if resources:
+        dirs.append(Path(resources).expanduser() / "integrations" / "ofx" / "workflows")
 
     # Active project workflows
     try:

@@ -9,17 +9,17 @@ from rich.panel import Panel
 from ofx.models.job import Job
 from ofx.models.workflow import Workflow
 from ofx.runner.step_descriptors import step_type_label
-from ofx.settings import DEFAULT_WORKFLOWS_DIRS, get_console
+from ofx.settings import get_console, get_workflow_search_dirs
 from ofx.utils.workflow_utils import find_workflow
 
 def _find_workflow_fuzzy(name: str) -> Workflow:
     """Find workflow by name, with recursive fallback for bare names."""
-    dirs = tuple(DEFAULT_WORKFLOWS_DIRS)
+    dirs = tuple(get_workflow_search_dirs())
     with suppress(RuntimeError):
         return find_workflow(name, dirs)
     from ofx.settings import ALLOWED_WORKFLOW_FILE_EXTENSIONS
 
-    for d in DEFAULT_WORKFLOWS_DIRS:
+    for d in dirs:
         if not d.is_dir():
             continue
         for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:

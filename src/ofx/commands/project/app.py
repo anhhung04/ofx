@@ -15,13 +15,10 @@ app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 NAME = "project"
 HELP = "Manage Red Team projects."
 
+
 @app.command()
 def init(
     name: Annotated[str, typer.Argument(help="Project name")],
-    is_multiphase: Annotated[
-        bool,
-        typer.Option("--multiphase", "-m", help="Initialize a multi-phase project"),
-    ] = False,
 ):
     """Init new OFX project"""
     console = get_console()
@@ -30,13 +27,14 @@ def init(
 
     console.print(f"[bold green]Creating project '{name}'...[/bold green]")
     base = ProjectManager.create_project(name)
-    InitHandler.run_interactive(Path(base), is_multiphase)
+    InitHandler.run_interactive(Path(base))
 
     print_success(
         "Project Created",
         f"Project '{name}' initialized successfully!",
         details={"Location": base},
     )
+
 
 @app.command()
 def sync(
@@ -93,6 +91,7 @@ def sync(
         details={"Project": project},
     )
 
+
 @app.command(name="import")
 def import_project(
     url: Annotated[str, typer.Argument(help="Git repository URL to clone")],
@@ -118,6 +117,7 @@ def import_project(
         "Project imported successfully!",
         details={"Name": name, "URL": url},
     )
+
 
 @app.command(name="list")
 @app.command(name="ls", hidden=True)
@@ -161,20 +161,26 @@ def list_projects():
 
     console.print(table)
 
+
 @app.command(name="info")
 def project_info(
-    name: Annotated[str, typer.Argument(help="Project name (optional, uses active)")] = "",
+    name: Annotated[
+        str, typer.Argument(help="Project name (optional, uses active)")
+    ] = "",
 ):
     """Show project workspace structure and details"""
     console = get_console()
-    from .project_manager import ProjectManager, PROJECT_DIRS
+    from .project_manager import PROJECT_DIRS, ProjectManager
 
     if name:
         project_path = Path(ProjectManager.resolve_path(name))
     else:
         project_path = ProjectManager.get_active_path()
         if project_path is None:
-            error_exit("No Project", "No active project. Use 'ofx project use <name>' or specify a project name.")
+            error_exit(
+                "No Project",
+                "No active project. Use 'ofx project use <name>' or specify a project name.",
+            )
 
     if not project_path.exists():
         error_exit("Not Found", f"Project not found: {project_path}")
@@ -184,7 +190,9 @@ def project_info(
     console.print()
 
     # Show workspace structure
-    table = Table(title="Workspace Structure", show_header=True, header_style="bold cyan")
+    table = Table(
+        title="Workspace Structure", show_header=True, header_style="bold cyan"
+    )
     table.add_column("Directory", style="cyan")
     table.add_column("Purpose", style="dim")
     table.add_column("Status")
@@ -209,15 +217,14 @@ def project_info(
             if run.is_dir():
                 console.print(f"  [dim]{run.name}/[/]")
 
+
 _DIR_PURPOSE = {
-    "workflows": "Custom workflows for this engagement",
-    "targets": "Target lists (IPs, domains, URLs)",
-    "runs": "Workflow run outputs",
-    "evidence": "Screenshots, collected data",
-    "loot": "Exfiltrated data",
-    "reports": "Generated reports",
-    "notes": "Engagement notes",
+    "evidence": "Evidence and collected files",
+    "notes": "Human-authored asset and engagement notes",
+    "workflows": "Workspace-local workflow definitions",
+    "runs": "Generated workflow outputs",
 }
+
 
 @app.command(name="remove")
 @app.command(name="rm", hidden=True)
@@ -256,6 +263,7 @@ def remove(name: Annotated[str, typer.Argument(help="Project name to delete")]):
             f"Failed to delete project '{name}'",
         )
 
+
 @app.command(name="use")
 def use(
     name: Annotated[
@@ -288,6 +296,7 @@ def use(
     os.environ["OFX_ACTIVE_PROJECT"] = name
     settings.active_project = name
     console.print(f"[green]Active project set to:[/] {name} → {resolved}")
+
 
 @app.command()
 def status(
@@ -399,12 +408,14 @@ def status(
     )
     console.print(panel)
 
+
 @app.command(hidden=True)
 def encrypt_filter():
     """Git clean filter: Encrypt stdin to stdout (used by git attributes)"""
     from .encryption import GitFilterHandler
 
     GitFilterHandler.encrypt_stdin_to_stdout()
+
 
 @app.command(hidden=True)
 def decrypt_filter():

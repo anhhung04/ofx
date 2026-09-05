@@ -8,6 +8,7 @@ from typer.testing import CliRunner
 
 import ofx.settings as settings_mod
 from ofx.commands.project.app import app
+from ofx.commands.project.project_manager import ProjectManager
 
 runner = CliRunner()
 
@@ -30,8 +31,6 @@ def temp_home(tmp_path, monkeypatch):
 
 
 def test_use_set_and_clear(temp_home):
-    from ofx.commands.project.project_manager import ProjectManager
-
     proj_name = "myproj"
     ProjectManager.create_project(proj_name)
 
@@ -55,3 +54,20 @@ def test_use_invalid_project(temp_home):
 
     assert result.exit_code == 1
     assert "Project 'nosuchproj' not found" in result.output
+
+
+def test_create_project_uses_minimal_workspace_tree(tmp_path, monkeypatch):
+    monkeypatch.setenv("OFX_PROJECTS_PATH", str(tmp_path))
+
+    project = Path(ProjectManager.create_project("demo project"))
+
+    assert {path.name for path in project.iterdir()} == {
+        ".git",
+        ".gitignore",
+        "README.md",
+        "evidence",
+        "notes",
+        "runs",
+        "workflows",
+    }
+    assert "Rules of Engagement" in (project / "README.md").read_text()

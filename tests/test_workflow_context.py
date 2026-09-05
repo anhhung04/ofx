@@ -67,18 +67,16 @@ class TestWorkflowDirectoryOperations:
 
     def test_context_has_default_workflow_dirs(self):
         """Test that RunContext initializes with default workflow_dirs"""
-        from ofx.settings import DEFAULT_WORKFLOWS_DIRS
+        from ofx.settings import get_workflow_search_dirs
 
         ctx = RunContext()
 
         assert isinstance(ctx.workflow_dirs, list)
-        assert len(ctx.workflow_dirs) == len(DEFAULT_WORKFLOWS_DIRS)
-        for dir in DEFAULT_WORKFLOWS_DIRS:
-            assert dir in ctx.workflow_dirs
+        assert ctx.workflow_dirs == get_workflow_search_dirs()
 
     def test_workflow_runner_initializes_workflow_dirs(self):
         """Test that WorkflowRunner uses default workflow_dirs from context"""
-        from ofx.settings import DEFAULT_WORKFLOWS_DIRS
+        from ofx.settings import get_workflow_search_dirs
 
         test_workflow_content = """
 name: test
@@ -97,13 +95,12 @@ jobs:
         workflow_obj = Workflow.model_validate(workflow)
 
         ctx = RunContext()
-        assert len(ctx.workflow_dirs) == len(DEFAULT_WORKFLOWS_DIRS)
+        expected_dirs = get_workflow_search_dirs()
+        assert ctx.workflow_dirs == expected_dirs
 
         runner = WorkflowRunner(workflow_obj, ctx)
 
-        assert len(runner.ctx.workflow_dirs) == len(DEFAULT_WORKFLOWS_DIRS)
-        for dir in DEFAULT_WORKFLOWS_DIRS:
-            assert dir.absolute() in runner.ctx.workflow_dirs
+        assert runner.ctx.workflow_dirs == expected_dirs
 
     def test_workflow_runner_preserves_existing_dirs(self):
         """Test that WorkflowRunner preserves workflow_dirs if already set"""

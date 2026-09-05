@@ -241,7 +241,30 @@ class TestCollectionManager:
         assert mgr.migrate_from_assets(assets_file) == 0
 
 class TestWorkflowSearchIntegration:
-    """Verify that get_workflow_search_dirs() picks up collection directories."""
+    """Verify that get_workflow_search_dirs() picks up integration directories."""
+
+    def test_exegol_workspace_and_resources_precede_tool_defaults(
+        self, tmp_path: Path, monkeypatch
+    ):
+        import ofx.settings as s
+        from ofx.commands.project.project_manager import ProjectManager
+
+        workspace = tmp_path / "workspace"
+        resources = tmp_path / "resources"
+        defaults = tmp_path / "defaults"
+        monkeypatch.setenv("EXEGOL_WORKSPACE_ROOT", str(workspace))
+        monkeypatch.setenv("EXEGOL_RESOURCES", str(resources))
+        monkeypatch.setattr(s, "DEFAULT_WORKFLOWS_DIRS", [defaults])
+        monkeypatch.setattr(s, "COLLECTIONS_DIR", tmp_path / "missing")
+        monkeypatch.setattr(
+            ProjectManager, "get_project_workflow_dir", staticmethod(lambda: None)
+        )
+
+        assert s.get_workflow_search_dirs() == [
+            workspace / "workflows",
+            resources / "integrations" / "ofx" / "workflows",
+            defaults,
+        ]
 
     def test_includes_collection_dirs(self, tmp_path: Path, monkeypatch):
         """Collections directory is scanned and added to search dirs."""
@@ -265,9 +288,13 @@ class TestWorkflowSearchIntegration:
     def test_empty_collections_dir(self, tmp_path: Path, monkeypatch):
         """When no collections are installed, only default dirs + built-in workflow dirs are returned."""
         import ofx.settings as s
+        from ofx.commands.project.project_manager import ProjectManager
 
         monkeypatch.setattr(s, "COLLECTIONS_DIR", tmp_path / "empty")
         monkeypatch.setattr(s, "DEFAULT_WORKFLOWS_DIRS", [tmp_path / "wf"])
+        monkeypatch.setattr(
+            ProjectManager, "get_project_workflow_dir", staticmethod(lambda: None)
+        )
 
         dirs = s.get_workflow_search_dirs()
         assert dirs[0] == tmp_path / "wf"

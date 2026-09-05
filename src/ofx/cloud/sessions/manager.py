@@ -5,6 +5,7 @@ Orchestrates both **local** (background subprocess) and **cloud** (VPS) sessions
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import secrets as _secrets
@@ -13,20 +14,19 @@ import shutil
 import signal
 import subprocess
 import tarfile
-import json
+from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from collections.abc import Callable
 from typing import Any
 
+from ofx.cloud.runtime import remote_join
 from ofx.cloud.sessions.encryption import decrypt_results, encrypt_results
 from ofx.cloud.sessions.models import Session, SessionStatus, SessionTarget
 from ofx.cloud.sessions.python_steps import (
     iter_python_step_bundles as _iter_python_step_bundles,
 )
-from ofx.cloud.runtime import remote_join
 from ofx.cloud.sessions.script_builder import build_session_script
 from ofx.cloud.sessions.store import SessionStore
 from ofx.cloud.temp_upload import upload_temp_content
@@ -142,10 +142,10 @@ class SessionManager:
         """
         session_id = _secrets.token_hex(4)
 
-        from ofx.settings import DEFAULT_WORKFLOWS_DIRS
+        from ofx.settings import get_workflow_search_dirs
         from ofx.utils.workflow_utils import find_workflow
 
-        workflow = find_workflow(workflow_file, tuple(DEFAULT_WORKFLOWS_DIRS))
+        workflow = find_workflow(workflow_file, tuple(get_workflow_search_dirs()))
         session_steps, resolved_job_id = self._resolve_session_steps(workflow, job_id)
         workflow_name = workflow.name or Path(workflow_file).stem
         profile_name = workflow.defaults.profile or ""
@@ -1711,8 +1711,8 @@ class SessionManager:
 
     def _reconnect(self, session: Session) -> Any:
         """Create a PostSSH or PostWinRM to reconnect to a session's host."""
-        from ofx.models.cloud import CloudConfig
         from ofx.cloud.runtime import create_remote_runner
+        from ofx.models.cloud import CloudConfig
 
         connection = _cloud_connection_settings(
             os_type=session.os_type or "linux",

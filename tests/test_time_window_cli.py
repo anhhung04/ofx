@@ -264,27 +264,6 @@ class TestExecutionSummaryPanel:
         assert "EXPIRED" in output
         assert "aborted" in output
 
-class TestEngagementFileStructure:
-    """Test that ENGAGEMENT_FILE_STRUCTURE includes notes and reports."""
-
-    def test_contains_notes(self):
-        from ofx.commands.project.handlers.init import ENGAGEMENT_FILE_STRUCTURE
-
-        flat = [e if isinstance(e, str) else e[0] for e in ENGAGEMENT_FILE_STRUCTURE]
-        assert "notes" in flat
-
-    def test_contains_reports(self):
-        from ofx.commands.project.handlers.init import ENGAGEMENT_FILE_STRUCTURE
-
-        flat = [e if isinstance(e, str) else e[0] for e in ENGAGEMENT_FILE_STRUCTURE]
-        assert "reports" in flat
-
-    def test_structure_is_list(self):
-        from ofx.commands.project.handlers.init import ENGAGEMENT_FILE_STRUCTURE
-
-        assert isinstance(ENGAGEMENT_FILE_STRUCTURE, list)
-        assert len(ENGAGEMENT_FILE_STRUCTURE) > 0
-
 class TestFlowRunHandlerTimeWindow:
     """Test that FlowRunHandler injects _cli_time_window into run_vars."""
 

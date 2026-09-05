@@ -106,7 +106,9 @@ class TestFlowInfo:
         flow = nested / "fallback.yml"
         flow.write_text(yaml.dump(MINIMAL_WORKFLOW))
 
-        monkeypatch.setattr("ofx.commands.flow.info.DEFAULT_WORKFLOWS_DIRS", [tmp_path])
+        monkeypatch.setattr(
+            "ofx.commands.flow.info.get_workflow_search_dirs", lambda: [tmp_path]
+        )
         monkeypatch.setattr(
             "ofx.commands.flow.info.find_workflow",
             lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("missing")),
@@ -286,7 +288,9 @@ class TestFlowVisualize:
         flow = nested / "fallback.yml"
         flow.write_text(yaml.dump(MINIMAL_WORKFLOW))
 
-        monkeypatch.setattr("ofx.commands.flow.info.DEFAULT_WORKFLOWS_DIRS", [tmp_path])
+        monkeypatch.setattr(
+            "ofx.commands.flow.info.get_workflow_search_dirs", lambda: [tmp_path]
+        )
         monkeypatch.setattr(
             "ofx.commands.flow.info.find_workflow",
             lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("missing")),

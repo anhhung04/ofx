@@ -9,9 +9,9 @@ from pathlib import Path
 from ofx.models.workflow import Workflow
 from ofx.settings import (
     ALLOWED_WORKFLOW_FILE_EXTENSIONS,
-    BUILTIN_WORKFLOWS_DIR,
-    DEFAULT_WORKFLOWS_DIRS,
+    BUILTIN_WORKFLOWS_DIR,  # noqa: F401 - compatibility for callers/tests monkeypatching this module
     get_console,
+    get_workflow_search_dirs,
 )
 
 logger = logging.getLogger("ofx")
@@ -98,14 +98,7 @@ def validate_workflows(
     if all_workflows:
         seen: set[str] = set()
         files: list[Path] = []
-        dirs: list[Path] = []
-
-        if BUILTIN_WORKFLOWS_DIR.is_dir():
-            dirs.append(BUILTIN_WORKFLOWS_DIR)
-
-        user_dir = Path.home() / ".ofx" / "workflows"
-        if user_dir.is_dir():
-            dirs.append(user_dir)
+        dirs = get_workflow_search_dirs()
 
         collection_manager_cls = CollectionManager
         if collection_manager_cls is None:
@@ -193,10 +186,10 @@ def validate_workflows(
         from ofx.utils.workflow_utils import find_workflow as workflow_finder
 
     try:
-        wf = workflow_finder(workflow_name, tuple(DEFAULT_WORKFLOWS_DIRS))
+        wf = workflow_finder(workflow_name, tuple(get_workflow_search_dirs()))
         path = wf.workflow_path
     except RuntimeError:
-        for d in DEFAULT_WORKFLOWS_DIRS:
+        for d in get_workflow_search_dirs():
             if not d.is_dir():
                 continue
             for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:

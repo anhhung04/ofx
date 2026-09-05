@@ -18,29 +18,6 @@ from ..encryption import (
 
 logger = logging.getLogger(settings.app_branding)
 
-ENGAGEMENT_FILE_STRUCTURE: list[str | tuple[str, list]] = [
-    ("evidence", ["creds", "data", "screenshots"]),
-    "hosts",
-    "logs",
-    "osint",
-    "scans",
-    "scope",
-    "subdomains",
-    "targets",
-    "vulns",
-    "web",
-    "certs",
-    "tools",
-    "exploits",
-    "post-exploits",
-    "notes",
-    "reports",
-]
-
-DIRECTORY_STRUCTURE: list[str | tuple[str, list]] = [
-    ("ept", ENGAGEMENT_FILE_STRUCTURE),
-    ("ipt", ENGAGEMENT_FILE_STRUCTURE + ["lateral-movement"]),
-]
 
 class InitConfig:
     """Configuration for project initialization."""
@@ -48,18 +25,17 @@ class InitConfig:
     def __init__(
         self,
         base_path: Path,
-        is_multiphase: bool = False,
         remote_type: str = "",
         remote_config: dict[str, Any] | None = None,
         encrypt: bool = False,
         encryption_key: str = "",
     ):
         self.base_path = base_path
-        self.is_multiphase = is_multiphase
         self.remote_type = remote_type
         self.remote_config = remote_config or {}
         self.encrypt = encrypt
         self.encryption_key = encryption_key
+
 
 class InitHandler:
     """Handles project initialization."""
@@ -68,7 +44,7 @@ class InitHandler:
         self._config = config
 
     @classmethod
-    def run_interactive(cls, base_path: Path, is_multiphase: bool = False) -> None:
+    def run_interactive(cls, base_path: Path) -> None:
         """Run initialization with interactive prompts."""
         console = get_console()
         remote_type = "git"
@@ -114,7 +90,6 @@ class InitHandler:
 
         config = InitConfig(
             base_path=base_path,
-            is_multiphase=is_multiphase,
             remote_type=remote_type,
             remote_config=remote_config,
             encrypt=encrypt,
@@ -125,21 +100,11 @@ class InitHandler:
         cls(config).run()
 
     def run(self) -> None:
-        """Execute project initialization."""
+        """Configure Git and optional remote storage."""
         console = get_console()
         cfg = self._config
 
-        if cfg.is_multiphase:
-            console.print(
-                f"✅ Initializing multi-phase project at: {cfg.base_path.absolute()}"
-            )
-            self._make_dir(cfg.base_path, DIRECTORY_STRUCTURE)
-        else:
-            console.print(
-                f"✅ Initializing single-phase project at: {cfg.base_path.absolute()}"
-            )
-            self._make_dir(cfg.base_path, ENGAGEMENT_FILE_STRUCTURE)
-
+        console.print(f"✅ Initializing project at: {cfg.base_path.absolute()}")
         self._setup_local_git()
 
         if cfg.remote_type and cfg.remote_config.get("url"):

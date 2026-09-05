@@ -1,6 +1,6 @@
 import logging
 import shutil
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from os import getenv
 from pathlib import Path
 
@@ -9,15 +9,7 @@ from ofx.settings import DEFAULT_PROJECTS_PATH
 logger = logging.getLogger("ofx")
 
 # Standard project workspace directories
-PROJECT_DIRS = [
-    "workflows",    # custom workflows for this engagement
-    "targets",      # target lists (IPs, domains, URLs)
-    "runs",         # workflow run outputs (organized by date)
-    "evidence",     # screenshots, collected data
-    "loot",         # exfiltrated data
-    "reports",      # generated reports
-    "notes",        # engagement notes
-]
+PROJECT_DIRS = ["evidence", "notes", "workflows", "runs"]
 
 PROJECT_GITIGNORE = """# OFX Project
 .ofx-encryption-key
@@ -37,12 +29,18 @@ Thumbs.db
 
 PROJECT_README = """# {name}
 
-## Engagement Info
+## Authorization and Rules of Engagement
 
-- **Client:** 
-- **Scope:** 
-- **Start Date:** {date}
+- **Client:**
+- **Authorized scope:**
+- **Out of scope:**
+- **Rules of engagement:**
+- **Start date:** {date}
 - **Status:** Active
+
+## Notes
+
+Keep scope, RoE, targets, decisions, and engagement notes in this file.
 
 ## Quick Start
 
@@ -56,15 +54,13 @@ ofx flow run workflows/my-scan.yml
 
 ## Structure
 
-| Directory | Purpose |
+| Path | Purpose |
 |---|---|
-| `workflows/` | Custom workflows for this engagement |
-| `targets/` | Target lists (IPs, domains, URLs) |
-| `runs/` | Workflow run outputs (organized by date) |
-| `evidence/` | Screenshots, collected data |
-| `loot/` | Exfiltrated data |
-| `reports/` | Generated reports |
-| `notes/` | Engagement notes |
+| `README.md` | Authorization, scope, RoE, targets, and notes |
+| `evidence/` | Evidence and collected files |
+| `notes/` | Human-authored asset and engagement notes |
+| `workflows/` | Workspace-local OFX workflows |
+| `runs/` | Generated workflow output (ignored by Git) |
 """
 
 
@@ -125,10 +121,12 @@ class ProjectManager:
         # Create README
         readme = project_path / "README.md"
         if not readme.exists():
-            readme.write_text(PROJECT_README.format(
-                name=safe_name,
-                date=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-            ))
+            readme.write_text(
+                PROJECT_README.format(
+                    name=safe_name,
+                    date=datetime.now(UTC).strftime("%Y-%m-%d"),
+                )
+            )
 
         # Create .gitignore
         gitignore = project_path / ".gitignore"
@@ -174,7 +172,7 @@ class ProjectManager:
         active = cls.get_active_path()
         if active is None:
             return None
-        date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        date_str = datetime.now(UTC).strftime("%Y-%m-%d")
         run_dir = active / "runs" / f"{date_str}_{workflow_name}"
         run_dir.mkdir(parents=True, exist_ok=True)
         return run_dir
