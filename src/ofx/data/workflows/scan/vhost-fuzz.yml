@@ -1,0 +1,52 @@
+name: vhost-fuzz
+description: Virtual host discovery — fuzz Host headers against an IP to uncover hidden
+  vhosts not visible in DNS.
+tags:
+- scan
+- fuzz
+- vhost
+- web
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: IP or host to fuzz
+      alias: t
+    base_domain:
+      required: true
+      type: string
+      description: Base domain for Host header (e.g. example.com)
+      alias: d
+    wordlist:
+      type: string
+      default: /usr/share/seclists/Discovery/DNS/subdomains-top1million-20000.txt
+      description: Subdomain wordlist for Host fuzzing
+    port:
+      type: number
+      default: 443
+      description: Target port
+    scheme:
+      type: string
+      default: https
+      description: http or https
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+jobs:
+  vhost:
+    name: Virtual Host Fuzzing
+    steps:
+    - name: cdn-check
+      run: echo {{ inputs.target }} | cdncheck -cdn -silent -resp
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+    - name: ffuf-vhost
+      run: 'ffuf -u {{ inputs.scheme }}://{{ inputs.target }}:{{ inputs.port }}/ -H
+        "Host: FUZZ.{{ inputs.base_domain }}" -w {{ inputs.wordlist }} -ac -of csv -o
+        {{ env.OFX_RUN_DIR }}/vhost_results.csv'
+
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+      timeout: 240

@@ -1,0 +1,98 @@
+name: waf-detect
+description: WAF/CDN detection — fingerprint WAF and CDN providers in front of targets
+  and produce a filtered target list so protected hosts are skipped by aggressive scans.
+tags:
+- scan
+- waf
+- cdn
+- detect
+- opsec
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Host/URL or file of targets to check
+      alias: t
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+jobs:
+  detect:
+    name: WAF/CDN Detection
+    outputs:
+      clean_targets: '{{ steps.split.outputs.clean_targets }}'
+      waf_count: '{{ steps.split.outputs.waf_count }}'
+      cdn_count: '{{ steps.split.outputs.cdn_count }}'
+    steps:
+    - name: normalize
+      script: |
+        import os
+        src = str(__inputs__.get("target", ""))
+        rd = os.environ["OFX_RUN_DIR"]
+        values = open(src).read().splitlines() if os.path.isfile(src) else [src]
+        targets = [v.strip() for v in values if v.strip()]
+        out = os.path.join(rd, "waf_input.txt")
+        with open(out, "w") as fh:
+            fh.write("\n".join(targets))
+        print(f"checking {len(targets)} targets")
+    - name: cdncheck
+      run: cdncheck -l {{ env.OFX_RUN_DIR }}/waf_input.txt -cdn -waf -silent -resp -o {{ env.OFX_RUN_DIR }}/cdncheck_results.txt
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+    - name: wafw00f
+      run: wafw00f -i {{ env.OFX_RUN_DIR }}/waf_input.txt -f json -o {{ env.OFX_RUN_DIR }}/wafw00f_results.json
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+    - name: split
+      script: |
+        import os, json, re
+        rd = os.environ["OFX_RUN_DIR"]
+
+        targets = open(os.path.join(rd, "waf_input.txt")).read().splitlines()
+        protected = {}
+
+        # cdncheck output lines: <target> [provider,...]
+        try:
+            for line in open(os.path.join(rd, "cdncheck_results.txt")):
+                line = line.strip()
+                if not line:
+                    continue
+                host, _, rest = line.partition(" ")
+                providers = re.findall(r"[a-zA-Z0-9&]+", rest)
+                protected.setdefault(host, set()).update(providers or {"cdn/waf"})
+        except FileNotFoundError:
+            pass
+
+        try:
+            for entry in json.load(open(os.path.join(rd, "wafw00f_results.json"))):
+                url = entry.get("url") or entry.get("URL") or ""
+                waf = entry.get("firewall") or ""
+                if url and waf and waf.lower() not in ("none", "generic", ""):
+                    protected.setdefault(url, set()).add(waf)
+        except (FileNotFoundError, json.JSONDecodeError):
+            pass
+
+        waf_hosts, cdn_hosts, clean = [], [], []
+        for t in targets:
+            if t in protected:
+                providers = sorted(protected[t])
+                print(f"protected: {t} ({', '.join(providers)})")
+                waf_hosts.append(t)
+            else:
+                clean.append(t)
+
+        for name, items in (("targets_waf.txt", waf_hosts), ("targets_cdn.txt", cdn_hosts), ("targets_clean.txt", clean)):
+            with open(os.path.join(rd, name), "w") as fh:
+                fh.write("\n".join(items))
+
+        print(f"clean: {len(clean)}, protected: {len(waf_hosts)}")
+        if not clean:
+            print("all targets are WAF/CDN protected — aggressive scanning skipped")
+        add_outputs(
+            clean_targets=os.path.join(rd, "targets_clean.txt"),
+            clean_count=len(clean),
+            waf_count=len(waf_hosts),
+            cdn_count=len(cdn_hosts),
+        )

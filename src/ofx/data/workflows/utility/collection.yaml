@@ -14,3 +14,4 @@ workflows:
 - export-results.yml
 - extract-iocs.yml
 - parse-targets.yml
+- classify-target.yml

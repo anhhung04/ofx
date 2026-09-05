@@ -1,0 +1,60 @@
+name: subdomain-permute
+description: Subdomain permutation enumeration — generate and resolve name variations
+  from known subdomains with alterx/dnsgen.
+tags:
+- recon
+- subdomain
+- permutation
+- active
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: File of known subdomains
+      alias: t
+    resolvers:
+      type: string
+      default: ''
+      description: Custom DNS resolver file
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+jobs:
+  permute:
+    name: Subdomain Permutations
+    outputs:
+      subdomains: '{{ steps.resolve.outputs.subdomain_file }}'
+      count: '{{ steps.resolve.outputs.subdomain_count }}'
+    steps:
+    - name: alterx
+      run: alterx -l {{ inputs.target }} -o {{ env.OFX_RUN_DIR }}/permutations.txt
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+    - name: dnsgen
+      run: dnsgen {{ inputs.target }} > {{ env.OFX_RUN_DIR }}/permutations_dnsgen.txt
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+    - name: resolve
+      script: |
+        import os
+        rd = os.environ["OFX_RUN_DIR"]
+        seen = set()
+        for name in ("permutations.txt", "permutations_dnsgen.txt"):
+            try:
+                with open(os.path.join(rd, name)) as fh:
+                    seen.update(line.strip() for line in fh if line.strip())
+            except FileNotFoundError:
+                pass
+        out = os.path.join(rd, "all_permutations.txt")
+        with open(out, "w") as fh:
+            fh.write("\n".join(sorted(seen)))
+        print(f"generated {len(seen)} permutations to resolve")
+        add_outputs(subdomain_file=out, subdomain_count=len(seen))
+    - name: puredns-resolve
+      run: puredns resolve {{ env.OFX_RUN_DIR }}/all_permutations.txt -w {{ env.OFX_RUN_DIR
+        }}/resolved_permutations.txt{% if inputs.resolvers %} -r {{ inputs.resolvers }}{% endif %}
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+      timeout: 240

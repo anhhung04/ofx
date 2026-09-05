@@ -4,6 +4,7 @@ Submodules
 ----------
 osint     -- email patterns, domain permutations, crt.sh, DNS helpers
 portscan  -- async TCP connect scanner
+targets   -- target classification (domain/subdomain/cidr/ip/url)
 web       -- HTTP tech fingerprinting and security header auditing
 """
 
@@ -20,6 +21,7 @@ from .osint import (
     zone_transfer_command,
 )
 from .portscan import TOP_100_PORTS, PortResult, async_port_scan, port_scan
+from .targets import TARGET_TYPES, classify_target, split_targets
 from .web import robots_txt_url, security_headers_audit, web_fingerprint
 
 __all__ = [
@@ -32,6 +34,9 @@ __all__ = [
     "reverse_dns_command",
     "zone_transfer_command",
     "TOP_100_PORTS",
+    "TARGET_TYPES",
+    "classify_target",
+    "split_targets",
     "PortResult",
     "async_port_scan",
     "port_scan",

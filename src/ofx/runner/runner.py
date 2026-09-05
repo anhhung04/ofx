@@ -165,8 +165,18 @@ class Runner[TModel: BaseModel]:
     def _build_template_context(self) -> dict[str, Any]:
         envs = self.ctx.envs
 
-        def env_lookup(key: str, default: str = "") -> Any:
-            return envs.get(key, os.environ.get(key, default))
+        class EnvLookup(dict):
+            """Mapping view over run env vars with ``os.environ`` fallback.
+
+            Supports both ``{{ env.VAR }}`` mapping access and the legacy
+            ``{{ env('VAR') }}`` call style.
+            """
+
+            def __missing__(self, key: str) -> Any:
+                return os.environ.get(key, "")
+
+            def __call__(self, key: str, default: str = "") -> Any:
+                return envs.get(key, os.environ.get(key, default))
 
         return {
             **self.ctx.vars,
@@ -175,7 +185,7 @@ class Runner[TModel: BaseModel]:
             "registry": self._registry,
             "runner": self,
             "ctx": self.ctx,
-            "env": env_lookup,
+            "env": EnvLookup(envs),
             "vars": self.ctx.vars,
         }
 

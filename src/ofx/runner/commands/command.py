@@ -70,6 +70,9 @@ def write_outputs_file(outputs_file: str | os.PathLike[str] | None, **kwargs: An
 
 def exec_script_in_process(invocation: _ScriptProcessInvocation) -> _ScriptExecutionResult:
     """Execute script in a separate process with channel communication"""
+    envs = getattr(invocation.ctx, "envs", None) or {}
+    if envs:
+        os.environ.update({key: str(value) for key, value in envs.items()})
     if invocation.outputs_file:
         path_str = str(invocation.outputs_file)
         os.environ.update({

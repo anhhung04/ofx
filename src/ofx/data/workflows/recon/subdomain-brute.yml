@@ -1,0 +1,62 @@
+name: subdomain-brute
+description: Active subdomain brute-force — DNS wordlist enumeration with puredns/dnsx
+  against a root domain.
+tags:
+- recon
+- subdomain
+- brute
+- active
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Root domain (e.g. example.com)
+      alias: t
+    wordlist:
+      type: string
+      default: /usr/share/seclists/Discovery/DNS/subdomains-top1million-20000.txt
+      description: Subdomain wordlist path
+    resolvers:
+      type: string
+      default: ''
+      description: Custom DNS resolver file
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+jobs:
+  brute:
+    name: Subdomain Brute Force
+    outputs:
+      subdomains: '{{ steps.merge.outputs.subdomain_file }}'
+      count: '{{ steps.merge.outputs.subdomain_count }}'
+    steps:
+    - name: puredns
+      run: puredns bruteforce {{ inputs.wordlist }} {{ inputs.target }} -w {{ env.OFX_RUN_DIR
+        }}/brute_puredns.txt{% if inputs.resolvers %} -r {{ inputs.resolvers }}{% endif %}
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+      timeout: 240
+    - name: dnsx-brute
+      run: dnsx -d {{ inputs.target }} -w {{ inputs.wordlist }} -silent -o {{ env.OFX_RUN_DIR
+        }}/brute_dnsx.txt{% if inputs.resolvers %} -r {{ inputs.resolvers }}{% endif %}
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+      timeout: 240
+    - name: merge
+      script: |
+        import os
+        rd = os.environ["OFX_RUN_DIR"]
+        seen = set()
+        for name in ("brute_puredns.txt", "brute_dnsx.txt"):
+            try:
+                with open(os.path.join(rd, name)) as fh:
+                    seen.update(line.strip() for line in fh if line.strip())
+            except FileNotFoundError:
+                pass
+        out = os.path.join(rd, "brute_subdomains.txt")
+        with open(out, "w") as fh:
+            fh.write("\n".join(sorted(seen)))
+        print(f"found {len(seen)} subdomains via brute force")
+        add_outputs(subdomain_file=out, subdomain_count=len(seen))

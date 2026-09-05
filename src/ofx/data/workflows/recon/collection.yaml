@@ -15,3 +15,10 @@ workflows:
 - dns-enum.yml
 - external-recon.yml
 - osint-gather.yml
+- full-recon.yml
+- js-analysis.yml
+- subdomain-brute.yml
+- subdomain-permute.yml
+- subdomain-takeover.yml
+- url-archive.yml
+- zone-transfer.yml

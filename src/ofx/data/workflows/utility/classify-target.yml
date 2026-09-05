@@ -1,0 +1,53 @@
+name: classify-target
+description: Target classification — detect whether targets are domains, subdomains,
+  CIDR ranges, IPs, or URLs and split them into typed lists for downstream workflows.
+tags:
+- utility
+- target
+- classify
+- scope
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Single target or path to a file with mixed targets
+      alias: t
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+jobs:
+  classify:
+    name: Classify Targets
+    outputs:
+      target_type: '{{ steps.classify.outputs.target_type }}'
+      counts: '{{ steps.classify.outputs.counts }}'
+    steps:
+    - name: classify
+      script: |
+        import os, json
+        from ofx.api.recon.targets import split_targets
+
+        src = str(__inputs__.get("target", ""))
+        rd = os.environ["OFX_RUN_DIR"]
+        values = open(src).read().splitlines() if os.path.isfile(src) else [src]
+
+        groups = split_targets(values)
+        counts = {}
+        for gtype, items in groups.items():
+            path = os.path.join(rd, f"targets_{gtype}.txt")
+            with open(path, "w") as fh:
+                fh.write("\n".join(items))
+            if items:
+                counts[gtype] = len(items)
+                print(f"{gtype}: {len(items)} -> {path}")
+
+        if len(counts) == 1:
+            target_type = next(iter(counts))
+        elif counts:
+            target_type = "mixed"
+        else:
+            target_type = "unknown"
+        print(f"target_type: {target_type}")
+        add_outputs(target_type=target_type, counts=json.dumps(counts))

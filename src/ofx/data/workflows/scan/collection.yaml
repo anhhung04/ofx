@@ -15,3 +15,6 @@ workflows:
 - port-scan.yml
 - ssl-audit.yml
 - web-probe.yml
+- dir-fuzz.yml
+- vhost-fuzz.yml
+- waf-detect.yml
