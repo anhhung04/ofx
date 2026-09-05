@@ -34,37 +34,8 @@ jobs:
           name: pure-packages
           path: dist/*
 
-  build-compiled:
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: docker/setup-buildx-action@v3
-
-      - name: Build compiled wheel
-        run: |
-          docker buildx build \
-            -f Dockerfile.compile \
-            --build-arg PYTHON_VERSION=3.13 \
-            --platform linux/amd64 \
-            --target=export \
-            --output type=local,dest=dist \
-            .
-
-      - name: Verify compiled wheel
-        run: |
-          python3 -m zipfile --test dist/*.whl
-          docker run --rm -v "$PWD/dist:/dist:ro" python:3.13-slim sh -c \
-            'apt-get update -qq && apt-get install -y -qq git >/dev/null && python -m pip install /dist/*.whl && python -c "import ofx"'
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: compiled-py3.13-amd64
-          path: dist/*.whl
-
   release:
-    needs: [build-pure, build-compiled]
+    needs: [build-pure]
     runs-on: ubuntu-latest
     permissions:
       contents: write
