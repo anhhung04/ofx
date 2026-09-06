@@ -251,5 +251,8 @@ async def run_workflow(
         except Exception as e:
             logger.debug("Failed to close channel store: %s", e)
 
-        for path in (output_dir, TEMP_DIR):
-            remove_empty_dirs(path)
+        if output_path is None:
+            # Only prune the auto-created temp output dir; a caller-provided
+            # path may be a project root with intentional empty scaffold dirs.
+            remove_empty_dirs(output_dir)
+        remove_empty_dirs(TEMP_DIR)

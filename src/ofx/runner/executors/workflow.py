@@ -74,11 +74,13 @@ class WorkflowExecutor(Executor):
             from ofx.commands.project.project_manager import ProjectManager
             wf_name = runner.model.name or "workflow"
             project_run_dir = ProjectManager.get_run_dir(wf_name)
+            runner._run_dir_is_temp = project_run_dir is None
             if project_run_dir is not None:
                 runner._run_dir = project_run_dir
             else:
                 runner._run_dir = Path(tempfile.mkdtemp(prefix="ofx_run_"))
         except Exception:
+            runner._run_dir_is_temp = True
             runner._run_dir = Path(tempfile.mkdtemp(prefix="ofx_run_"))
 
         # Create organized subdirectories
@@ -227,7 +229,7 @@ class WorkflowExecutor(Executor):
         await self._write_run_summary(runner)
 
         # Only clean up temp directories, not project run directories
-        if not str(runner._run_dir).startswith(str(Path.home() / ".ofx" / "projects")):
+        if getattr(runner, "_run_dir_is_temp", True):
             remove_tree(
                 runner._run_dir,
                 on_error=lambda message: logger.debug(message),
@@ -238,7 +240,7 @@ class WorkflowExecutor(Executor):
         # Write summary even on failure
         await self._write_run_summary(runner)
 
-        if not str(runner._run_dir).startswith(str(Path.home() / ".ofx" / "projects")):
+        if getattr(runner, "_run_dir_is_temp", True):
             remove_tree(
                 runner._run_dir,
                 on_error=lambda message: logger.debug(message),

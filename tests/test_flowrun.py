@@ -491,7 +491,8 @@ class TestFlowRun:
 
         assert await run_workflow("wf.yml", quiet=False, output_path=tmp_path) == "partial"
         assert warnings == ["Workflow execution cancelled — collecting partial results"]
-        assert cleanup_calls == [tmp_path, tmp_path / "missing-temp-dir"]
+        # caller-provided output (e.g. a project root) is never pruned
+        assert cleanup_calls == [tmp_path / "missing-temp-dir"]
 
     @pytest.mark.asyncio
     async def test_run_workflow_assembles_runner_applies_quiet_and_cleans_up(
@@ -577,13 +578,72 @@ class TestFlowRun:
         assert execution_calls == ["run", str(built_runner)]
         import logging
         assert built_runner.log_level == logging.ERROR
-        assert cleanup_calls == [tmp_path, tmp_path / "missing-temp-dir"]
+        # caller-provided output (e.g. a project root) is never pruned
+        assert cleanup_calls == [tmp_path / "missing-temp-dir"]
         assert loop_calls == [
             ("add", signal.SIGINT),
             ("add", signal.SIGTERM),
             ("remove", signal.SIGINT),
             ("remove", signal.SIGTERM),
         ]
+
+    @pytest.mark.asyncio
+    async def test_run_workflow_preserves_empty_dirs_in_caller_output(
+        self, monkeypatch, tmp_path
+    ):
+        """Project-root output must keep empty scaffold dirs (evidence/, notes/)."""
+        from ofx.runner.api import run_workflow
+
+        project_root = tmp_path / "proj"
+        for name in ("evidence", "notes", "workflows"):
+            (project_root / name).mkdir(parents=True)
+
+        workflow_model = _workflow_from_yaml(
+            """
+            name: test
+            jobs:
+              scan:
+                steps:
+                  - run: "echo hi"
+            """,
+            tmp_path / "flows" / "wf.yml",
+        )
+
+        class _Runner:
+            log_level = 0
+
+            async def run(self):
+                return "ok"
+
+        monkeypatch.setattr(
+            "ofx.runner.api.find_workflow",
+            lambda workflow, search_paths: workflow_model,
+        )
+        monkeypatch.setattr("ofx.runner.api.register_secrets", lambda _v: None)
+        monkeypatch.setattr("ofx.runner.api.register_sensitive_env", lambda _e: None)
+        monkeypatch.setattr(
+            "ofx.runner.api.load_secrets_by_keys", lambda needed, secrets_dir=None: {}
+        )
+        monkeypatch.setattr(
+            "ofx.runner.api.RegistryFactory.create", lambda backend, **config: "registry"
+        )
+        monkeypatch.setattr("ofx.runner.api.WorkflowExecutor", lambda: "executor")
+        monkeypatch.setattr(
+            "ofx.runner.api.WorkflowRunner",
+            lambda workflow, **kwargs: _Runner(),
+        )
+        monkeypatch.setattr(
+            "ofx.runner.channels.close_channel_store", lambda: None
+        )
+
+        assert await run_workflow(
+            "wf.yml",
+            quiet=True,
+            output_path=project_root,
+            workflow_search_paths=[tmp_path],
+        ) == "ok"
+        for name in ("evidence", "notes", "workflows"):
+            assert (project_root / name).is_dir(), f"{name}/ was pruned"
 
     @pytest.mark.asyncio
     async def test_flow(self, caplog):
