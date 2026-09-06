@@ -6,11 +6,10 @@ import fcntl
 import json
 import logging
 import os
+from collections.abc import Generator, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from collections.abc import Iterator
-from collections.abc import Generator
 from typing import Any
 
 from ofx.cloud.sessions.models import Session, SessionStatus

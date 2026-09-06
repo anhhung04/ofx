@@ -12,6 +12,7 @@ from typing import Any
 
 from ofx.models.step import RunType
 from ofx.runner.context import ConditionNotMetError, RunnerStatus
+from ofx.runner.step_fields import BASE_STEP_TEMPLATE_FIELDS, RUN_TYPE_TEMPLATE_FIELDS
 
 _MAX_BACKOFF_SECONDS = 300
 _JITTER_MIN = 0.5
@@ -20,6 +21,22 @@ _DEFAULT_TIMEOUT_MINUTES = 60
 
 class StepRunnerMixin:
     """Mixin providing methods shared by StepRunner and CloudStepRunner."""
+
+    async def _prepare_step_run(
+        self,
+        *,
+        run_if_message: str,
+        resolve_workflow_fields: bool = True,
+    ) -> None:
+        """Common step pre-run: retry defaults, run type, templates, timeout, run_if."""
+        self._apply_retry_profile_defaults()
+        self._run_type = self.model.get_run_type()
+        fields = list(BASE_STEP_TEMPLATE_FIELDS)
+        if resolve_workflow_fields or self._run_type is not RunType.WORKFLOW:
+            fields.extend(RUN_TYPE_TEMPLATE_FIELDS[self._run_type])
+        await self._resolve_template_fields(fields)
+        await self._resolve_timeout_field()
+        self._ensure_run_if_condition(run_if_message)
 
     def _ensure_run_if_condition(self, message: str) -> None:
         """Validate ``run_if`` for the current step or cancel it."""

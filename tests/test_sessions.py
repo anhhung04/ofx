@@ -1404,7 +1404,7 @@ class TestSessionSubmitHelpers:
             patch.object(mgr, "_upload_script_files"),
             patch("ofx.cloud.runtime.create_remote_runner", return_value=remote),
             patch(
-                "ofx.cloud.sessions.manager.upload_temp_content",
+                "ofx.cloud.sessions.submit.upload_temp_content",
                 side_effect=lambda _remote, content, remote_path, suffix="": temp_uploads.append((content, remote_path)),
             ),
         ):
@@ -1478,7 +1478,7 @@ class TestSessionSubmitHelpers:
             patch.object(mgr, "_upload_script_files"),
             patch("ofx.cloud.runtime.create_remote_runner", return_value=remote),
             patch(
-                "ofx.cloud.sessions.manager.upload_temp_content",
+                "ofx.cloud.sessions.submit.upload_temp_content",
                 side_effect=lambda _remote, content, remote_path, suffix="": temp_uploads.append((content, remote_path)),
             ),
         ):
@@ -1534,7 +1534,7 @@ class TestSessionSubmitHelpers:
             patch.object(mgr, "_upload_script_files"),
             patch("ofx.cloud.runtime.create_remote_runner", return_value=remote),
             patch(
-                "ofx.cloud.sessions.manager.upload_temp_content",
+                "ofx.cloud.sessions.submit.upload_temp_content",
                 side_effect=lambda _remote, content, remote_path, suffix="": temp_uploads.append((content, remote_path)),
             ),
         ):
@@ -1839,7 +1839,7 @@ class TestCloudFetchMaterialization:
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(mgr, "_reconnect", lambda s: _FakeRemote())
             mp.setattr(
-                "ofx.cloud.sessions.manager._decrypt_at_rest_openssl",
+                "ofx.cloud.sessions.results._decrypt_at_rest_openssl",
                 _fake_decrypt,
             )
             await mgr._fetch_cloud_results(session, results)
@@ -1891,7 +1891,7 @@ class TestCloudFetchMaterialization:
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(mgr, "_reconnect", lambda s: _FakeRemote())
             mp.setattr(
-                "ofx.cloud.sessions.manager._decrypt_at_rest_openssl",
+                "ofx.cloud.sessions.results._decrypt_at_rest_openssl",
                 _unexpected_decrypt,
             )
             await mgr._fetch_cloud_results(session, results)
@@ -2289,7 +2289,7 @@ class TestCloudStatusBackoff:
     @pytest.mark.asyncio
     async def test_circuit_breaker_marks_unreachable(self, tmp_path):
         """After _MAX_CONSECUTIVE_FAILURES, session becomes UNREACHABLE."""
-        from ofx.cloud.sessions import manager as mgr_mod
+        from ofx.cloud.sessions import status as mgr_mod
 
         mgr = self._make_mgr(tmp_path)
         session = self._make_running_session()
@@ -2308,7 +2308,7 @@ class TestCloudStatusBackoff:
     @pytest.mark.asyncio
     async def test_circuit_breaker_no_pid_marks_unreachable(self, tmp_path):
         """Circuit breaker works in the no-PID path too."""
-        from ofx.cloud.sessions import manager as mgr_mod
+        from ofx.cloud.sessions import status as mgr_mod
 
         mgr = self._make_mgr(tmp_path)
         session = self._make_running_session(pid=None)

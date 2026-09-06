@@ -15,8 +15,8 @@ from ofx.runner.logging import bubble_context_log
 from ofx.runner.registry_keys import RunnerRegistryKeys
 from ofx.runner.run_defaults import model_field_is_explicitly_set
 from ofx.runner.runner import Runner
-from ofx.runner.step_fields import BASE_STEP_TEMPLATE_FIELDS, RUN_TYPE_TEMPLATE_FIELDS
 from ofx.runner.step_mixin import StepRunnerMixin
+
 
 class StepRunner(StepRunnerMixin, Runner[Step]):
     def __init__(
@@ -37,7 +37,6 @@ class StepRunner(StepRunnerMixin, Runner[Step]):
         self._outputs_file: Path | None = None
 
     async def _pre_run(self) -> None:
-        self._apply_retry_profile_defaults()
         self._run_type = self.model.get_run_type()
 
         if (
@@ -52,10 +51,9 @@ class StepRunner(StepRunnerMixin, Runner[Step]):
                 include_ofx_alias=True,
             )
 
-        fields = [*BASE_STEP_TEMPLATE_FIELDS, *RUN_TYPE_TEMPLATE_FIELDS[self._run_type]]
-        await self._resolve_template_fields(fields)
-        await self._resolve_timeout_field()
-        self._ensure_run_if_condition("Step skipped due to run_if condition")
+        await self._prepare_step_run(
+            run_if_message="Step skipped due to run_if condition"
+        )
 
         self.update_env(self.model.env)
         resolved_run_with = await self._resolve_template(self.model.run_with)

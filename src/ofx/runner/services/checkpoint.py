@@ -174,7 +174,6 @@ __all__ = [
     "clean_all_checkpoints",
     "clean_checkpoints",
     "clean_stale_checkpoints",
-    "find_running_checkpoints",
     "get_checkpoint",
     "list_checkpoints",
     "write_checkpoint",

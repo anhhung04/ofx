@@ -8,7 +8,6 @@ from __future__ import annotations
 import asyncio
 import secrets as _secrets
 import shlex
-from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -24,12 +23,11 @@ from ofx.runner.context import (
 )
 from ofx.runner.logging import bubble_context_log
 from ofx.runner.metadata import ModelContext
+from ofx.runner.profile_env import build_profile_env_overrides
 from ofx.runner.registry_keys import RunnerRegistryKeys
 from ofx.runner.run_defaults import model_field_is_explicitly_set
 from ofx.runner.runner import Runner
-from ofx.runner.step_fields import BASE_STEP_TEMPLATE_FIELDS, RUN_TYPE_TEMPLATE_FIELDS
 from ofx.runner.step_mixin import StepRunnerMixin
-from ofx.runner.profile_env import build_profile_env_overrides
 from ofx.utils.shell import bash_dquote_escape
 
 if TYPE_CHECKING:
@@ -120,15 +118,11 @@ class CloudStepRunner(StepRunnerMixin, Runner):
         return bool(cloud_config and cloud_config.connection_type == "winrm")
 
     async def _pre_run(self) -> None:
-        self._apply_retry_profile_defaults()
-        self._run_type = self.model.get_run_type()
         self.update_vars({"remote_work_dir": self._resolve_remote_work_dir()})
-        fields = list(BASE_STEP_TEMPLATE_FIELDS)
-        if self._run_type is not RunType.WORKFLOW:
-            fields.extend(RUN_TYPE_TEMPLATE_FIELDS[self._run_type])
-        await self._resolve_template_fields(fields)
-        await self._resolve_timeout_field()
-        self._ensure_run_if_condition(self._produce_log("Step condition not met"))
+        await self._prepare_step_run(
+            run_if_message=self._produce_log("Step condition not met"),
+            resolve_workflow_fields=False,
+        )
 
     async def _on_failure_cleanup(self) -> None:
         """Best-effort cleanup of remote temp files on step failure."""

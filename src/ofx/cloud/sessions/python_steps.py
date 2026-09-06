@@ -7,6 +7,7 @@ from typing import Any
 
 from ofx.cloud.script_runtime import build_python_step_payload, is_python_step_run_type
 
+
 def step_bundle_filename(step_index: int) -> str:
     """Return deterministic staged filename for Python step bundles."""
     return f".ofx_step_{step_index}.py"

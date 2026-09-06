@@ -10,6 +10,7 @@ from pydantic import Field
 
 from ofx.models.base import OFXBaseModel
 
+
 class SessionStatus(str, Enum):
     """Lifecycle states for a detached session."""
 
