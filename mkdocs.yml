@@ -135,3 +135,70 @@ nav:
                   - Built-in Variables & Functions: guide/context-variables-functions.md
             - Interactive Mode:
                   - Overview: guide/interactive-mode.md
+                  - Usage: guide/interactive-mode/usage.md
+                  - Detection: guide/interactive-mode/detection.md
+                  - Examples: guide/interactive-mode/examples.md
+                  - Error Handling: guide/interactive-mode/error-handling.md
+                  - Limitations: guide/interactive-mode/limitations.md
+                  - Best Practices: guide/interactive-mode/best-practices.md
+            - Cloud:
+                  - Cloud Runners: guide/cloud-runners.md
+                  - Cloud Sessions: guide/cloud-sessions.md
+                  - Configuration: guide/cloud/configuration.md
+                  - Lifecycle: guide/cloud/lifecycle.md
+                  - Fleet: guide/cloud/fleet.md
+                  - Variables: guide/cloud/variables.md
+            - Collections: guide/collections.md
+            - Data Modules:
+                  - Overview: guide/extending-data-modules.md
+                  - Custom Connectors: guide/extending-data-modules/custom-connectors.md
+                  - Data Directory: guide/extending-data-modules/data-directory.md
+            - Developing Connectors: guide/developing-connectors.md
+        - CLI Reference:
+            - Overview: cli/commands.md
+            - Commands:
+                  - index: cli/commands/index.md
+                  - flow run: cli/commands/run.md
+                  - flow init: cli/commands/flow-init.md
+                  - flow info: cli/commands/info.md
+                  - flow list: cli/commands/list.md
+                  - flow validate: cli/commands/validate.md
+                  - flow visualize: cli/commands/visualize.md
+                  - flow modules: cli/commands/modules.md
+                  - flow collection: cli/commands/collection.md
+                  - flow schema: cli/commands/schema.md
+                  - flow history: cli/commands/history.md
+                  - flow sync: cli/commands/sync.md
+                  - flow ai: cli/commands/ai.md
+                  - cloud: cli/commands/cloud.md
+                  - session: cli/commands/session.md
+                  - project: cli/commands/project.md
+                  - init: cli/commands/init.md
+                  - secret: cli/commands/secret.md
+                  - doctor: cli/commands/doctor.md
+                  - api: cli/commands/api.md
+                  - docs-serve: cli/commands/docs-serve.md
+            - Visualization: cli/visualization.md
+        - Reference:
+            - API Overview: reference/api.md
+            - Core: reference/core.md
+            - CLI: reference/cli.md
+        - ofx.api Library:
+            - Overview: api/overview.md
+            - ad: api/ad.md
+            - bundle: api/bundle.md
+            - c2: api/c2.md
+            - data: api/data.md
+            - dns: api/dns.md
+            - evasion: api/evasion.md
+            - exfil: api/exfil.md
+            - httpserver: api/httpserver.md
+            - lateral: api/lateral.md
+            - loot: api/loot.md
+            - opsec: api/opsec.md
+            - packers: api/packers.md
+            - payloads: api/payloads.md
+            - persistence: api/persistence.md
+            - privesc: api/privesc.md
+            - recon: api/recon.md
+            - service: api/service.md
