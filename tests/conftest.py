@@ -168,13 +168,13 @@ def _shared_executor_override(
 ) -> Iterator[Any]:
     """Temporarily install a shared executor and sync ``run_in_executor``.
 
-    Patches ``ofx.runner.commands.command._shared_executor`` and the running
+    Patches ``ofx.modules.execution.command._shared_executor`` and the running
     loop's ``run_in_executor`` (so submitted calls run inline), restoring both
     on exit. ``pool`` defaults to a fresh ``_FakeExecutor``; pass ``None`` to
     clear the module-level executor so the runner under test builds its own.
     Yields the pool that was installed.
     """
-    import ofx.runner.commands.command as command_module
+    import ofx.modules.execution.command as command_module
 
     executor = _FakeExecutor() if pool is _KEEP_SHARED_EXECUTOR else pool
     original_shared_executor = command_module._shared_executor

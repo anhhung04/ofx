@@ -155,7 +155,9 @@ def list_modules(
     """List builtin modules, cached remote modules, and workflow-local modules."""
     console = get_console()
     table = Table(
-        title=f"Modules (cache: {MODULES_DIR})", padding=(0, 1), show_lines=False
+        title=f"Modules (cache: {MODULES_DIR})",
+        border_style="cyan",
+        header_style="bold cyan",
     )
     table.add_column("Type", style="cyan", no_wrap=True)
     table.add_column("Name", style="bold", no_wrap=True)

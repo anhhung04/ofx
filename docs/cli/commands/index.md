@@ -130,6 +130,7 @@ ofx secret list
 | `ofx flow tools` | Install and manage workflow tool dependencies |
 | `ofx flow schema` | Inspect workflow/job/step model schemas |
 | `ofx flow collection` | Manage workflow collections |
+| `ofx flow modules` | Manage namespaced remote modules (`<owner>.<repo>.<module>`) |
 | `ofx project init` | Initialize new project |
 | `ofx project sync` | Sync project to storage |
 | `ofx secret manage` | Manage secrets |

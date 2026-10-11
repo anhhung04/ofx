@@ -91,14 +91,8 @@ ofx flow collection update
 List all installed collections.
 
 ```bash
-ofx flow collection list [options]
+ofx flow collection list
 ```
-
-**Options:**
-
-| Option | Description |
-|--------|-------------|
-| `--outdated` | Show only collections with newer remote versions |
 
 Displays a table with name, version, source URL, and tags.
 

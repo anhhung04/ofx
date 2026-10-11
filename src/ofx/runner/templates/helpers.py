@@ -408,7 +408,7 @@ def build_all_helpers() -> dict[str, Any]:
     Called by :pymethod:`TemplateResolver.get_support_functions` and also
     usable in tests for direct validation.
     """
-    from ofx.runner.commands.shell_functions import get_shell_exports
+    from ofx.modules.execution.shell_functions import get_shell_exports
     from ofx.runner.findings_export import export_typed_outputs
     from ofx.settings import IS_WINDOWS
 

@@ -10,7 +10,7 @@ from rich.console import Console
 
 from ofx.models.command import Command
 from ofx.models.workflow import ToolConfig
-from ofx.runner.commands.command import CommandRunner
+from ofx.modules.execution.command import CommandRunner
 from ofx.runner.context import RunContext, context_with_env
 from ofx.runner.runner import Runner
 from ofx.settings import TOOLS_BIN_DIR, ensure_dir

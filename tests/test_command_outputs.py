@@ -3,8 +3,8 @@
 import pytest
 
 from ofx.models.command import Command
+from ofx.modules.execution.command_executor import CommandExecutionResult
 from ofx.runner import CommandRunner, RunContext, RunnerStatus
-from ofx.runner.commands.command_executor import CommandExecutionResult
 
 
 class TestCommandOutputs:
@@ -262,7 +262,7 @@ class TestCommandRunnerHelpers:
             async def capture_outputs_file(self, runner, key, log_fn):
                 await runner.reg_update(key, {"captured": True})
 
-        monkeypatch.setattr("ofx.runner.commands.command.CommandExecutor", _Exec)
+        monkeypatch.setattr("ofx.modules.execution.command.CommandExecutor", _Exec)
 
         await runner._do_run()
 

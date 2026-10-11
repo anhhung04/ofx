@@ -76,9 +76,14 @@ class Step(OFXBaseModel):
     module: str | None = Field(
         default=None,
         description=(
-            "Module to run in the step. Either a builtin name ('builtin.<name>' "
-            "or a bare builtin name) or a user-defined function reference "
-            "('<file.py>::<func>')."
+            "Module to run in the step. Accepted reference forms: a builtin "
+            "name ('shell', 'python', 'builtin.<name>' or "
+            "'local.builtin.<name>'); a workflow-local file UDF "
+            "('<file>.py[::<func>]'); a workflow-local named module "
+            "('local.<name>[::<func>]', run from <workflow_dir>/modules/); an "
+            "ofx.api function ('local.api.<path>[::<func>]'); or a remote "
+            "GitHub module ('<owner>.<repo>.<module>[@<ref>][::<func>]'). "
+            "The function defaults to 'run' when no '::<func>' is given."
         ),
     )
     run_with: dict[str, Any] = Field(

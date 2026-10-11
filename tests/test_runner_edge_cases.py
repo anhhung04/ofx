@@ -11,8 +11,8 @@ from conftest import _FakeExecutor, _shared_executor_override
 
 from ofx.models.command import Command, Script
 from ofx.models.workflow import ToolConfig
+from ofx.modules.execution.command import CommandRunner, ScriptRunner
 from ofx.runner import RunContext, RunnerStatus
-from ofx.runner.commands.command import CommandRunner, ScriptRunner
 from ofx.runner.tool_installer import ToolInstallation, ToolInstallerRunner
 from ofx.settings import settings
 
@@ -622,7 +622,7 @@ print("Injected variables work!")
         assert result.stderr == ""
 
     def test_exec_script_in_process_builds_store_globals_and_streams(self, monkeypatch):
-        from ofx.runner.commands.command import exec_script_in_process
+        from ofx.modules.execution.command import exec_script_in_process
 
         invocation = SimpleNamespace(
             script="print('hi')",
@@ -667,11 +667,11 @@ print("Injected variables work!")
         export_helper = object()
 
         monkeypatch.setattr(
-            "ofx.runner.commands.command.ChannelStore",
+            "ofx.modules.execution.command.ChannelStore",
             lambda channels_dir: calls.append(("store", channels_dir)) or store_obj,
         )
         monkeypatch.setattr(
-            "ofx.runner.commands.command.os.environ.update",
+            "ofx.modules.execution.command.os.environ.update",
             lambda updates: calls.append(("env", updates)),
         )
         monkeypatch.setattr(
@@ -680,11 +680,11 @@ print("Injected variables work!")
         )
         captures = iter((stdout_capture, stderr_capture))
         monkeypatch.setattr(
-            "ofx.runner.commands.command.io.StringIO",
+            "ofx.modules.execution.command.io.StringIO",
             lambda: next(captures),
         )
         monkeypatch.setattr(
-            "ofx.runner.commands.command.contextlib.chdir",
+            "ofx.modules.execution.command.contextlib.chdir",
             lambda _path: contextlib.nullcontext(),
         )
         monkeypatch.setattr(
@@ -716,7 +716,7 @@ print("Injected variables work!")
 
     def test_exec_script_in_process_restores_cwd_and_captures_error(self, tmp_path):
 
-        from ofx.runner.commands.command import (
+        from ofx.modules.execution.command import (
             exec_script_in_process,
         )
 
@@ -740,7 +740,7 @@ print("Injected variables work!")
         assert Path.cwd() == original_cwd
 
     def test_exec_script_in_process_exposes_os_to_runtime(self, tmp_path):
-        from ofx.runner.commands.command import exec_script_in_process
+        from ofx.modules.execution.command import exec_script_in_process
 
         invocation = SimpleNamespace(
             script="import os\nprint(bool(os.environ is not None))",
@@ -778,7 +778,7 @@ print("Injected variables work!")
             def shutdown(self, **kwargs):
                 return None
 
-        import ofx.runner.commands.command as command_module
+        import ofx.modules.execution.command as command_module
 
         monkeypatch.setattr(command_module, "ProcessPoolExecutor", lambda **kwargs: _Executor())
         monkeypatch.setattr(command_module.atexit, "register", lambda fn, *args, **kwargs: registered.append((fn, args, kwargs)))

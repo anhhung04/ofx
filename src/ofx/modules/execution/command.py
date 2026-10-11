@@ -15,20 +15,20 @@ from pathlib import Path
 from typing import Any
 
 from ofx.models.command import Command, Script
-from ofx.runner.channels import ChannelStore
-from ofx.runner.commands.command_executor import (
+from ofx.modules.execution.command_executor import (
     OFX_OUTPUTS_ENV,
     RUNNER_OUTPUTS_ENV,
     CommandExecutionResult,
     CommandExecutor,
     parse_outputs_file,
 )
+from ofx.runner.channels import ChannelStore
 from ofx.runner.context import RunContext, RunnerStatus, RunResult
 from ofx.runner.logging import bubble_context_log
 from ofx.runner.registry_keys import RunnerRegistryKeys
 from ofx.runner.run_defaults import (
-    resolve_model_shell,
     resolve_model_run_default,
+    resolve_model_shell,
 )
 from ofx.runner.runner import Runner
 from ofx.settings import settings

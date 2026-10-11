@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from ofx.models.command import Command
-from ofx.runner.commands.shell_functions import get_shell_functions
+from ofx.modules.execution.shell_functions import get_shell_functions
 from ofx.settings import settings
 from ofx.utils.file_cleanup import remove_file
 

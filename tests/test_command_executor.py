@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from ofx.models.command import Command
-from ofx.runner.commands.command_executor import (
+from ofx.modules.execution.command_executor import (
     CommandExecutionResult,
     CommandExecutor,
     _kill_process_tree,
@@ -56,7 +56,7 @@ class TestDecodeOutput:
         assert stderr == "some warning"
         assert outputs == {}
 
-    @patch("ofx.runner.commands.command_executor.settings")
+    @patch("ofx.modules.execution.command_executor.settings")
     def test_large_stdout_truncated(self, mock_settings):
         mock_settings.max_output_size = 100
         executor = _make_executor()
@@ -66,7 +66,7 @@ class TestDecodeOutput:
         assert outputs.get("output_truncated") is True
         assert stdout.startswith("A" * 100)
 
-    @patch("ofx.runner.commands.command_executor.settings")
+    @patch("ofx.modules.execution.command_executor.settings")
     def test_large_stderr_truncated(self, mock_settings):
         mock_settings.max_output_size = 100
         executor = _make_executor()
@@ -75,7 +75,7 @@ class TestDecodeOutput:
         assert "STDERR TRUNCATED" in stderr
         assert outputs.get("stderr_truncated") is True
 
-    @patch("ofx.runner.commands.command_executor.settings")
+    @patch("ofx.modules.execution.command_executor.settings")
     def test_both_truncated(self, mock_settings):
         mock_settings.max_output_size = 50
         executor = _make_executor()
@@ -90,7 +90,7 @@ class TestDecodeOutput:
         assert outputs.get("binary_output") is True
         assert base64.b64encode(binary_data).decode("utf-8") == stdout
 
-    @patch("ofx.runner.commands.command_executor.settings")
+    @patch("ofx.modules.execution.command_executor.settings")
     def test_binary_output_truncated(self, mock_settings):
         mock_settings.max_output_size = 50
         executor = _make_executor()
@@ -290,7 +290,7 @@ class TestExecuteStreaming:
 
     async def test_streaming_truncates_stdout_when_limit_exceeded(self, monkeypatch):
         monkeypatch.setattr(
-            "ofx.runner.commands.command_executor.settings.max_output_size",
+            "ofx.modules.execution.command_executor.settings.max_output_size",
             3,
         )
         executor = _make_executor(cmd='printf "abcde\\n"')
@@ -430,7 +430,7 @@ class TestCommandExecutionHelpers:
         monkeypatch.setattr(executor, "_spawn_subprocess", _spawn_subprocess)
         monkeypatch.setattr(executor, "_await_with_timeout", _await_with_timeout)
         monkeypatch.setattr(
-            "ofx.runner.commands.command_executor.settings.max_output_size",
+            "ofx.modules.execution.command_executor.settings.max_output_size",
             3,
         )
 
@@ -525,7 +525,7 @@ class TestCommandExecutionHelpers:
         polls = iter([None, ProcessLookupError()])
 
         monkeypatch.setattr(
-            "ofx.runner.commands.command_executor.os.getpgid",
+            "ofx.modules.execution.command_executor.os.getpgid",
             lambda pid: pid,
         )
 
@@ -538,7 +538,7 @@ class TestCommandExecutionHelpers:
                 raise result
 
         monotonic_values = iter([0.0, 0.1, 0.2])
-        monkeypatch.setattr("ofx.runner.commands.command_executor.os.killpg", _killpg)
+        monkeypatch.setattr("ofx.modules.execution.command_executor.os.killpg", _killpg)
         monkeypatch.setattr("time.sleep", lambda _seconds: None)
         monkeypatch.setattr("time.monotonic", lambda: next(monotonic_values))
 
@@ -550,7 +550,7 @@ class TestCommandExecutionHelpers:
         assert _process_group_id(SimpleNamespace(pid=None)) is None
 
         monkeypatch.setattr(
-            "ofx.runner.commands.command_executor.os.getpgid",
+            "ofx.modules.execution.command_executor.os.getpgid",
             lambda _pid: (_ for _ in ()).throw(ProcessLookupError()),
         )
 
@@ -560,7 +560,7 @@ class TestCommandExecutionHelpers:
     def test_process_group_id_rejects_unsafe_pid_values(self, pid, monkeypatch):
         getpgid = MagicMock()
         monkeypatch.setattr(
-            "ofx.runner.commands.command_executor.os.getpgid",
+            "ofx.modules.execution.command_executor.os.getpgid",
             getpgid,
         )
 
@@ -568,14 +568,14 @@ class TestCommandExecutionHelpers:
         getpgid.assert_not_called()
 
     def test_process_group_id_rejects_shared_or_unexpected_groups(self, monkeypatch):
-        monkeypatch.setattr("ofx.runner.commands.command_executor.os.getpgrp", lambda: 50)
+        monkeypatch.setattr("ofx.modules.execution.command_executor.os.getpgrp", lambda: 50)
         monkeypatch.setattr(
-            "ofx.runner.commands.command_executor.os.getpgid", lambda _pid: 50
+            "ofx.modules.execution.command_executor.os.getpgid", lambda _pid: 50
         )
         assert _process_group_id(SimpleNamespace(pid=50)) is None
 
         monkeypatch.setattr(
-            "ofx.runner.commands.command_executor.os.getpgid", lambda _pid: 124
+            "ofx.modules.execution.command_executor.os.getpgid", lambda _pid: 124
         )
         assert _process_group_id(SimpleNamespace(pid=123)) is None
 
@@ -601,7 +601,7 @@ class TestCommandExecutionHelpers:
         proc = MagicMock()
         proc.wait = AsyncMock()
 
-        with patch("ofx.runner.commands.command_executor._kill_process_tree") as mock_kill:
+        with patch("ofx.modules.execution.command_executor._kill_process_tree") as mock_kill:
             task = asyncio.create_task(
                 executor._await_with_timeout(proc, asyncio.Event().wait())
             )
@@ -754,8 +754,8 @@ class TestTimeout:
         proc.wait = AsyncMock()
 
         with (
-            patch("ofx.runner.commands.command_executor._kill_process_tree") as mock_kill,
-            patch("ofx.runner.commands.command_executor.os.killpg") as mock_killpg,
+            patch("ofx.modules.execution.command_executor._kill_process_tree") as mock_kill,
+            patch("ofx.modules.execution.command_executor.os.killpg") as mock_killpg,
         ):
             with pytest.raises(RuntimeError, match="timed out"):
                 await executor._await_with_timeout(proc, asyncio.sleep(0.01))

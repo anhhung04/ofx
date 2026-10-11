@@ -21,14 +21,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from ofx.cloud.script_runtime import (
+from ofx.cloud.module_kind import is_udf_module_step
+from ofx.cloud.payload import (
     build_module_step_payload,
-    build_udf_step_source,
-    is_udf_module_step,
     parse_module_outputs_sentinel,
 )
 from ofx.cloud.sessions.python_steps import iter_python_step_bundles
 from ofx.cloud.sessions.script_builder import build_session_script
+from ofx.cloud.udf_wrapper import build_udf_step_source
 from ofx.models.step import Step
 from ofx.runner import RunContext
 from ofx.runner.cloud_step import CloudStepRunner, _RemoteHandlerRunner

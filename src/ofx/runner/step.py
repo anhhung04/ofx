@@ -41,7 +41,7 @@ class StepRunner(StepRunnerMixin, Runner[Step]):
         # Module steps capture step outputs through the RUNNER_OUTPUTS env
         # file; workflow and pipe steps do not.
         if self._run_type == RunType.MODULE:
-            from ofx.runner.commands.command_executor import prepare_outputs_file_env
+            from ofx.modules.execution.command_executor import prepare_outputs_file_env
 
             self._outputs_file = prepare_outputs_file_env(
                 self.ctx.envs,

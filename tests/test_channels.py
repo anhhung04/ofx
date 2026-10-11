@@ -11,6 +11,7 @@ import pytest
 
 from ofx.runner.channels import ChannelStore
 
+
 @pytest.fixture
 def channels_dir(tmp_path):
     """Create a temporary channels directory."""
@@ -420,8 +421,8 @@ class TestScriptRunnerChannelPrimitives:
     @pytest.mark.asyncio
     async def test_script_publish_primitive_string(self):
         from ofx.models.command import Script
+        from ofx.modules.execution.command import ScriptRunner
         from ofx.runner import RunContext, RunnerStatus
-        from ofx.runner.commands.command import ScriptRunner
 
         script_model = Script(
             script="""
@@ -440,8 +441,8 @@ print(f"Type: {type(val).__name__}")
     @pytest.mark.asyncio
     async def test_script_publish_primitive_int(self):
         from ofx.models.command import Script
+        from ofx.modules.execution.command import ScriptRunner
         from ofx.runner import RunContext, RunnerStatus
-        from ofx.runner.commands.command import ScriptRunner
 
         script_model = Script(
             script="""
@@ -460,8 +461,8 @@ print(f"Type: {type(val).__name__}")
     @pytest.mark.asyncio
     async def test_script_publish_dict(self):
         from ofx.models.command import Script
+        from ofx.modules.execution.command import ScriptRunner
         from ofx.runner import RunContext, RunnerStatus
-        from ofx.runner.commands.command import ScriptRunner
 
         script_model = Script(
             script="""
@@ -480,8 +481,8 @@ print(f"Type: {type(val).__name__}")
     @pytest.mark.asyncio
     async def test_script_publish_list(self):
         from ofx.models.command import Script
+        from ofx.modules.execution.command import ScriptRunner
         from ofx.runner import RunContext, RunnerStatus
-        from ofx.runner.commands.command import ScriptRunner
 
         script_model = Script(
             script="""

@@ -23,7 +23,6 @@ from ofx.modules.base import (
 )
 from ofx.modules.registry import ModuleRegistry
 from ofx.runner.channels import ChannelStore
-from ofx.runner.commands.command import CommandRunner, ScriptRunner
 from ofx.runner.context import RunContext, RunnerStatus, context_copy
 from ofx.runner.registry_keys import RunnerRegistryKeys
 from ofx.runner.run_defaults import resolve_model_run_default, resolve_model_shell
@@ -99,6 +98,11 @@ class ModuleRunner(Runner[ModuleInvocation]):
         )
 
     async def _run_builtin(self, spec: ModuleSpec) -> None:
+        # Imported lazily: importing the command/script runners eagerly here
+        # would re-enter the importing ofx.runner package (see ofx/runner/
+        # __init__.py) and is never needed for UDF/api modules.
+        from ofx.modules.execution.command import CommandRunner, ScriptRunner
+
         if spec.name == "shell":
             child: Runner[Any] = CommandRunner(
                 self._build_command(),
@@ -112,7 +116,11 @@ class ModuleRunner(Runner[ModuleInvocation]):
                 parent=self,
             )
         else:
-            raise RuntimeError(f"Unsupported builtin module: {spec.name}")
+            raise RuntimeError(
+                f"Unsupported builtin module: {spec.name}. "
+                f"Available builtin modules: shell, python "
+                f"(see 'ofx flow modules list')."
+            )
         result = await child.run()
         self._outputs.update(result.outputs)
         if result.status != RunnerStatus.COMPLETED:
@@ -124,7 +132,11 @@ class ModuleRunner(Runner[ModuleInvocation]):
     def _build_command(self) -> Command:
         cmd = self.model.args.get("cmd")
         if not cmd:
-            raise RuntimeError("shell module requires 'cmd' in args")
+            raise RuntimeError(
+                "shell module requires 'cmd' in args. "
+                "Accepted form: 'with: {cmd: <shell command>}' "
+                "(the command string may use {{ inputs.* }} in a template)."
+            )
         return Command(
             cmd=str(cmd),
             shell=self.model.shell,
@@ -147,7 +159,11 @@ class ModuleRunner(Runner[ModuleInvocation]):
                     f"Failed to read script file {script_file}: {exc}"
                 ) from exc
         if not script:
-            raise RuntimeError(PYTHON_MODULE_REQUIRES_SCRIPT)
+            raise RuntimeError(
+                f"{PYTHON_MODULE_REQUIRES_SCRIPT}. Accepted forms: "
+                f"'with: {{script: <inline code>}}' or "
+                f"'with: {{script_file: <path to .py>}}'."
+            )
         return Script(
             script=str(script),
             shell=self.model.shell,

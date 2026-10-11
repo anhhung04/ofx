@@ -5,11 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ofx.cloud.script_runtime import (
-    build_module_step_payload,
-    is_python_module_step,
-    is_udf_module_step,
-)
+from ofx.cloud.module_kind import is_python_module_step, is_udf_module_step
+from ofx.cloud.payload import build_module_step_payload
 
 
 def step_bundle_filename(step_index: int) -> str:

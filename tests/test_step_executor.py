@@ -203,10 +203,11 @@ async def test_do_run_retries_then_succeeds(monkeypatch) -> None:
     await StepExecutor().do_run(runner)
 
     assert sleep_delays == [0.5]
-    assert calls[0] == (
+    assert calls[0].startswith(
         "Retry 2/2 in 0.5s - Step execution failed with status: "
         "RunnerStatus.FAILED, error: boom"
     )
+    assert "Remediation:" in calls[0]
     assert calls[-1] == "result: namespace(status=<RunnerStatus.COMPLETED: 'completed'>)"
 
 

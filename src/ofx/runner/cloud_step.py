@@ -11,16 +11,18 @@ import shlex
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from ofx.cloud.runtime import remote_join
-from ofx.cloud.script_runtime import (
-    MODULE_OUTPUTS_SENTINEL,
-    build_module_step_payload,
-    build_python_step_payload,
+from ofx.cloud.module_kind import (
     is_python_module_step,
     is_shell_module_step,
     is_udf_module_step,
+)
+from ofx.cloud.payload import (
+    MODULE_OUTPUTS_SENTINEL,
+    build_module_step_payload,
+    build_python_step_payload,
     parse_module_outputs_sentinel,
 )
+from ofx.cloud.runtime import remote_join
 from ofx.cloud.temp_upload import upload_temp_content
 from ofx.models.step import RunType
 from ofx.runner.context import (

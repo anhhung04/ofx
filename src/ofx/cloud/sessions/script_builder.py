@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 
-from ofx.cloud.script_runtime import is_python_module_step, is_udf_module_step
+from ofx.cloud.module_kind import is_python_module_step, is_udf_module_step
 from ofx.cloud.sessions.python_steps import step_bundle_filename
 from ofx.models.step import RunType, Step
 from ofx.utils.shell import bash_dquote_escape

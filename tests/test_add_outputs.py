@@ -6,10 +6,11 @@ import json
 import pytest
 
 from ofx.models.command import Script
-from ofx.runner import RunContext, RunnerStatus, ScriptRunner
-from ofx.runner.commands.command import (
+from ofx.modules.execution.command import (
     write_outputs_file,
 )
+from ofx.runner import RunContext, RunnerStatus, ScriptRunner
+
 
 class TestAddOutputsUnit:
     """Test the add_outputs function logic directly."""

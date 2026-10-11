@@ -17,10 +17,8 @@ from conftest import _FakeGitRepo, _install_fake_clone
 from rich.console import Console
 from typer.testing import CliRunner
 
-from ofx.cloud.script_runtime import (
-    build_udf_step_source,
-    is_udf_module_step,
-)
+from ofx.cloud.module_kind import is_udf_module_step
+from ofx.cloud.udf_wrapper import build_udf_step_source
 from ofx.models.step import Step
 from ofx.modules import ModuleRegistry
 from ofx.modules.refs import (

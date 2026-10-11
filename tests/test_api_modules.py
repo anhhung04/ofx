@@ -20,13 +20,11 @@ from io import BytesIO
 import pytest
 from conftest import _install_fake_clone
 
-from ofx.cloud.script_runtime import (
-    build_module_step_payload,
-    build_udf_step_source,
-    is_udf_module_step,
-)
+from ofx.cloud.module_kind import is_udf_module_step
+from ofx.cloud.payload import build_module_step_payload
 from ofx.cloud.sessions.python_steps import iter_python_step_bundles
 from ofx.cloud.sessions.script_builder import build_session_script
+from ofx.cloud.udf_wrapper import build_udf_step_source
 from ofx.models.step import Step
 from ofx.modules import ModuleInvocation, ModuleRegistry, ModuleRunner
 from ofx.modules.refs import parse_module_ref
