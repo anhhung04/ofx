@@ -23,7 +23,7 @@ from ofx.api.file import read_file, write_file
 ## Start with these pages
 
 - [Reconnaissance](recon.md)
-- [Post-Exploitation](#post-exploitation--ad) — see the `ofx.api.post` runners and [Persistence](persistence.md)
+- [Post-Exploitation / Persistence](persistence.md) — the `ofx.api.post` runners and persistence helpers
 - [Evasion](evasion.md)
 - [OPSEC](opsec.md)
 - [Privesc](privesc.md)
