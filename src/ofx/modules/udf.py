@@ -5,10 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ofx.modules.base import ModuleSpec
+from ofx.modules.base import DEFAULT_MODULE_FUNCTION, ModuleSpec
 from ofx.utils.module_loader import load_module_from_file
 
-DEFAULT_UDF_FUNCTION = "run"
+LOCAL_MODULES_SUBDIR = "modules"
 
 
 def split_udf_spec(spec: str) -> tuple[Path, str]:
@@ -16,7 +16,7 @@ def split_udf_spec(spec: str) -> tuple[Path, str]:
     if "::" in spec:
         path_part, function = spec.rsplit("::", 1)
     else:
-        path_part, function = spec, DEFAULT_UDF_FUNCTION
+        path_part, function = spec, DEFAULT_MODULE_FUNCTION
     path = Path(path_part)
     if not path.suffix == ".py":
         raise ValueError(
@@ -35,6 +35,15 @@ def resolve_udf_path(spec: str, workflow_dir: Path | None) -> Path:
         if candidate.exists():
             return candidate
     return Path.cwd() / path
+
+
+def resolve_local_named_path(workflow_dir: Path | None, name: str) -> Path:
+    """Return ``<workflow_dir>/modules/<name>.py`` for a ``local.<name>`` ref.
+
+    Falls back to the current working directory when *workflow_dir* is None.
+    """
+    root = workflow_dir if workflow_dir is not None else Path.cwd()
+    return root / LOCAL_MODULES_SUBDIR / f"{name}.py"
 
 
 def load_module_file(
@@ -78,9 +87,10 @@ def load_udf_spec(spec: str, workflow_dir: Path | None) -> ModuleSpec:
 
 
 __all__ = [
-    "DEFAULT_UDF_FUNCTION",
+    "LOCAL_MODULES_SUBDIR",
     "load_module_file",
     "load_udf_spec",
+    "resolve_local_named_path",
     "resolve_udf_path",
     "split_udf_spec",
 ]

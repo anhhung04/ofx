@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from conftest import _FakeGitRepo, _install_fake_clone
 from rich.console import Console
 from typer.testing import CliRunner
 
@@ -68,41 +69,26 @@ def _write_repo(target: Path, manifest: str = MANIFEST) -> Path:
     return target
 
 
-class _FakeRepo:
-    def __init__(self, checkout_calls: list[str] | None = None):
-        self.git = types.SimpleNamespace(
-            checkout=lambda ref: checkout_calls.append(ref) if checkout_calls is not None else None
-        )
-
-    def close(self):
-        pass
+_REPO_MODULES = {
+    "parse_nmap.py": MODULE_BODY,
+    "kerberoast.py": "def run(ctx):\n    return {'krb': True}\n",
+}
 
 
 def _install_fake_git(monkeypatch, *, fail_clone: bool = False, clone_hook=None):
     """Patch ``ofx.modules.remote.git`` with a no-network clone layer.
 
-    The GitHub token resolver is also stubbed to an empty token so tests are
-    hermetic regardless of the developer machine's ``gh`` auth state.
-    Returns ``(clone_calls, checkout_calls)`` lists for assertions.
+    Thin wrapper over the shared ``_install_fake_clone`` helper that supplies
+    the standard fake repo layout (manifest + ``modules/`` files). Returns
+    ``(clone_calls, checkout_calls)`` lists for assertions.
     """
-    clone_calls: list[tuple[str, str]] = []
-    checkout_calls: list[str] = []
-
-    monkeypatch.setattr("ofx.modules.remote.get_github_token", lambda: "")
-
-    def fake_clone_from(url: str, target: str, multi_options=None):
-        clone_calls.append((url, target))
-        if fail_clone:
-            raise ImportError(f"boom: {url}")
-        target_path = Path(target)
-        _write_repo(target_path)
-        if clone_hook:
-            clone_hook(target_path)
-        return _FakeRepo(checkout_calls)
-
-    fake_git = types.SimpleNamespace(Repo=types.SimpleNamespace(clone_from=fake_clone_from))
-    monkeypatch.setattr("ofx.modules.remote.git", fake_git)
-    return clone_calls, checkout_calls
+    return _install_fake_clone(
+        monkeypatch,
+        MANIFEST,
+        modules=_REPO_MODULES,
+        fail_clone=fail_clone,
+        clone_hook=clone_hook,
+    )
 
 
 def _use_modules_dir(monkeypatch, tmp_path: Path) -> Path:
@@ -370,7 +356,7 @@ modules:
     def test_missing_manifest_raises_manifest_error(self, monkeypatch, tmp_path: Path, modules_dir: Path):
         def no_manifest_clone(url, target, multi_options=None):
             Path(target).mkdir(parents=True, exist_ok=True)
-            return _FakeRepo()
+            return _FakeGitRepo()
 
         fake_git = types.SimpleNamespace(
             Repo=types.SimpleNamespace(clone_from=no_manifest_clone)
@@ -384,7 +370,7 @@ modules:
             target_path = Path(target)
             target_path.mkdir(parents=True, exist_ok=True)
             (target_path / MANIFEST_FILENAME).write_text("::: not yaml")
-            return _FakeRepo()
+            return _FakeGitRepo()
 
         fake_git = types.SimpleNamespace(
             Repo=types.SimpleNamespace(clone_from=bad_manifest_clone)
@@ -507,7 +493,7 @@ class TestFlowModulesCli:
 
         def no_manifest_clone(url, target, multi_options=None):
             Path(target).mkdir(parents=True, exist_ok=True)
-            return _FakeRepo()
+            return _FakeGitRepo()
 
         fake_git = types.SimpleNamespace(
             Repo=types.SimpleNamespace(clone_from=no_manifest_clone)
@@ -563,7 +549,7 @@ class TestFlowModulesCli:
 
         _write_repo(modules_dir / "anhhung04" / "ofx-modules")
         _write_repo(modules_dir / "anhhung04" / "ofx-modules@v1.2.0")
-        monkeypatch.setattr("ofx.commands.flow.modules.git", types.SimpleNamespace(Repo=FakeRepo))
+        monkeypatch.setattr("ofx.modules.remote.git", types.SimpleNamespace(Repo=FakeRepo))
 
         result = CliRunner().invoke(app, ["update"])
         assert result.exit_code == 0

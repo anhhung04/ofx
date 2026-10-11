@@ -12,6 +12,7 @@ and runs whatever the referenced repo publishes — only use repos you trust.
 from __future__ import annotations
 
 import shutil
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -20,11 +21,11 @@ import yaml
 from filelock import FileLock
 from git.exc import GitCommandError
 
+from ofx.modules.base import DEFAULT_MODULE_FUNCTION
 from ofx.modules.refs import REMOTE_KIND, ModuleRef
-from ofx.settings import MODULES_DIR, get_github_token
+from ofx.settings import MODULES_DIR, authenticated_git_url
 
 MANIFEST_FILENAME = "ofx-modules.yml"
-DEFAULT_REMOTE_FUNCTION = "run"
 
 
 class ManifestError(ValueError):
@@ -41,26 +42,8 @@ class RemoteModuleEntry:
     """
 
     file: Path | None = None
-    function: str = DEFAULT_REMOTE_FUNCTION
+    function: str = DEFAULT_MODULE_FUNCTION
     api_path: str | None = None
-
-
-def _authenticated_url(source: str) -> str:
-    """Inject a GitHub token into HTTPS clone URLs for private repo access.
-
-    Mirrors ``ofx.collections.manager.CollectionManager._authenticated_url``
-    (duplicated locally to avoid a cross-package import of a private member).
-    """
-    token = get_github_token()
-    if not token:
-        return source
-    if source.startswith("https://github.com/"):
-        return source.replace(
-            "https://github.com/",
-            f"https://x-access-token:{token}@github.com/",
-            1,
-        )
-    return source
 
 
 def cache_dir_for(ref: ModuleRef) -> Path:
@@ -72,6 +55,72 @@ def cache_dir_for(ref: ModuleRef) -> Path:
     if ref.kind != REMOTE_KIND:
         raise ValueError(f"Cannot cache non-remote module ref: {ref.raw!r}")
     return MODULES_DIR / ref.owner / ref.cache_key
+
+
+def clone_remote_module(ref: ModuleRef, target: Path | None = None) -> Path:
+    """Clone *ref*'s repo into the module cache and return the clone directory.
+
+    This is the single clone entry point shared by module resolution and the
+    ``ofx flow modules add`` command. *target* defaults to
+    :func:`cache_dir_for` (passing an explicit path is only useful for
+    tests). An existing clone is reused as-is.
+
+    Raises:
+        ValueError: If *ref* is not a remote module ref, or cloning/checkout
+            failed (the message names owner/repo/module/ref and the URL).
+    """
+    if target is None:
+        target = cache_dir_for(ref)
+    _clone_remote_module(ref, target)
+    return target
+
+
+def update_cached_clone(target: Path) -> None:
+    """Pull the latest changes of an unpinned cached clone at *target*.
+
+    Raises:
+        ValueError: If *target* is a pinned clone (immutable) or the pull
+            failed (not a git repo, no remote, network error).
+    """
+    if "@" in target.name:
+        raise ValueError(
+            f"Pinned clones are immutable: '{target}' (remove and re-add "
+            "with the new ref instead of updating)."
+        )
+    try:
+        repo = git.Repo(target)
+        repo.remotes.origin.pull()
+    except (git.GitCommandError, git.InvalidGitRepositoryError, ValueError) as exc:
+        raise ValueError(f"Failed to update cached clone '{target}': {exc}") from exc
+    finally:
+        with suppress(Exception):
+            repo.close()
+
+
+def remove_cached_clone(target: Path, *, root: Path | None = None) -> Path:
+    """Delete a cached clone at *target* (and its ``.lock`` file).
+
+    *root* is the module cache root that *target* must live under; it
+    defaults to ``MODULES_DIR``.
+
+    Raises:
+        ValueError: If *target* is outside the module cache root.
+        FileNotFoundError: If *target* is not an existing directory.
+    """
+    cache_root = (root if root is not None else MODULES_DIR).resolve()
+    resolved = Path(target).resolve()
+    if not resolved.is_relative_to(cache_root):
+        raise ValueError(
+            f"Refusing to remove path outside the module cache: {resolved}"
+        )
+    if not resolved.is_dir():
+        raise FileNotFoundError(
+            f"No cached clone at '{resolved}'; use 'ofx flow modules list' "
+            "to see cached clones."
+        )
+    shutil.rmtree(resolved)
+    Path(f"{resolved}.lock").unlink(missing_ok=True)
+    return resolved
 
 
 def _clone_remote_module(ref: ModuleRef, target: Path) -> None:
@@ -86,7 +135,7 @@ def _clone_remote_module(ref: ModuleRef, target: Path) -> None:
         if target.is_dir():
             return
         target.parent.mkdir(parents=True, exist_ok=True)
-        clone_url = _authenticated_url(ref.clone_url)
+        clone_url = authenticated_git_url(ref.clone_url)
         try:
             repo = git.Repo.clone_from(clone_url, str(target))
         except GitCommandError as exc:
@@ -175,10 +224,7 @@ def ensure_remote_repo(ref: ModuleRef) -> Path:
     """
     if ref.kind != REMOTE_KIND:
         raise ValueError(f"Cannot fetch non-remote module ref: {ref.raw!r}")
-    cache_dir = cache_dir_for(ref)
-    if not cache_dir.is_dir():
-        _clone_remote_module(ref, cache_dir)
-    return cache_dir
+    return clone_remote_module(ref)
 
 
 def ensure_remote_module(
@@ -212,7 +258,8 @@ def ensure_remote_module(
         raise ValueError(
             f"Remote module '{ref.display}' not found in manifest "
             f"{repo_dir / MANIFEST_FILENAME} (repo: {ref.clone_url}). "
-            f"Available modules: {available}"
+            f"Available modules: {available}. Fix the '<owner>.<repo>.<module>' "
+            "spec or declare the module in the repo's manifest."
         )
     if not isinstance(module_conf, dict):
         raise ManifestError(
@@ -252,38 +299,20 @@ def ensure_remote_module(
     function = (
         ref.function
         or module_conf.get("function")
-        or DEFAULT_REMOTE_FUNCTION
+        or DEFAULT_MODULE_FUNCTION
     )
     return RemoteModuleEntry(file=entry_path, function=function)
 
 
-def ensure_remote_module_file(
-    ref: ModuleRef, *, workflow_dir: Path | None = None
-) -> Path:
-    """Ensure a remote module is cached and return its entry file path.
-
-    Raises:
-        ValueError: If the module is an ``api:`` manifest entry, which has no
-            entry file (call :func:`ensure_remote_module` and use
-            ``api_path`` instead).
-    """
-    entry = ensure_remote_module(ref, workflow_dir=workflow_dir)
-    if entry.file is None:
-        raise ValueError(
-            f"Remote module '{ref.display}' is an 'api:' manifest entry "
-            f"('ofx.api.{entry.api_path}') and has no entry file"
-        )
-    return entry.file
-
-
 __all__ = [
-    "DEFAULT_REMOTE_FUNCTION",
     "MANIFEST_FILENAME",
     "ManifestError",
     "RemoteModuleEntry",
     "cache_dir_for",
+    "clone_remote_module",
     "ensure_remote_module",
-    "ensure_remote_module_file",
     "ensure_remote_repo",
     "load_manifest",
+    "remove_cached_clone",
+    "update_cached_clone",
 ]

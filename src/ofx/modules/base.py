@@ -8,6 +8,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+DEFAULT_MODULE_FUNCTION = "run"
+"""Entry function used when a module spec omits an explicit ``::<func>``."""
+
+PYTHON_MODULE_REQUIRES_SCRIPT = (
+    "python module requires 'script' or 'script_file' in args"
+)
+"""Shared error text for python module steps with no script source."""
+
 
 @dataclass(slots=True)
 class ModuleContext:
@@ -58,4 +66,10 @@ class ModuleSpec:
     function: str | None = None
 
 
-__all__ = ["ModuleContext", "ModuleResult", "ModuleSpec"]
+__all__ = [
+    "DEFAULT_MODULE_FUNCTION",
+    "PYTHON_MODULE_REQUIRES_SCRIPT",
+    "ModuleContext",
+    "ModuleResult",
+    "ModuleSpec",
+]

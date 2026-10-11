@@ -10,7 +10,11 @@ from io import StringIO
 from pathlib import Path
 from typing import Any
 
-from ofx.modules.base import ModuleContext, ModuleResult
+from ofx.modules.base import (
+    PYTHON_MODULE_REQUIRES_SCRIPT,
+    ModuleContext,
+    ModuleResult,
+)
 
 name = "python"
 description = "Execute a Python script (inline `script` or `script_file` in `with:`)."
@@ -41,7 +45,7 @@ def run(ctx: ModuleContext) -> ModuleResult:
     if not script:
         return ModuleResult(
             exit_code=1,
-            stderr="python module requires 'script' or 'script_file' in args",
+            stderr=PYTHON_MODULE_REQUIRES_SCRIPT,
         )
 
     stdout_capture = StringIO()

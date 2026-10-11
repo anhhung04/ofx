@@ -5,23 +5,25 @@ from __future__ import annotations
 from pathlib import Path
 
 from ofx.modules.api import resolve_api_callable
-from ofx.modules.base import ModuleSpec
+from ofx.modules.base import DEFAULT_MODULE_FUNCTION, ModuleSpec
 from ofx.modules.builtins import BUILTIN_MODULES
 from ofx.modules.refs import (
     API_KIND,
     BUILTIN_KIND,
+    BUILTIN_PREFIX,
     LOCAL_FILE_KIND,
+    LOCAL_MODULES_SUBDIR,
     LOCAL_NAMED_KIND,
     REMOTE_KIND,
     REMOTE_SCHEME_HINT,
     parse_module_ref,
 )
 from ofx.modules.remote import ensure_remote_module
-from ofx.modules.udf import DEFAULT_UDF_FUNCTION, load_module_file, load_udf_spec
-
-BUILTIN_PREFIX = "builtin."
-
-LOCAL_MODULES_SUBDIR = "modules"
+from ofx.modules.udf import (
+    load_module_file,
+    load_udf_spec,
+    resolve_local_named_path,
+)
 
 
 class ModuleRegistry:
@@ -68,9 +70,10 @@ class ModuleRegistry:
             ref = parse_module_ref(spec)
         except ValueError as exc:
             available = ", ".join(self.builtin_names)
-            raise ValueError(
-                f"{exc} Available builtin modules: {available}."
-            ) from None
+            message = f"{exc} Available builtin modules: {available}."
+            if REMOTE_SCHEME_HINT not in message:
+                message = f"{message} {REMOTE_SCHEME_HINT}"
+            raise ValueError(message) from None
 
         if ref.kind == BUILTIN_KIND:
             builtin = self._builtins.get(ref.name or "")
@@ -103,7 +106,7 @@ class ModuleRegistry:
                     f"<workflow_dir>/{LOCAL_MODULES_SUBDIR}/{ref.name}.py)"
                 )
             return load_module_file(
-                path, ref.function or DEFAULT_UDF_FUNCTION, name=ref.raw
+                path, ref.function or DEFAULT_MODULE_FUNCTION, name=ref.raw
             )
 
         if ref.kind == REMOTE_KIND:
@@ -125,9 +128,7 @@ class ModuleRegistry:
         self, name: str, *, workflow_dir: Path | None = None
     ) -> Path:
         """Return ``<workflow_dir>/modules/<name>.py`` for a ``local.<name>`` ref."""
-        base_dir = self._base_dir(workflow_dir)
-        root = base_dir if base_dir is not None else Path.cwd()
-        return root / LOCAL_MODULES_SUBDIR / f"{name}.py"
+        return resolve_local_named_path(self._base_dir(workflow_dir), name)
 
 
 __all__ = ["BUILTIN_PREFIX", "LOCAL_MODULES_SUBDIR", "ModuleRegistry"]

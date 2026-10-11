@@ -184,6 +184,24 @@ def get_github_token() -> str:
     """
     return settings.github_token.get_secret_value() or _gh_cli_token()
 
+def authenticated_git_url(source: str) -> str:
+    """Inject the GitHub token into HTTPS GitHub clone URLs.
+
+    Used for private repo access when cloning remote modules and
+    collections. If no token is available, or the URL is not an HTTPS
+    GitHub URL, the original URL is returned unchanged.
+    """
+    token = get_github_token()
+    if not token:
+        return source
+    if source.startswith("https://github.com/"):
+        return source.replace(
+            "https://github.com/",
+            f"https://x-access-token:{token}@github.com/",
+            1,
+        )
+    return source
+
 _console = None
 
 def get_console():

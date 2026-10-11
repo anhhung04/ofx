@@ -10,7 +10,6 @@ import shutil
 from pathlib import Path
 from typing import Annotated
 
-import git
 import typer
 from rich.table import Table
 
@@ -25,8 +24,11 @@ from ofx.modules.refs import (
 from ofx.modules.remote import (
     MANIFEST_FILENAME,
     cache_dir_for,
+    clone_remote_module,
     ensure_remote_module,
-    ensure_remote_repo,
+    load_manifest,
+    remove_cached_clone,
+    update_cached_clone,
 )
 from ofx.settings import MODULES_DIR, get_console
 
@@ -59,11 +61,12 @@ def add(
 ):
     """Pre-clone a remote module repo into the local module cache."""
     ref = _parse_repo_ref(repo)
-    target = ensure_remote_repo(ref)
+    try:
+        target = clone_remote_module(ref)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
     if verify_manifest:
         try:
-            from ofx.modules.remote import load_manifest
-
             load_manifest(ref, target)
         except Exception as exc:
             shutil.rmtree(target, ignore_errors=True)
@@ -92,7 +95,7 @@ def update(
                 "Pinned clones are immutable; remove and re-add with the "
                 "new ref instead of updating."
             )
-        target = MODULES_DIR / ref.owner / ref.repo
+        target = cache_dir_for(parse_remote_repo(f"{ref.owner}.{ref.repo}"))
         if not target.is_dir():
             print_warning("Not Found", f"No cached clone at {target}")
             raise typer.Exit(code=1)
@@ -105,14 +108,10 @@ def update(
     updated: list[str] = []
     skipped: list[str] = []
     for label, target in targets:
-        if "@" in target.name:
-            skipped.append(f"{label} (pinned, immutable)")
-            continue
         try:
-            repo_obj = git.Repo(target)
-            repo_obj.remotes.origin.pull()
+            update_cached_clone(target)
             updated.append(label)
-        except (git.GitCommandError, git.InvalidGitRepositoryError) as exc:
+        except ValueError as exc:
             skipped.append(f"{label} ({exc})")
     if updated:
         print_success("Updated", f"Pulled {len(updated)} clone(s): {', '.join(updated)}")
@@ -129,19 +128,18 @@ def remove(
 ):
     """Delete a cached remote module clone."""
     ref = _parse_repo_ref(repo)
-    dir_name = f"{ref.repo}@{ref.ref}" if ref.ref else ref.repo
-    target = (MODULES_DIR / ref.owner / dir_name).resolve()
-    modules_root = MODULES_DIR.resolve()
-    if not target.is_relative_to(modules_root):
-        raise typer.BadParameter(f"Refusing to remove path outside module cache: {target}")
-    if not target.is_dir():
-        print_warning("Not Found", f"No cached clone at {target}")
-        raise typer.Exit(code=1)
-    shutil.rmtree(target)
-    lock_file = Path(f"{target}.lock")
-    lock_file.unlink(missing_ok=True)
+    target = cache_dir_for(ref)
+    try:
+        removed = remove_cached_clone(target)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    except FileNotFoundError as exc:
+        print_warning("Not Found", str(exc))
+        raise typer.Exit(code=1) from exc
     ref_label = f"@{ref.ref}" if ref.ref else ""
-    print_success("Removed", f"Deleted '{ref.owner}/{ref.repo}{ref_label}' from {target}")
+    print_success(
+        "Removed", f"Deleted '{ref.owner}/{ref.repo}{ref_label}' from {removed}"
+    )
 
 
 @app.command("list")

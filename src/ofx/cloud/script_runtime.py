@@ -12,6 +12,7 @@ from ofx.api.bundle import build_bundle
 from ofx.api.bundle.analyzer import detect_ofx_imports
 from ofx.api.bundle.obfuscator import obfuscate_bootstrap
 from ofx.models.step import RunType, Step
+from ofx.modules.base import DEFAULT_MODULE_FUNCTION, PYTHON_MODULE_REQUIRES_SCRIPT
 
 _MODULE_PYTHON_NAMES: frozenset[str] = frozenset(
     {"python", "builtin.python", "local.builtin.python"}
@@ -20,7 +21,7 @@ _MODULE_SHELL_NAMES: frozenset[str] = frozenset(
     {"shell", "builtin.shell", "local.builtin.shell"}
 )
 
-_MODULE_OUTPUTS_SENTINEL = "__OFX_MODULE_OUTPUTS__"
+MODULE_OUTPUTS_SENTINEL = "__OFX_MODULE_OUTPUTS__"
 
 def module_base_name(module: str | None) -> str:
     """Return the base module name without a ``::func`` UDF suffix."""
@@ -94,8 +95,8 @@ def resolve_python_step_source(step: Step, *, workflow_dir: Path | None = None) 
     script_file = args.get("script_file")
     if not script_file:
         raise ValueError(
-            f"Module step '{step.name}' requires a 'script' or 'script_file' "
-            "argument in its 'with:' args."
+            f"Module step '{step.name}': {PYTHON_MODULE_REQUIRES_SCRIPT} "
+            "(add a 'script' or 'script_file' entry to the step's 'with:' args)."
         )
     local_path = Path(str(script_file)).expanduser()
     if not local_path.is_absolute():
@@ -252,7 +253,10 @@ def _resolve_udf_target(
         REMOTE_KIND,
         parse_module_ref,
     )
-    from ofx.modules.udf import DEFAULT_UDF_FUNCTION, split_udf_spec
+    from ofx.modules.udf import (
+        resolve_local_named_path,
+        split_udf_spec,
+    )
 
     module = getattr(step, "module", None) or ""
     if not is_udf_module_step(step):
@@ -272,11 +276,8 @@ def _resolve_udf_target(
             )
         return entry.file, entry.function
     if ref.kind == LOCAL_NAMED_KIND:
-        from ofx.modules.registry import LOCAL_MODULES_SUBDIR
-
-        root = workflow_dir if workflow_dir is not None else Path.cwd()
-        path = root / LOCAL_MODULES_SUBDIR / f"{ref.name}.py"
-        return path, ref.function or DEFAULT_UDF_FUNCTION
+        path = resolve_local_named_path(workflow_dir, ref.name or "")
+        return path, ref.function or DEFAULT_MODULE_FUNCTION
     _path, function = split_udf_spec(module)
     from ofx.modules.udf import resolve_udf_path
 
@@ -357,14 +358,14 @@ def parse_module_outputs_sentinel(stdout: str) -> tuple[str, dict[str, Any]]:
     outputs)``. When the sentinel is absent or cannot be parsed, the original
     stdout is returned with an empty outputs dict (raw stdout is preserved).
     """
-    index = stdout.rfind(_MODULE_OUTPUTS_SENTINEL)
+    index = stdout.rfind(MODULE_OUTPUTS_SENTINEL)
     if index == -1:
         return stdout, {}
     line_start = stdout.rfind("\n", 0, index) + 1
     line_end = stdout.find("\n", index)
     if line_end == -1:
         line_end = len(stdout)
-    encoded = stdout[line_start:line_end][len(_MODULE_OUTPUTS_SENTINEL):].strip()
+    encoded = stdout[line_start:line_end][len(MODULE_OUTPUTS_SENTINEL):].strip()
     if not encoded:
         return stdout, {}
     try:

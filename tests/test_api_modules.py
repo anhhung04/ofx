@@ -14,12 +14,11 @@ import py_compile
 import re
 import subprocess
 import sys
-import types as types_mod
 import zipfile
 from io import BytesIO
-from pathlib import Path
 
 import pytest
+from conftest import _install_fake_clone
 
 from ofx.cloud.script_runtime import (
     build_module_step_payload,
@@ -828,37 +827,6 @@ modules:
 """
 
 
-class _FakeGitRepo:
-    def __init__(self, checkout_calls=None):
-        self.git = types_mod.SimpleNamespace(
-            checkout=lambda ref: checkout_calls.append(ref) if checkout_calls is not None else None
-        )
-
-    def close(self):
-        pass
-
-
-def _install_fake_clone(monkeypatch, manifest: str) -> list[tuple[str, str]]:
-    """Patch the git layer so an api-only manifest repo needs no network."""
-    clone_calls: list[tuple[str, str]] = []
-    monkeypatch.setattr("ofx.modules.remote.get_github_token", lambda: "")
-
-    def fake_clone_from(url, target, multi_options=None):
-        clone_calls.append((url, target))
-        target_path = Path(target)
-        target_path.mkdir(parents=True, exist_ok=True)
-        (target_path / "ofx-modules.yml").write_text(manifest)
-        return _FakeGitRepo()
-
-    monkeypatch.setattr(
-        "ofx.modules.remote.git",
-        types_mod.SimpleNamespace(
-            Repo=types_mod.SimpleNamespace(clone_from=fake_clone_from)
-        ),
-    )
-    return clone_calls
-
-
 class TestRemoteApiManifestEntries:
     """Manifest ``api:`` entries resolve and run without any .py files."""
 
@@ -933,13 +901,16 @@ class TestRemoteApiManifestEntries:
         with pytest.raises(ManifestError, match="'api' entry takes its function"):
             ModuleRegistry().resolve("acme.ofx-api.broken")
 
-    def test_ensure_remote_module_file_rejects_api_entry(self, monkeypatch, tmp_path):
-        from ofx.modules.remote import ensure_remote_module_file
+    def test_ensure_remote_module_returns_api_entry_without_file(
+        self, monkeypatch, tmp_path
+    ):
+        from ofx.modules.remote import ensure_remote_module
 
         monkeypatch.setattr("ofx.modules.remote.MODULES_DIR", tmp_path / "mods")
         _install_fake_clone(monkeypatch, _MANIFEST_WITH_API)
-        with pytest.raises(ValueError, match="no entry file"):
-            ensure_remote_module_file(parse_module_ref("acme.ofx-api.classify"))
+        entry = ensure_remote_module(parse_module_ref("acme.ofx-api.classify"))
+        assert entry.file is None
+        assert entry.api_path == "recon.targets.split_targets"
 
     def test_udf_entries_still_work_alongside_api_entries(self, monkeypatch, tmp_path):
         manifest = _MANIFEST_WITH_API + "".join(

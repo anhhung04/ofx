@@ -15,7 +15,12 @@ from pydantic import Field
 from ofx.models.base import OFXBaseModel
 from ofx.models.command import Command, Script
 from ofx.modules.api import invoke_api_callable, is_ctx_style
-from ofx.modules.base import ModuleContext, ModuleResult, ModuleSpec
+from ofx.modules.base import (
+    PYTHON_MODULE_REQUIRES_SCRIPT,
+    ModuleContext,
+    ModuleResult,
+    ModuleSpec,
+)
 from ofx.modules.registry import ModuleRegistry
 from ofx.runner.channels import ChannelStore
 from ofx.runner.commands.command import CommandRunner, ScriptRunner
@@ -142,9 +147,7 @@ class ModuleRunner(Runner[ModuleInvocation]):
                     f"Failed to read script file {script_file}: {exc}"
                 ) from exc
         if not script:
-            raise RuntimeError(
-                "python module requires 'script' or 'script_file' in args"
-            )
+            raise RuntimeError(PYTHON_MODULE_REQUIRES_SCRIPT)
         return Script(
             script=str(script),
             shell=self.model.shell,

@@ -18,6 +18,9 @@ REMOTE_KIND = "remote"
 API_KIND = "api"
 
 API_PREFIX = "local.api."
+BUILTIN_PREFIX = "builtin."
+LOCAL_PREFIX = "local."
+LOCAL_MODULES_SUBDIR = "modules"
 
 REMOTE_SCHEME_HINT = (
     "Remote modules reference GitHub repos as "
@@ -299,24 +302,18 @@ def parse_remote_repo(spec: str) -> ModuleRef:
     )
 
 
-def is_remote_module_spec(spec: str) -> bool:
-    """Return whether *spec* parses as a remote GitHub module reference."""
-    try:
-        return parse_module_ref(spec).kind == REMOTE_KIND
-    except ValueError:
-        return False
-
-
 __all__ = [
     "API_KIND",
     "API_PREFIX",
     "BUILTIN_KIND",
+    "BUILTIN_PREFIX",
     "LOCAL_FILE_KIND",
+    "LOCAL_MODULES_SUBDIR",
     "LOCAL_NAMED_KIND",
+    "LOCAL_PREFIX",
     "REMOTE_KIND",
     "REMOTE_SCHEME_HINT",
     "ModuleRef",
-    "is_remote_module_spec",
     "parse_module_ref",
     "parse_remote_repo",
 ]

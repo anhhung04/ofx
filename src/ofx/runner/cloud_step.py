@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from ofx.cloud.runtime import remote_join
 from ofx.cloud.script_runtime import (
-    _MODULE_OUTPUTS_SENTINEL,
+    MODULE_OUTPUTS_SENTINEL,
     build_module_step_payload,
     build_python_step_payload,
     is_python_module_step,
@@ -303,7 +303,7 @@ class CloudStepRunner(StepRunnerMixin, Runner):
                 timeout=timeout_seconds,
             )
             cleaned_stdout, parsed_outputs = parse_module_outputs_sentinel(raw_output)
-            if _MODULE_OUTPUTS_SENTINEL in raw_output and not parsed_outputs:
+            if MODULE_OUTPUTS_SENTINEL in raw_output and not parsed_outputs:
                 self._log_debug(
                     "Failed to parse UDF module outputs sentinel; keeping raw stdout"
                 )
