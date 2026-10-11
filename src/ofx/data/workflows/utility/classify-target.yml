@@ -30,4 +30,4 @@ jobs:
       target_files: '{{ steps.classify.outputs.target_files }}'
     steps:
     - name: classify
-      module: local.classify
+      module: local.builtin.classify_targets

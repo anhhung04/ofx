@@ -39,15 +39,20 @@ jobs:
   archive:
     name: Archive URL Collection
     outputs:
-      urls: '{{ steps.merge.outputs.url_file }}'
-      url_count: '{{ steps.merge.outputs.url_count }}'
+      urls: '{{ steps.merge.outputs.output_file }}'
+      url_count: '{{ steps.merge.outputs.count }}'
     steps:
+    - name: normalize
+      module: local.builtin.normalize_targets
+      with:
+        target: '{{ inputs.target }}'
+        output: url_archive_input.txt
+        output_dir: '{{ inputs.output_dir or env.OFX_RUN_DIR }}'
     - name: waybackurls
       module: local.builtin.shell
       with:
-        cmd: if [ -f "{{ inputs.target }}" ]; then cat "{{ inputs.target }}"; else printf
-          '%s\n' "{{ inputs.target }}"; fi | waybackurls > {{ inputs.output_dir or
-          env.OFX_RUN_DIR }}/urls_wayback.txt
+        cmd: cat {{ steps.normalize.outputs.target_file }} | waybackurls > {{ inputs.output_dir
+          or env.OFX_RUN_DIR }}/urls_wayback.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
       timeout: 120
@@ -56,8 +61,7 @@ jobs:
     - name: gau
       module: local.builtin.shell
       with:
-        cmd: if [ -f "{{ inputs.target }}" ]; then cat "{{ inputs.target }}"; else printf
-          '%s\n' "{{ inputs.target }}"; fi | gau --threads 5 > {{ inputs.output_dir
+        cmd: cat {{ steps.normalize.outputs.target_file }} | gau --threads 5 > {{ inputs.output_dir
           or env.OFX_RUN_DIR }}/urls_gau.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
@@ -67,17 +71,19 @@ jobs:
     - name: katana-passive
       module: local.builtin.shell
       with:
-        cmd: ( if [ -f "{{ inputs.target }}" ]; then cat "{{ inputs.target }}"; else
-          printf '%s\n' "{{ inputs.target }}"; fi ) > {{ inputs.output_dir or env.OFX_RUN_DIR
-          }}/url_archive_input.txt && katana -list {{ inputs.output_dir or env.OFX_RUN_DIR
-          }}/url_archive_input.txt -passive -silent -o {{ inputs.output_dir or env.OFX_RUN_DIR
-          }}/urls_katana.txt
+        cmd: katana -list {{ steps.normalize.outputs.target_file }} -passive -silent
+          -o {{ inputs.output_dir or env.OFX_RUN_DIR }}/urls_katana.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
       timeout: 120
       retry: 2
       retry-delay: 5
     - name: merge
-      module: local.merge_urls
+      module: local.builtin.merge_lists
       with:
+        files:
+        - urls_wayback.txt
+        - urls_gau.txt
+        - urls_katana.txt
+        output: all_urls.txt
         output_dir: '{{ inputs.output_dir or env.OFX_RUN_DIR }}'

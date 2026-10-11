@@ -63,7 +63,13 @@ class TestModuleRegistry:
 
     def test_builtin_names_sorted(self):
         registry = ModuleRegistry()
-        assert registry.builtin_names == ("python", "shell")
+        assert registry.builtin_names == (
+            "classify_targets",
+            "merge_lists",
+            "normalize_targets",
+            "python",
+            "shell",
+        )
 
     def test_unknown_name_error_lists_builtins(self):
         registry = ModuleRegistry()

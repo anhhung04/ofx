@@ -29,6 +29,9 @@ from ofx.runner.run_defaults import resolve_model_run_default, resolve_model_she
 from ofx.runner.runner import Runner
 from ofx.settings import DEFAULT_SHELL, settings
 
+COMMAND_BUILTINS = ("shell", "python")
+"""Builtin modules that delegate to :class:`CommandRunner`/:class:`ScriptRunner`."""
+
 
 class ModuleInvocation(OFXBaseModel):
     """Model describing a single module invocation."""
@@ -51,8 +54,9 @@ class ModuleRunner(Runner[ModuleInvocation]):
     """Run builtin modules and user-defined functions.
 
     Builtin ``shell``/``python`` modules delegate to the existing
-    :class:`CommandRunner`/:class:`ScriptRunner` machinery; UDFs execute in a
-    worker thread against a :class:`ModuleContext`.
+    :class:`CommandRunner`/:class:`ScriptRunner` machinery; UDFs, ``ofx.api``
+    functions, and the pure-Python builtins execute in a worker thread against
+    a :class:`ModuleContext`.
     """
 
     def __init__(
@@ -79,13 +83,13 @@ class ModuleRunner(Runner[ModuleInvocation]):
         registry = ModuleRegistry(workflow_dir=self.ctx.workflow_dir)
         spec = registry.resolve(self.model.name)
         try:
-            if spec.kind in ("udf", "api"):
+            if self._uses_command_runner(spec):
+                await self._run_builtin(spec)
+            else:
                 module_result = await asyncio.to_thread(self._invoke_udf, spec)
                 self._outputs.update(self._module_result_outputs(module_result))
                 if module_result.exit_code not in (0, None):
                     raise RuntimeError(self._udf_failure_message(module_result))
-            else:
-                await self._run_builtin(spec)
         finally:
             await self.reg_update(RunnerRegistryKeys.OUTPUTS, self._outputs)
 
@@ -97,29 +101,40 @@ class ModuleRunner(Runner[ModuleInvocation]):
             f" with context: \n---\n{self.ctx}\n---"
         )
 
+    @staticmethod
+    def _uses_command_runner(spec: ModuleSpec) -> bool:
+        """Return whether *spec* is a builtin backed by a command/script runner.
+
+        UDFs, ``ofx.api`` functions, and the pure-Python builtins (``merge_lists``,
+        ``normalize_targets``, ``classify_targets``) all run through
+        :meth:`_invoke_udf` with a :class:`ModuleContext`; only the builtin
+        ``shell``/``python`` modules need :class:`CommandRunner`/
+        :class:`ScriptRunner`.
+        """
+        return spec.kind == "builtin" and spec.name in COMMAND_BUILTINS
+
     async def _run_builtin(self, spec: ModuleSpec) -> None:
+        """Run the builtin ``shell``/``python`` module for *spec*.
+
+        Only reached when :meth:`_uses_command_runner` accepts the spec; every
+        other module kind runs through :meth:`_invoke_udf`.
+        """
         # Imported lazily: importing the command/script runners eagerly here
         # would re-enter the importing ofx.runner package (see ofx/runner/
         # __init__.py) and is never needed for UDF/api modules.
         from ofx.modules.execution.command import CommandRunner, ScriptRunner
 
-        if spec.name == "shell":
-            child: Runner[Any] = CommandRunner(
-                self._build_command(),
-                context_copy(self.ctx),
-                parent=self,
-            )
-        elif spec.name == "python":
-            child = ScriptRunner(
+        if spec.name == "python":
+            child: Runner[Any] = ScriptRunner(
                 self._build_script(),
                 context_copy(self.ctx),
                 parent=self,
             )
         else:
-            raise RuntimeError(
-                f"Unsupported builtin module: {spec.name}. "
-                f"Available builtin modules: shell, python "
-                f"(see 'ofx flow modules list')."
+            child = CommandRunner(
+                self._build_command(),
+                context_copy(self.ctx),
+                parent=self,
             )
         result = await child.run()
         self._outputs.update(result.outputs)
@@ -259,4 +274,4 @@ class ModuleRunner(Runner[ModuleInvocation]):
         )
 
 
-__all__ = ["ModuleInvocation", "ModuleRunner"]
+__all__ = ["COMMAND_BUILTINS", "ModuleInvocation", "ModuleRunner"]

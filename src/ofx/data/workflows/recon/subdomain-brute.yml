@@ -55,8 +55,8 @@ jobs:
   brute:
     name: Subdomain Brute Force
     outputs:
-      subdomains: '{{ steps.merge.outputs.subdomain_file }}'
-      subdomain_count: '{{ steps.merge.outputs.subdomain_count }}'
+      subdomains: '{{ steps.merge.outputs.output_file }}'
+      subdomain_count: '{{ steps.merge.outputs.count }}'
     steps:
     - name: puredns
       module: local.builtin.shell
@@ -77,6 +77,10 @@ jobs:
       log-command: '{{ inputs.log_command }}'
       timeout: 240
     - name: merge
-      module: local.merge_brute
+      module: local.builtin.merge_lists
       with:
+        files:
+        - brute_puredns.txt
+        - brute_dnsx.txt
+        output: brute_subdomains.txt
         output_dir: '{{ inputs.output_dir or env.OFX_RUN_DIR }}'

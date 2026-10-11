@@ -35,7 +35,7 @@ jobs:
       target_type: '{{ steps.classify.outputs.target_type }}'
     steps:
     - name: classify
-      module: local.classify
+      module: local.builtin.classify_targets
   recon:
     name: Reconnaissance
     needs:
@@ -60,15 +60,18 @@ jobs:
         output_dir: '{{ env.OFX_RUN_DIR }}'
     - name: merge_subs
       run_if: "{{ jobs.classify.outputs.target_type in ['domain', 'mixed'] }}"
-      module: local.merge_subdomain_lists
+      module: local.builtin.merge_lists
       with:
-        passive_file: '{{ steps.passive.outputs.subdomain_file }}'
-        brute_file: '{{ steps.brute.outputs.subdomains }}'
+        files:
+        - '{{ steps.passive.outputs.subdomain_file }}'
+        - '{{ steps.brute.outputs.subdomains }}'
+        output: all_subdomains.txt
+        output_dir: '{{ env.OFX_RUN_DIR }}'
     - name: permute
       run_if: "{{ jobs.classify.outputs.target_type in ['domain', 'mixed'] }}"
       uses: recon/subdomain-permute
       with:
-        target: '{{ steps.merge_subs.outputs.subdomains }}'
+        target: '{{ steps.merge_subs.outputs.output_file }}'
         resolvers: '{{ inputs.resolvers }}'
         log_command: '{{ inputs.log_command }}'
         output_dir: '{{ env.OFX_RUN_DIR }}'
@@ -77,7 +80,7 @@ jobs:
       run_if: "{{ jobs.classify.outputs.target_type in ['domain', 'mixed'] }}"
       uses: recon/subdomain-takeover
       with:
-        target: '{{ steps.merge_subs.outputs.subdomains }}'
+        target: '{{ steps.merge_subs.outputs.output_file }}'
         log_command: '{{ inputs.log_command }}'
         output_dir: '{{ env.OFX_RUN_DIR }}'
       continue-on-error: true

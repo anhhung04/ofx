@@ -9,10 +9,11 @@ from ofx.modules.base import ModuleContext, ModuleResult, ModuleSpec
 from ofx.modules.refs import ModuleRef, parse_module_ref
 from ofx.modules.registry import ModuleRegistry
 from ofx.modules.remote import ManifestError, ensure_remote_module
-from ofx.modules.runner import ModuleInvocation, ModuleRunner
+from ofx.modules.runner import COMMAND_BUILTINS, ModuleInvocation, ModuleRunner
 
 __all__ = [
     "ApiModuleError",
+    "COMMAND_BUILTINS",
     "ManifestError",
     "ModuleContext",
     "ModuleInvocation",

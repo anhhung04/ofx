@@ -51,8 +51,8 @@ jobs:
   subdomain-enum:
     name: Subdomain Enumeration
     outputs:
-      subdomain_file: "{{ steps['merge-subs'].outputs.subdomain_file }}"
-      subdomain_count: "{{ steps['merge-subs'].outputs.subdomain_count }}"
+      subdomain_file: "{{ steps['merge-subs'].outputs.output_file }}"
+      subdomain_count: "{{ steps['merge-subs'].outputs.count }}"
     steps:
     - name: amass
       module: local.builtin.shell
@@ -73,8 +73,12 @@ jobs:
       timeout: 240
       retry: 2
     - name: merge-subs
-      module: local.merge_subdomains
+      module: local.builtin.merge_lists
       with:
+        files:
+        - subdomains_amass.txt
+        - subdomains_subfinder.txt
+        output: all_subdomains.txt
         output_dir: '{{ inputs.output_dir or env.OFX_RUN_DIR }}'
   asn-discovery:
     name: ASN & IP Range Discovery

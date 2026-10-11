@@ -54,14 +54,15 @@ jobs:
       detector_errors: '{{ steps.split.outputs.detector_errors }}'
     steps:
     - name: normalize
-      module: local.normalize
+      module: local.builtin.normalize_targets
       with:
         target: '{{ inputs.target }}'
+        output: waf_input.txt
         output_dir: '{{ inputs.output_dir or env.OFX_RUN_DIR }}'
     - name: cdncheck
       module: local.builtin.shell
       with:
-        cmd: cdncheck -i {{ inputs.output_dir or env.OFX_RUN_DIR }}/waf_input.txt -cdn
+        cmd: cdncheck -i {{ steps.normalize.outputs.target_file }} -cdn
           -waf -silent -resp -o {{ inputs.output_dir or env.OFX_RUN_DIR }}/cdncheck_results.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
@@ -69,7 +70,7 @@ jobs:
     - name: wafw00f
       module: local.builtin.shell
       with:
-        cmd: wafw00f -i {{ inputs.output_dir or env.OFX_RUN_DIR }}/waf_input.txt -f
+        cmd: wafw00f -i {{ steps.normalize.outputs.target_file }} -f
           json -o {{ inputs.output_dir or env.OFX_RUN_DIR }}/wafw00f_results.json
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'

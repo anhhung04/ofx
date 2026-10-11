@@ -28,12 +28,15 @@ jobs:
       record_count: "{{ steps['parse-results'].outputs.record_count }}"
     steps:
     - name: normalize
-      module: local.normalize_targets
+      module: local.builtin.normalize_targets
+      with:
+        target: '{{ inputs.target }}'
+        output: dns_input.txt
     - name: dnsx-resolve
       module: local.builtin.shell
       with:
-        cmd: dnsx -l {{ env.OFX_RUN_DIR }}/dns_input.txt -a -aaaa -cname -mx -ns -txt
-          -soa -silent -o {{ env.OFX_RUN_DIR }}/dns_records.txt{% if inputs.resolvers
+        cmd: dnsx -l {{ steps.normalize.outputs.target_file }} -a -aaaa -cname -mx -ns
+          -txt -soa -silent -o {{ env.OFX_RUN_DIR }}/dns_records.txt{% if inputs.resolvers
           %} -r {{ inputs.resolvers }}{% endif %}
       log-command: '{{ inputs.log_command }}'
     - name: parse-results

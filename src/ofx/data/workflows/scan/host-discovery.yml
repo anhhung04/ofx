@@ -39,8 +39,8 @@ jobs:
   ping-sweep:
     name: Ping Sweep
     outputs:
-      host_file: "{{ steps['merge-hosts'].outputs.host_file }}"
-      host_count: "{{ steps['merge-hosts'].outputs.host_count }}"
+      host_file: "{{ steps['merge-hosts'].outputs.output_file }}"
+      host_count: "{{ steps['merge-hosts'].outputs.count }}"
     steps:
     - name: fping-sweep
       module: local.builtin.shell
@@ -59,6 +59,10 @@ jobs:
       log-command: '{{ inputs.log_command }}'
       timeout: 30
     - name: merge-hosts
-      module: local.merge_hosts
+      module: local.builtin.merge_lists
       with:
+        files:
+        - live_hosts.txt
+        - live_hosts_naabu.txt
+        output: all_live_hosts.txt
         output_dir: '{{ inputs.output_dir or env.OFX_RUN_DIR }}'

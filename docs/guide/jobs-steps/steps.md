@@ -173,8 +173,30 @@ Parsing order: `::` splits the function first, then `@` splits the ref; `.py`-su
 |--------|-----------|-------------------|
 | `shell` | `module: shell` (or `module: builtin.shell`) | `cmd` — the shell command(s) to run |
 | `python` | `module: python` (or `module: builtin.python`) | `script` — inline Python, or `script_file` — path to a `.py` file |
+| `merge_lists` | `module: local.builtin.merge_lists` | `files` — artifact files to merge (list or comma-separated string; relative paths resolve against `output_dir`/`OFX_RUN_DIR`), `output` — merged file, `output_dir`, `fail_if` — `all_missing` (default), `any_missing` or `never`, `sort` — default `true`, `required` — subset of `files` that must exist |
+| `normalize_targets` | `module: local.builtin.normalize_targets` | `target` — file path, literal, or comma list, `output` — file name for literal targets (default `targets_normalized.txt`), `output_dir` |
+| `classify_targets` | `module: local.builtin.classify_targets` | `target` — single target or file of mixed targets, `source_type` — `auto` (default), `file` or `target` |
 
-`module: shell` and `module: builtin.shell` are equivalent; likewise `module: python` and `module: builtin.python`.
+`module: shell` and `module: builtin.shell` are equivalent; likewise `module: python` and `module: builtin.python`, and the bare name of any builtin resolves too.
+
+**`merge_lists` module** — merge line-based artifacts into one de-duplicated file and publish `output_file` plus `count`:
+
+```yaml
+steps:
+  - name: merge
+    module: local.builtin.merge_lists
+    with:
+      files:
+        - subdomains_amass.txt
+        - subdomains_subfinder.txt
+      output: all_subdomains.txt
+```
+
+Missing inputs are an error by default (`fail_if: all_missing`) so an empty merge can never be mistaken for "the producers found nothing"; use `required` to make a subset mandatory while tolerating optional collectors.
+
+**`normalize_targets` module** — turn any target input into a per-line target file and publish `target_file` plus `count`. A target that already is a file is published in place (its absolute path) without copying; literals are written to `output` under `output_dir`/`OFX_RUN_DIR`. An empty target raises.
+
+**`classify_targets` module** — classify targets into `domain`/`subdomain`/`cidr`/`ip`/`url`/`unknown`, writing `targets_<type>.txt` per group under `OFX_RUN_DIR`, and publish `target_type`, `counts` (JSON) and `target_files` (JSON). With `source_type: auto` a value that is not an existing file but ends in a known file suffix (`targets.txt`) or is not a valid target itself is rejected as a mistyped path; pass `source_type: target` to force literal handling (CIDRs and URLs are always accepted as literals).
 
 **Shell module** — run a command with `cmd`. The step-level `shell` and `working-directory` fields control the interpreter and cwd:
 

@@ -16,7 +16,7 @@ a workflow-local file, or a remote GitHub module. The implementation lives in
 | `ofx.modules.ModuleRunner` | Executes a resolved spec for a step: receives a `ModuleInvocation` and a `RunContext`, records outputs |
 | `ofx.modules.base` | `ModuleContext` (the `ctx` handed to Python/UDF modules), `ModuleSpec`, `ModuleResult` |
 | `ofx.modules.remote` | Remote module resolution: clone/cache/update of `<owner>.<repo>.<module>` refs and manifest validation |
-| `ofx.modules.builtins` | The `shell` and `python` builtin modules |
+| `ofx.modules.builtins` | The builtin modules: `shell`, `python`, `merge_lists`, `normalize_targets`, `classify_targets` |
 
 `ofx.modules.base.DEFAULT_MODULE_FUNCTION` is the default entry-point name when a reference
 omits `::<func>`.

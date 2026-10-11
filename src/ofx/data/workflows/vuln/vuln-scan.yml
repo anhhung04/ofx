@@ -37,7 +37,7 @@ jobs:
       severity_count: '{{ steps.summarize.outputs.severity_count }}'
     steps:
     - name: targets
-      module: local.normalize_targets
+      module: local.builtin.normalize_targets
     - name: nuclei
       module: local.builtin.shell
       with:

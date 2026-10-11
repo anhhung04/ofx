@@ -40,8 +40,8 @@ jobs:
   js:
     name: JavaScript Analysis
     outputs:
-      js_file: "{{ steps['merge-js'].outputs.js_file }}"
-      js_count: "{{ steps['merge-js'].outputs.js_count }}"
+      js_file: "{{ steps['merge-js'].outputs.output_file }}"
+      js_count: "{{ steps['merge-js'].outputs.count }}"
       secrets_report: '{{ inputs.output_dir or env.OFX_RUN_DIR }}/js_secrets.html'
     steps:
     - name: subjs
@@ -62,8 +62,14 @@ jobs:
       log-command: '{{ inputs.log_command }}'
       timeout: 120
     - name: merge-js
-      module: local.merge_js
+      module: local.builtin.merge_lists
       with:
+        files:
+        - js_files_subjs.txt
+        - js_files_katana.txt
+        required:
+        - js_files_subjs.txt
+        output: js_files.txt
         output_dir: '{{ inputs.output_dir or env.OFX_RUN_DIR }}'
     - name: secretfinder
       module: local.builtin.shell

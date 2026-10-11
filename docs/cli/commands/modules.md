@@ -35,6 +35,9 @@ Modules (cache: /home/dev/.ofx/modules)
 ┏━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ Type    ┃ Name                      ┃ Location                       ┃
 ┡━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ builtin │ classify_targets          │ built-in                       │
+│ builtin │ merge_lists               │ built-in                       │
+│ builtin │ normalize_targets         │ built-in                       │
 │ builtin │ python                    │ built-in                       │
 │ builtin │ shell                     │ built-in                       │
 │ remote  │ anhhung04.ofx-modules     │ ~/.ofx/modules/anhhung04/...   │
