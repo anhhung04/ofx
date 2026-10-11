@@ -14,6 +14,7 @@ from pydantic import Field
 
 from ofx.models.base import OFXBaseModel
 from ofx.models.command import Command, Script
+from ofx.modules.api import invoke_api_callable, is_ctx_style
 from ofx.modules.base import ModuleContext, ModuleResult, ModuleSpec
 from ofx.modules.registry import ModuleRegistry
 from ofx.runner.channels import ChannelStore
@@ -74,7 +75,7 @@ class ModuleRunner(Runner[ModuleInvocation]):
         registry = ModuleRegistry(workflow_dir=self.ctx.workflow_dir)
         spec = registry.resolve(self.model.name)
         try:
-            if spec.kind == "udf":
+            if spec.kind in ("udf", "api"):
                 module_result = await asyncio.to_thread(self._invoke_udf, spec)
                 self._outputs.update(self._module_result_outputs(module_result))
                 if module_result.exit_code not in (0, None):
@@ -153,7 +154,14 @@ class ModuleRunner(Runner[ModuleInvocation]):
         )
 
     def _invoke_udf(self, spec: ModuleSpec) -> ModuleResult:
-        """Execute a UDF synchronously (called from a worker thread)."""
+        """Execute a UDF or ``ofx.api`` module synchronously (worker thread).
+
+        UDFs always receive the :class:`ModuleContext`. ``ofx.api`` functions
+        are kwargs-style: the invocation args (merged workflow inputs plus the
+        step's ``with:`` args) are filtered to their signature, so unrelated
+        keys are ignored. A function that declares a ``ctx`` parameter is
+        treated like a UDF and receives the context instead.
+        """
         callable_obj = spec.callable
         if callable_obj is None:
             return ModuleResult(
@@ -176,6 +184,14 @@ class ModuleRunner(Runner[ModuleInvocation]):
             subscribe=store.subscribe,
             wait_for=store.wait_for,
         )
+
+        def _call() -> Any:
+            if spec.kind != "api":
+                return callable_obj(module_ctx)
+            if is_ctx_style(callable_obj):
+                return callable_obj(module_ctx)
+            return invoke_api_callable(callable_obj, dict(self.model.args))
+
         returned: Any = None
         try:
             with (
@@ -183,7 +199,7 @@ class ModuleRunner(Runner[ModuleInvocation]):
                 contextlib.redirect_stdout(stdout_capture),
                 contextlib.redirect_stderr(stderr_capture),
             ):
-                returned = callable_obj(module_ctx)
+                returned = _call()
             exit_code = 0
         except Exception:
             stderr_capture.write(traceback.format_exc())

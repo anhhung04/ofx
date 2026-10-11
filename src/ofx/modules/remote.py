@@ -33,10 +33,16 @@ class ManifestError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class RemoteModuleEntry:
-    """Resolved entry point for a remote module."""
+    """Resolved entry point for a remote module.
 
-    file: Path
-    function: str
+    A manifest entry with an ``api:`` key resolves to an ``ofx.api`` function
+    instead of a file: ``file`` is ``None`` and ``api_path`` holds the dotted
+    path under ``ofx.api`` (whose last segment names the function).
+    """
+
+    file: Path | None = None
+    function: str = DEFAULT_REMOTE_FUNCTION
+    api_path: str | None = None
 
 
 def _authenticated_url(source: str) -> str:
@@ -138,6 +144,29 @@ def load_manifest(ref: ModuleRef, repo_dir: Path) -> dict:
     return _load_manifest(ref, repo_dir)
 
 
+def _reject_api_spec_suffixes(ref: ModuleRef, module_conf: dict, repo_dir: Path) -> None:
+    """Reject ``::<func>``/``function:`` on manifest ``api:`` entries.
+
+    The function of an ``api:`` entry is the last segment of its dotted path,
+    so an explicit function name would be silently ignored — fail loudly.
+    """
+    if ref.function:
+        raise ValueError(
+            f"Invalid module reference '{ref.display}': '::<func>' is not "
+            f"valid for remote module '{ref.module}' — its manifest entry uses "
+            f"'api: {module_conf.get('api')}' (the function is the last "
+            "segment of that path)."
+        )
+    if module_conf.get("function"):
+        raise ManifestError(
+            f"Invalid {MANIFEST_FILENAME} in '{ref.owner}/{ref.repo}' "
+            f"({repo_dir / MANIFEST_FILENAME}): '{ref.module}' declares both "
+            f"'api: {module_conf.get('api')}' and 'function: "
+            f"{module_conf.get('function')}'; an 'api' entry takes its "
+            "function from the last segment of the api path."
+        )
+
+
 def ensure_remote_repo(ref: ModuleRef) -> Path:
     """Ensure *ref*'s repo is cached locally; return its clone directory.
 
@@ -160,9 +189,13 @@ def ensure_remote_module(
     ``workflow_dir`` is accepted for signature symmetry with the local
     resolvers; remote modules always cache in ``MODULES_DIR``.
 
-    The manifest entry is ``manifest.modules[<name>].entry`` (default
-    ``modules/<name>.py``) and the entry function is the spec's ``::<func>``
-    or ``manifest.modules[<name>].function`` (default ``run``).
+    The manifest entry is either:
+
+    - ``api: <path under ofx.api>`` — an ``ofx.api`` function (resolved
+      immediately so a bad path fails fast; the repo may ship no ``.py``
+      files at all); or
+    - ``entry: <file>`` (default ``modules/<name>.py``) plus an optional
+      ``function``, overridden by the spec's ``::<func>`` — a UDF file.
 
     Raises:
         ManifestError: If the repo has no valid ``ofx-modules.yml``.
@@ -187,6 +220,27 @@ def ensure_remote_module(
             f"({repo_dir / MANIFEST_FILENAME}): entry for '{ref.module}' "
             "must be a mapping."
         )
+    api_path = module_conf.get("api")
+    if api_path is not None:
+        if not isinstance(api_path, str) or not api_path.strip():
+            raise ManifestError(
+                f"Invalid {MANIFEST_FILENAME} in '{ref.owner}/{ref.repo}' "
+                f"({repo_dir / MANIFEST_FILENAME}): 'api' for '{ref.module}' "
+                "must be a non-empty dotted path under ofx.api, e.g. "
+                "'recon.targets.split_targets'."
+            )
+        _reject_api_spec_suffixes(ref, module_conf, repo_dir)
+        api_path = api_path.strip()
+        # Imported lazily to keep the module-cache layer free of the api
+        # resolver at import time; resolution fails fast on bad paths.
+        from ofx.modules.api import resolve_api_callable
+
+        resolve_api_callable(api_path)
+        return RemoteModuleEntry(
+            file=None,
+            function=api_path.rsplit(".", 1)[-1],
+            api_path=api_path,
+        )
     entry = module_conf.get("entry") or f"modules/{ref.module}.py"
     entry_path = repo_dir / entry
     if not entry_path.is_file():
@@ -206,8 +260,20 @@ def ensure_remote_module(
 def ensure_remote_module_file(
     ref: ModuleRef, *, workflow_dir: Path | None = None
 ) -> Path:
-    """Ensure a remote module is cached and return its entry file path."""
-    return ensure_remote_module(ref, workflow_dir=workflow_dir).file
+    """Ensure a remote module is cached and return its entry file path.
+
+    Raises:
+        ValueError: If the module is an ``api:`` manifest entry, which has no
+            entry file (call :func:`ensure_remote_module` and use
+            ``api_path`` instead).
+    """
+    entry = ensure_remote_module(ref, workflow_dir=workflow_dir)
+    if entry.file is None:
+        raise ValueError(
+            f"Remote module '{ref.display}' is an 'api:' manifest entry "
+            f"('ofx.api.{entry.api_path}') and has no entry file"
+        )
+    return entry.file
 
 
 __all__ = [

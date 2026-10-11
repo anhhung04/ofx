@@ -15,6 +15,9 @@ BUILTIN_KIND = "builtin"
 LOCAL_FILE_KIND = "local_file"
 LOCAL_NAMED_KIND = "local_named"
 REMOTE_KIND = "remote"
+API_KIND = "api"
+
+API_PREFIX = "local.api."
 
 REMOTE_SCHEME_HINT = (
     "Remote modules reference GitHub repos as "
@@ -28,7 +31,8 @@ class ModuleRef:
     """A parsed module reference.
 
     Attributes:
-        kind: One of ``builtin``, ``local_file``, ``local_named``, ``remote``.
+        kind: One of ``builtin``, ``local_file``, ``local_named``, ``remote``,
+            ``api``.
         raw: The original (stripped) spec string.
         name: Builtin name (``builtin``), module directory name
             (``local_named``), or manifest module key (``remote``).
@@ -37,6 +41,8 @@ class ModuleRef:
         ref: Optional git tag/branch/commit for ``remote`` refs.
         function: Optional entry function name (``::<func>`` suffix).
         file: File path portion of a ``local_file`` UDF spec.
+        api_path: Dotted path under ``ofx.api`` for ``api`` refs (the function
+            is the last segment of the path).
     """
 
     kind: str
@@ -48,6 +54,7 @@ class ModuleRef:
     ref: str | None = None
     function: str | None = None
     file: str | None = None
+    api_path: str | None = None
 
     @property
     def display(self) -> str:
@@ -133,6 +140,39 @@ def _reject_function(kind: str, function: str | None, raw: str) -> None:
         )
 
 
+def _reject_api_ref(ref: str | None, raw: str) -> None:
+    if ref is not None:
+        raise ValueError(
+            f"Invalid module reference '{raw}': '@<ref>' is not valid on "
+            "'local.api.*' specs — the function comes from the path. Use "
+            "'local.api.<path>.<func>'."
+        )
+
+
+def _reject_api_function(function: str | None, raw: str) -> None:
+    if function is not None:
+        raise ValueError(
+            f"Invalid module reference '{raw}': 'local.api.*' modules do not "
+            "take a '::<func>' suffix — the function is the last segment of "
+            "the path (use 'local.api.<path>.<func>')."
+        )
+
+
+def _parse_api_ref(base: str, raw: str, ref: str | None, function: str | None) -> ModuleRef:
+    """Parse a ``local.api.<path>`` spec into an ``api`` ref."""
+    _reject_api_ref(ref, raw)
+    _reject_api_function(function, raw)
+    api_path = base[len(API_PREFIX) :]
+    segments = api_path.split(".")
+    if not api_path or any(not segment for segment in segments):
+        raise ValueError(
+            f"Invalid module reference '{raw}': expected "
+            "'local.api.<path>.<func>', e.g. "
+            "'local.api.recon.targets.split_targets'"
+        )
+    return ModuleRef(kind=API_KIND, raw=raw, api_path=api_path, function=segments[-1])
+
+
 def parse_module_ref(spec: str) -> ModuleRef:
     """Parse a module spec into a :class:`ModuleRef`.
 
@@ -142,8 +182,10 @@ def parse_module_ref(spec: str) -> ModuleRef:
     2. ``@`` splits off a remote git ref.
     3. ``.py``-suffixed specs are workflow-local UDF files.
     4. ``local.builtin.*`` / ``builtin.*`` / bare names are builtins.
-    5. ``local.<name>`` is a workflow-local named module.
-    6. Three-or-more dotted segments are remote GitHub modules.
+    5. ``local.api.<path>`` is an ``ofx.api`` function (checked before
+       ``local.<name>``).
+    6. ``local.<name>`` is a workflow-local named module.
+    7. Three-or-more dotted segments are remote GitHub modules.
 
     Raises:
         ValueError: If the spec is empty or malformed.
@@ -174,6 +216,17 @@ def parse_module_ref(spec: str) -> ModuleRef:
                     f"after '{prefix}'"
                 )
             return ModuleRef(kind=BUILTIN_KIND, raw=raw, name=name)
+
+    if base.startswith(API_PREFIX):
+        return _parse_api_ref(base, raw, ref, function)
+
+    if base == "local.api":
+        _reject_api_ref(ref, raw)
+        _reject_api_function(function, raw)
+        raise ValueError(
+            f"Invalid module reference '{raw}': missing path after 'local.api.' "
+            "(use 'local.api.<path>.<func>')"
+        )
 
     if base.startswith("local."):
         _reject_ref(LOCAL_NAMED_KIND, ref, raw)
@@ -255,6 +308,8 @@ def is_remote_module_spec(spec: str) -> bool:
 
 
 __all__ = [
+    "API_KIND",
+    "API_PREFIX",
     "BUILTIN_KIND",
     "LOCAL_FILE_KIND",
     "LOCAL_NAMED_KIND",

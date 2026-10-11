@@ -40,7 +40,8 @@ def is_udf_module_step(step: Step) -> bool:
     """Return whether a step invokes a user-defined module (UDF).
 
     UDF specs use ``<file>.py`` or ``<file>.py::<function>`` form; local
-    named modules (``local.<name>``) and remote GitHub modules
+    named modules (``local.<name>``), ``ofx.api`` functions
+    (``local.api.<path>``) and remote GitHub modules
     (``<owner>.<repo>.<module>[@<ref>][::<func>]``) are UDF-like too —
     their source is bundled for remote execution. Builtin python/shell
     module steps are never UDFs, even when their spec contains ``::`` or
@@ -54,13 +55,18 @@ def is_udf_module_step(step: Step) -> bool:
         return False
     # Imported lazily: ofx.modules transitively pulls in ofx.runner, which
     # imports this module — an eager import would cycle.
-    from ofx.modules.refs import LOCAL_NAMED_KIND, REMOTE_KIND, parse_module_ref
+    from ofx.modules.refs import (
+        API_KIND,
+        LOCAL_NAMED_KIND,
+        REMOTE_KIND,
+        parse_module_ref,
+    )
 
     try:
         kind = parse_module_ref(base).kind
     except ValueError:
         kind = None
-    if kind in (LOCAL_NAMED_KIND, REMOTE_KIND):
+    if kind in (LOCAL_NAMED_KIND, REMOTE_KIND, API_KIND):
         return True
     return "::" in module or module.endswith(".py")
 
@@ -139,6 +145,92 @@ print("__OFX_MODULE_OUTPUTS__" + _b64.b64encode(
 _sys.exit(_code)
 '''
 
+_API_UDF_WRAPPER_TEMPLATE = '''\
+# ofx remote UDF wrapper (generated)
+import base64 as _b64, inspect as _inspect, json as _json, os as _os, sys as _sys, traceback as _tb
+
+from ofx.api.{api_module} import {api_attr} as _func
+
+_UDF_INPUTS = _json.loads({inputs_json!r})
+_UDF_SECRETS = _json.loads({secrets_json!r})
+_UDF_CTX_STYLE = {ctx_style!r}
+
+class _ModuleContext:
+    def __init__(self):
+        self.inputs = _UDF_INPUTS
+        self.secrets = _UDF_SECRETS
+        self.env = dict(_os.environ)
+        self.working_directory = _os.getcwd()
+        self._outputs = {{}}
+    def add_outputs(self, **kwargs):
+        self._outputs.update(kwargs)
+    def log(self, message):
+        print(f"[module] {{message}}", file=_sys.stderr)
+
+def _invoke_kwargs(_func, _args):
+    # Mirrors ofx.modules.api.invoke_api_callable: filter the step args to the
+    # function signature so unrelated workflow inputs are ignored.
+    _params = _inspect.signature(_func).parameters
+    if any(_p.kind is _inspect.Parameter.VAR_KEYWORD for _p in _params.values()):
+        return _func(**_args)
+    _kwargs = {{}}
+    _missing = []
+    for _name, _param in _params.items():
+        if _param.kind in (
+            _inspect.Parameter.VAR_POSITIONAL,
+            _inspect.Parameter.VAR_KEYWORD,
+        ):
+            continue
+        if _name in _args:
+            _kwargs[_name] = _args[_name]
+        elif _param.default is _inspect.Parameter.empty:
+            _missing.append(_name)
+    if _missing:
+        raise TypeError(
+            "missing required argument(s) "
+            + ", ".join(_missing)
+            + "; received keys: "
+            + (", ".join(sorted(_args)) or "(none)")
+        )
+    return _func(**_kwargs)
+
+_ctx = _ModuleContext()
+try:
+    _result = _func(_ctx) if _UDF_CTX_STYLE else _invoke_kwargs(_func, _UDF_INPUTS)
+    if isinstance(_result, dict):
+        _ctx._outputs.update(_result)
+    elif _result is not None:
+        _ctx._outputs["result"] = _result
+    _outputs = _ctx._outputs
+    _code = 0
+except Exception:
+    _tb.print_exc()
+    _outputs = {{}}
+    _code = 1
+print("__OFX_MODULE_OUTPUTS__" + _b64.b64encode(
+    _json.dumps(_outputs, default=str).encode()).decode())
+_sys.exit(_code)
+'''
+
+def _resolve_api_step_target(step: Step, *, workflow_dir: Path | None = None) -> str | None:
+    """Return the ``ofx.api`` dotted path for an api-backed step, else None.
+
+    Covers ``local.api.<path>`` specs and remote manifest entries declared
+    with an ``api:`` key (which may ship no ``.py`` files at all).
+    """
+    from ofx.modules.refs import API_KIND, REMOTE_KIND, parse_module_ref
+    from ofx.modules.remote import ensure_remote_module
+
+    module = getattr(step, "module", None) or ""
+    ref = parse_module_ref(module_base_name(module))
+    if ref.kind == API_KIND:
+        return ref.api_path
+    if ref.kind == REMOTE_KIND:
+        entry = ensure_remote_module(ref, workflow_dir=workflow_dir)
+        return entry.api_path
+    return None
+
+
 def _resolve_udf_target(
     step: Step, *, workflow_dir: Path | None = None
 ) -> tuple[Path, str]:
@@ -148,6 +240,10 @@ def _resolve_udf_target(
     modules (``local.<name>[::<func>]``) and remote GitHub modules
     (``<owner>.<repo>.<module>[@<ref>][::<func>]``), which are fetched into
     the local module cache on first use.
+
+    Raises:
+        ValueError: If the step is an ``ofx.api`` module (``local.api.*`` or a
+            remote ``api:`` manifest entry), which has no UDF file.
     """
     # Imported lazily: ofx.modules.udf transitively pulls in ofx.runner,
     # which imports this module — an eager import would cycle.
@@ -168,6 +264,12 @@ def _resolve_udf_target(
         from ofx.modules.remote import ensure_remote_module
 
         entry = ensure_remote_module(ref, workflow_dir=workflow_dir)
+        if entry.api_path is not None:
+            raise ValueError(
+                f"Step '{step.name}' resolves to an 'api:' module "
+                f"('ofx.api.{entry.api_path}') and has no UDF file "
+                f"(spec {module!r})"
+            )
         return entry.file, entry.function
     if ref.kind == LOCAL_NAMED_KIND:
         from ofx.modules.registry import LOCAL_MODULES_SUBDIR
@@ -200,18 +302,49 @@ def build_udf_step_source(
 ) -> str:
     """Render the remote wrapper source for a ``module:`` UDF step.
 
-    The wrapper embeds the UDF file source, resolves *inputs*/*secrets*
-    (JSON-serialized with ``default=str``) into a minimal ``ModuleContext``,
-    invokes the target function, and prints a ``__OFX_MODULE_OUTPUTS__``
-    sentinel line (base64-encoded JSON) as its final stdout output.
+    UDF targets embed the module file source. ``ofx.api`` targets (a
+    ``local.api.<path>`` step or a remote manifest entry declared with
+    ``api:``) instead import the function by path — real source text, so the
+    bundle analyzer picks up its ``ofx.api`` imports automatically — and carry
+    an inline kwargs shim mirroring
+    :func:`ofx.modules.api.invoke_api_callable`.
+
+    Either way the wrapper resolves *inputs*/*secrets* (JSON-serialized with
+    ``default=str``) into a minimal ``ModuleContext``, invokes the target
+    function, and prints a ``__OFX_MODULE_OUTPUTS__`` sentinel line
+    (base64-encoded JSON) as its final stdout output.
     """
-    _path, function = _resolve_udf_target(step, workflow_dir=workflow_dir)
-    source = _resolve_udf_source(step, workflow_dir=workflow_dir)
     inputs_json = json.dumps(dict(inputs or {}), default=str)
     secrets_json = json.dumps(dict(secrets or {}), default=str)
+    api_path = _resolve_api_step_target(step, workflow_dir=workflow_dir)
+    if api_path is not None:
+        return _build_api_udf_step_source(
+            api_path,
+            inputs_json=inputs_json,
+            secrets_json=secrets_json,
+        )
+    _path, function = _resolve_udf_target(step, workflow_dir=workflow_dir)
+    source = _resolve_udf_source(step, workflow_dir=workflow_dir)
     return _UDF_WRAPPER_TEMPLATE.format(
         source=source,
         function=function,
+        inputs_json=inputs_json,
+        secrets_json=secrets_json,
+    )
+
+
+def _build_api_udf_step_source(
+    api_path: str, *, inputs_json: str, secrets_json: str
+) -> str:
+    """Render the remote wrapper source for an ``ofx.api``-backed step."""
+    # Imported lazily to avoid the ofx.modules/ofx.runner import cycle.
+    from ofx.modules.api import is_ctx_style, resolve_api_callable, resolve_api_import
+
+    api_module, api_attr = resolve_api_import(api_path)
+    return _API_UDF_WRAPPER_TEMPLATE.format(
+        api_module=api_module.removeprefix("ofx.api."),
+        api_attr=api_attr,
+        ctx_style=is_ctx_style(resolve_api_callable(api_path)),
         inputs_json=inputs_json,
         secrets_json=secrets_json,
     )
@@ -295,10 +428,12 @@ def build_module_step_payload(
 
     Python steps bundle their resolved source directly; UDF steps are
     rendered into a wrapper source (see :func:`build_udf_step_source`) and
-    run through the same payload path. The UDF file's ``ofx.api`` imports are
+    run through the same payload path. A UDF file's ``ofx.api`` imports are
     invisible to the bundle analyzer (embedded as a string literal), so they
     are detected on the raw UDF source and force-included via
-    ``extra_modules``.
+    ``extra_modules``. ``ofx.api``-backed steps need no such hint: their
+    wrapper carries a real ``from ofx.api.<path> import <func>`` statement,
+    which the analyzer detects in the generated source.
     """
     if is_python_module_step(step):
         return build_python_step_payload(
@@ -314,9 +449,15 @@ def build_module_step_payload(
             inputs=inputs,
             secrets=secrets,
         )
-        extra_modules = tuple(
-            sorted(detect_ofx_imports(_resolve_udf_source(step, workflow_dir=workflow_dir)))
-        )
+        extra_modules: tuple[str, ...] = ()
+        if _resolve_api_step_target(step, workflow_dir=workflow_dir) is None:
+            extra_modules = tuple(
+                sorted(
+                    detect_ofx_imports(
+                        _resolve_udf_source(step, workflow_dir=workflow_dir)
+                    )
+                )
+            )
         return build_python_payload(
             source,
             extra_modules=extra_modules,

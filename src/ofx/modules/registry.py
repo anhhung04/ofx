@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ofx.modules.api import resolve_api_callable
 from ofx.modules.base import ModuleSpec
 from ofx.modules.builtins import BUILTIN_MODULES
 from ofx.modules.refs import (
+    API_KIND,
     BUILTIN_KIND,
     LOCAL_FILE_KIND,
     LOCAL_NAMED_KIND,
@@ -30,7 +32,10 @@ class ModuleRegistry:
     - ``shell`` / ``builtin.shell`` / ``local.builtin.shell`` — builtin module
     - ``<path>.py[::<func>]`` — workflow-local UDF file
     - ``local.<name>[::<func>]`` — workflow-local ``modules/<name>.py``
+    - ``local.api.<path>.<func>`` — ``ofx.api`` function (kwargs-style; the
+      last path segment names the function)
     - ``<owner>.<repo>.<module>[@<ref>][::<func>]`` — remote GitHub module
+      (UDF or, for manifest ``api:`` entries, an ``ofx.api`` function)
 
     Relative UDF paths resolve against the registry's ``workflow_dir`` (if
     given) and then the current working directory.
@@ -77,6 +82,14 @@ class ModuleRegistry:
                 )
             return builtin
 
+        if ref.kind == API_KIND:
+            return ModuleSpec(
+                kind=API_KIND,
+                name=ref.raw,
+                callable=resolve_api_callable(ref.api_path or ""),
+                function=ref.function,
+            )
+
         if ref.kind == LOCAL_FILE_KIND:
             return load_udf_spec(ref.raw, self._base_dir(workflow_dir))
 
@@ -95,6 +108,13 @@ class ModuleRegistry:
 
         if ref.kind == REMOTE_KIND:
             entry = ensure_remote_module(ref, workflow_dir=workflow_dir)
+            if entry.api_path is not None:
+                return ModuleSpec(
+                    kind=API_KIND,
+                    name=ref.raw,
+                    callable=resolve_api_callable(entry.api_path),
+                    function=entry.function,
+                )
             return load_module_file(entry.file, entry.function, name=ref.raw)
 
         raise ValueError(  # pragma: no cover - defensive
