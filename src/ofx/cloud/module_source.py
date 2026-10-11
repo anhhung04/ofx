@@ -92,6 +92,7 @@ def resolve_udf_target(
     # Imported lazily: ofx.modules.udf transitively pulls in ofx.runner,
     # which imports this module — an eager import would cycle.
     from ofx.modules.refs import (
+        BUILTIN_KIND,
         LOCAL_NAMED_KIND,
         REMOTE_KIND,
         parse_module_ref,
@@ -124,6 +125,21 @@ def resolve_udf_target(
     if ref.kind == LOCAL_NAMED_KIND:
         path = resolve_local_named_path(workflow_dir, ref.name or "")
         return path, ref.function or DEFAULT_MODULE_FUNCTION
+    if ref.kind == BUILTIN_KIND:
+        # Pure-Python builtins stream their own source to the remote host;
+        # shell/python never reach here (classified separately upstream).
+        import ofx.modules.builtins as _builtins
+
+        file_by_name = {
+            module.name: Path(module.__file__ or "")
+            for module in _builtins.BUILTIN_MODULES
+        }
+        builtin_file = file_by_name.get(ref.name or "")
+        if builtin_file is None or not builtin_file.is_file():
+            raise ValueError(
+                f"Builtin module '{ref.raw}' has no bundleable source file"
+            )
+        return builtin_file, DEFAULT_MODULE_FUNCTION
     _path, function = split_udf_spec(module)
     from ofx.modules.udf import resolve_udf_path
 

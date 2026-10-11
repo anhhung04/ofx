@@ -69,6 +69,7 @@ _UDF_SECRETS = _json.loads({secrets_json!r})
 class _ModuleContext:
     def __init__(self):
         self.inputs = _UDF_INPUTS
+        self.args = _UDF_INPUTS
         self.secrets = _UDF_SECRETS
         self.env = dict(_os.environ)
         self.working_directory = _os.getcwd()
@@ -110,6 +111,7 @@ _UDF_CTX_STYLE = {ctx_style!r}
 class _ModuleContext:
     def __init__(self):
         self.inputs = _UDF_INPUTS
+        self.args = _UDF_INPUTS
         self.secrets = _UDF_SECRETS
         self.env = dict(_os.environ)
         self.working_directory = _os.getcwd()

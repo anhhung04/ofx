@@ -41,9 +41,11 @@ def is_udf_module_step(step: Step) -> bool:
     named modules (``local.<name>``), ``ofx.api`` functions
     (``local.api.<path>``) and remote GitHub modules
     (``<owner>.<repo>.<module>[@<ref>][::<func>]``) are UDF-like too —
-    their source is bundled for remote execution. Builtin python/shell
-    module steps are never UDFs, even when their spec contains ``::`` or
-    ends in ``.py``.
+    their source is bundled for remote execution. Pure-Python builtins
+    (anything in the builtin registry except shell/python) are also
+    bundled: their source lives under ``ofx/modules/builtins/``.
+    Builtin python/shell module steps are never UDFs, even when their
+    spec contains ``::`` or ends in ``.py``.
     """
     module = getattr(step, "module", None) or ""
     if not module:
@@ -55,6 +57,7 @@ def is_udf_module_step(step: Step) -> bool:
     # imports this module — an eager import would cycle.
     from ofx.modules.refs import (
         API_KIND,
+        BUILTIN_KIND,
         LOCAL_NAMED_KIND,
         REMOTE_KIND,
         parse_module_ref,
@@ -64,7 +67,7 @@ def is_udf_module_step(step: Step) -> bool:
         kind = parse_module_ref(base).kind
     except ValueError:
         kind = None
-    if kind in (LOCAL_NAMED_KIND, REMOTE_KIND, API_KIND):
+    if kind in (LOCAL_NAMED_KIND, REMOTE_KIND, API_KIND, BUILTIN_KIND):
         return True
     return "::" in module or module.endswith(".py")
 

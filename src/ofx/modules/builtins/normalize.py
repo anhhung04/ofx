@@ -11,12 +11,39 @@ downstream tooling as if the producers had found nothing.
 
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 from typing import Any
 
-from ofx.modules.base import ModuleContext, ModuleResult
-from ofx.modules.builtins._common import run_dir, text_arg
+NO_RUN_DIR_MESSAGE = "OFX_RUN_DIR is not set; cannot locate run artifacts"
+
+
+def _arg(ctx, key):
+    """Return a module argument from ``ctx.args`` (falling back to ``ctx.inputs``)."""
+    if key in ctx.args:
+        return ctx.args[key]
+    return ctx.inputs.get(key)
+
+
+def _text_arg(ctx, key):
+    """Return a module argument as a stripped string (``""`` when unset)."""
+    value = _arg(ctx, key)
+    return "" if value is None else str(value).strip()
+
+
+def _run_dir(ctx, override=""):
+    """Return the artifact directory: explicit override, then ``OFX_RUN_DIR``."""
+    candidate = (
+        override
+        or str(ctx.env.get("OFX_RUN_DIR") or "")
+        or os.environ.get("OFX_RUN_DIR", "")
+    )
+    if not candidate:
+        raise RuntimeError(NO_RUN_DIR_MESSAGE)
+    return Path(candidate).expanduser()
+
+
 
 name = "normalize_targets"
 description = (
@@ -52,9 +79,9 @@ def _count_lines(path: Path) -> int:
         return sum(1 for line in handle if line.strip())
 
 
-def run(ctx: ModuleContext) -> ModuleResult:
+def run(ctx):
     """Publish a per-line target file for the configured target input."""
-    raw = text_arg(ctx, "target")
+    raw = _text_arg(ctx, "target")
     if not raw:
         raise ValueError("normalize_targets requires a 'target' (file or literal)")
 
@@ -71,20 +98,23 @@ def run(ctx: ModuleContext) -> ModuleResult:
             raise RuntimeError(f"target file {target_file} contains no targets")
         print(f"target file: {target_file} ({count} targets)")
         ctx.add_outputs(target_file=str(target_file), count=count)
-        return ModuleResult()
+        return None
 
     targets = _split_literals(raw)
     if not targets:
         raise ValueError("target did not contain any usable value")
 
-    out_dir = run_dir(ctx, text_arg(ctx, "output_dir"))
-    out_path = out_dir / (text_arg(ctx, "output") or DEFAULT_OUTPUT)
+    raw_output = _text_arg(ctx, "output") or DEFAULT_OUTPUT
+    out_path = Path(raw_output).expanduser()
+    if not out_path.is_absolute():
+        out_dir = _run_dir(ctx, _text_arg(ctx, "output_dir"))
+        out_path = out_dir / out_path
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("\n".join(targets) + "\n")
 
     print(f"normalized {len(targets)} target(s) -> {out_path}")
     ctx.add_outputs(target_file=str(out_path), count=len(targets))
-    return ModuleResult()
+    return None
 
 
 __all__ = ["args_schema", "description", "name", "run"]

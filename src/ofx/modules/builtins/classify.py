@@ -13,12 +13,39 @@ when it is itself a valid target (a CIDR such as ``10.0.0.0/24`` or a URL).
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
 from ofx.api.recon.targets import classify_target, split_targets
-from ofx.modules.base import ModuleContext, ModuleResult
-from ofx.modules.builtins._common import run_dir, text_arg
+
+NO_RUN_DIR_MESSAGE = "OFX_RUN_DIR is not set; cannot locate run artifacts"
+
+
+def _arg(ctx, key):
+    """Return a module argument from ``ctx.args`` (falling back to ``ctx.inputs``)."""
+    if key in ctx.args:
+        return ctx.args[key]
+    return ctx.inputs.get(key)
+
+
+def _text_arg(ctx, key):
+    """Return a module argument as a stripped string (``""`` when unset)."""
+    value = _arg(ctx, key)
+    return "" if value is None else str(value).strip()
+
+
+def _run_dir(ctx, override=""):
+    """Return the artifact directory: explicit override, then ``OFX_RUN_DIR``."""
+    candidate = (
+        override
+        or str(ctx.env.get("OFX_RUN_DIR") or "")
+        or os.environ.get("OFX_RUN_DIR", "")
+    )
+    if not candidate:
+        raise RuntimeError(NO_RUN_DIR_MESSAGE)
+    return Path(candidate).expanduser()
+
 
 name = "classify_targets"
 description = "Classify targets (domain/subdomain/cidr/ip/url) into typed files."
@@ -32,6 +59,10 @@ args_schema: dict[str, Any] = {
         "type": "string",
         "enum": ["auto", "file", "target"],
         "description": "Input kind: auto (detect), file (must exist), or target (literal)",
+    },
+    "output_dir": {
+        "type": "string",
+        "description": "Directory for typed target files (default OFX_RUN_DIR)",
     },
 }
 
@@ -87,20 +118,20 @@ def _values(raw: str, source_type: str) -> list[str]:
     return [raw]
 
 
-def run(ctx: ModuleContext) -> ModuleResult:
+def run(ctx):
     """Classify the target input and publish the per-type files and counts."""
-    raw = text_arg(ctx, "target")
+    raw = _text_arg(ctx, "target")
     if not raw:
         raise ValueError("target is required")
 
-    source_type = text_arg(ctx, "source_type").lower() or "auto"
+    source_type = _text_arg(ctx, "source_type").lower() or "auto"
     if source_type not in SOURCE_TYPES:
         raise ValueError(
             f"unsupported source_type {source_type!r}; supported values: "
             + ", ".join(SOURCE_TYPES)
         )
 
-    out_dir = run_dir(ctx)
+    out_dir = _run_dir(ctx, _text_arg(ctx, "output_dir"))
 
     groups = split_targets(_values(raw, source_type))
     target_files: dict[str, str] = {}
@@ -127,7 +158,7 @@ def run(ctx: ModuleContext) -> ModuleResult:
         target_files=json.dumps(target_files, sort_keys=True),
     )
     print(f"target_type: {target_type}")
-    return ModuleResult()
+    return None
 
 
 __all__ = ["args_schema", "description", "name", "run"]

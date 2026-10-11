@@ -11,11 +11,38 @@ missing inputs are reported as failures unless ``fail_if`` says otherwise.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
-from ofx.modules.base import ModuleContext, ModuleResult
-from ofx.modules.builtins._common import arg, run_dir, text_arg
+NO_RUN_DIR_MESSAGE = "OFX_RUN_DIR is not set; cannot locate run artifacts"
+
+
+def _arg(ctx, key):
+    """Return a module argument from ``ctx.args`` (falling back to ``ctx.inputs``)."""
+    if key in ctx.args:
+        return ctx.args[key]
+    return ctx.inputs.get(key)
+
+
+def _text_arg(ctx, key):
+    """Return a module argument as a stripped string (``""`` when unset)."""
+    value = _arg(ctx, key)
+    return "" if value is None else str(value).strip()
+
+
+def _run_dir(ctx, override=""):
+    """Return the artifact directory: explicit override, then ``OFX_RUN_DIR``."""
+    candidate = (
+        override
+        or str(ctx.env.get("OFX_RUN_DIR") or "")
+        or os.environ.get("OFX_RUN_DIR", "")
+    )
+    if not candidate:
+        raise RuntimeError(NO_RUN_DIR_MESSAGE)
+    return Path(candidate).expanduser()
+
+
 
 name = "merge_lists"
 description = "Merge line-based artifact files into one de-duplicated list file."
@@ -57,13 +84,13 @@ args_schema: dict[str, Any] = {
 _FAIL_IF_MODES = ("all_missing", "any_missing", "never")
 
 
-def _path_list(ctx: ModuleContext, key: str) -> list[str]:
+def _path_list(ctx, key: str) -> list[str]:
     """Return the ``files``/``required`` argument as a list of strings.
 
     Accepts a list or a comma-separated string (the form used in workflow
     ``with:`` blocks when a single scalar is more convenient).
     """
-    value = arg(ctx, key)
+    value = _arg(ctx, key)
     if value is None or value == "":
         return []
     raw = value.split(",") if isinstance(value, str) else list(value)
@@ -75,8 +102,8 @@ def _path_list(ctx: ModuleContext, key: str) -> list[str]:
     return paths
 
 
-def _sort_enabled(ctx: ModuleContext) -> bool:
-    value = arg(ctx, "sort")
+def _sort_enabled(ctx) -> bool:
+    value = _arg(ctx, "sort")
     if value is None:
         return True
     if isinstance(value, str):
@@ -84,8 +111,8 @@ def _sort_enabled(ctx: ModuleContext) -> bool:
     return bool(value)
 
 
-def _fail_if(ctx: ModuleContext) -> str:
-    mode = text_arg(ctx, "fail_if").lower() or "all_missing"
+def _fail_if(ctx) -> str:
+    mode = _text_arg(ctx, "fail_if").lower() or "all_missing"
     if mode not in _FAIL_IF_MODES:
         raise ValueError(
             f"unsupported fail_if {mode!r}; supported values: "
@@ -99,6 +126,13 @@ def _resolve_source(src: str, run_dir: Path) -> Path:
     return path if path.is_absolute() else run_dir / path
 
 
+def _maybe_run_dir(ctx, override: str, paths: list[str]) -> Path:
+    """Resolve the run dir only when a relative path actually needs it."""
+    if all(Path(p).expanduser().is_absolute() for p in paths):
+        return Path("/")
+    return _run_dir(ctx, override)
+
+
 def _ordered(lines: list[str], *, sort: bool) -> list[str]:
     if sort:
         return sorted(set(lines))
@@ -106,7 +140,7 @@ def _ordered(lines: list[str], *, sort: bool) -> list[str]:
     return list(seen)
 
 
-def run(ctx: ModuleContext) -> ModuleResult:
+def run(ctx):
     """Merge the configured files into a single de-duplicated output file."""
     files = _path_list(ctx, "files")
     if not files:
@@ -114,13 +148,13 @@ def run(ctx: ModuleContext) -> ModuleResult:
             "merge_lists requires 'files' (one or more artifact paths; "
             "paths that template to empty are ignored)"
         )
-    output = text_arg(ctx, "output")
+    output = _text_arg(ctx, "output")
     if not output:
         raise ValueError("merge_lists requires 'output' (the merged file name)")
 
     fail_if = _fail_if(ctx)
     sort = _sort_enabled(ctx)
-    out_dir = run_dir(ctx, text_arg(ctx, "output_dir"))
+    out_dir = _maybe_run_dir(ctx, _text_arg(ctx, "output_dir"), [*files, output])
     required = {str(path).strip() for path in _path_list(ctx, "required")}
 
     lines: list[str] = []
@@ -165,7 +199,7 @@ def run(ctx: ModuleContext) -> ModuleResult:
 
     print(f"merged {len(merged)} unique entries -> {out_path}")
     ctx.add_outputs(output_file=str(out_path), count=len(merged))
-    return ModuleResult()
+    return None
 
 
 __all__ = ["args_schema", "description", "name", "run"]

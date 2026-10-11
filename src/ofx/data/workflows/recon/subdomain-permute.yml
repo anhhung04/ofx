@@ -48,8 +48,8 @@ jobs:
   permute:
     name: Subdomain Permutations
     outputs:
-      subdomains: '{{ steps.resolve.outputs.subdomain_file }}'
-      subdomain_count: '{{ steps.resolve.outputs.subdomain_count }}'
+      subdomains: '{{ steps.resolve.outputs.output_file }}'
+      subdomain_count: '{{ steps.resolve.outputs.count }}'
       resolved_file: '{{ inputs.output_dir or env.OFX_RUN_DIR }}/resolved_permutations.txt'
     steps:
     - name: alterx
@@ -69,9 +69,14 @@ jobs:
       log-command: '{{ inputs.log_command }}'
       timeout: 120
     - name: resolve
-      module: local.resolve
+      module: local.builtin.merge_lists
       with:
+        files:
+          - '{{ inputs.output_dir or env.OFX_RUN_DIR }}/permutations.txt'
+          - '{{ inputs.output_dir or env.OFX_RUN_DIR }}/permutations_dnsgen.txt'
+        output: all_permutations.txt
         output_dir: '{{ inputs.output_dir or env.OFX_RUN_DIR }}'
+        fail_if: all_missing
     - name: puredns-resolve
       module: local.builtin.shell
       with:
