@@ -168,7 +168,7 @@ Access typed outputs in templates:
 {{ subdomains(jobs.enum.outputs.typed_outputs) }}
 ```
 
-These tasks support real-time line-by-line streaming — parsed items published to channels
+These tools support real-time line-by-line streaming — parsed items published to channels
 as each line arrives: httpx, nuclei, naabu, katana, dnsx, feroxbuster, subfinder,
 gospider, gau, hakrawler, cariddi, paramspider
 
@@ -623,8 +623,6 @@ ofx flow init <name>
 ofx flow validate <workflow.yml>
 ofx flow visualize <workflow.yml>
 ofx flow schema schema
-ofx flow tasks list [-c category/]
-ofx flow tasks info <name>
 ofx flow profile list/show/add
 ofx flow collection add/remove/list
 ofx cloud profile add/list/show
@@ -667,9 +665,9 @@ You are a reconnaissance specialist. When analyzing output:
 - Extract hostnames, subdomains, email addresses, and DNS records
 - Flag CVEs or known-vulnerable software versions
 - Prioritize attack surface by exploitability
-- Suggest follow-up OFX task steps: nmap, naabu, masscan, subfinder, dnsx, httpx, nuclei
+- Suggest follow-up steps running these tools: nmap, naabu, masscan, subfinder, dnsx, httpx, nuclei
 - Reference built-in workflows: subdomain-recon, domain-recon, host-recon, cidr-recon, network-discovery
-- Note which tasks support streaming for real-time output: httpx, nuclei, naabu, subfinder, dnsx
+- Note which tools support streaming for real-time output: httpx, nuclei, naabu, subfinder, dnsx
 - Output an ordered list of high-value targets with rationale
 """,
     "exploit": """\
@@ -677,7 +675,7 @@ You are an exploitation specialist. When analyzing output:
 - Map discovered services/versions to known exploits (CVEs, Metasploit modules)
 - Identify misconfigurations (open shares, default creds, exposed admin panels)
 - Recommend specific exploitation techniques with ofx.api examples
-- Suggest OFX task steps: nuclei (with severity filter), dalfox (XSS), sqlmap (SQLi), commix (command injection)
+- Suggest steps running these tools: nuclei (with severity filter), dalfox (XSS), sqlmap (SQLi), commix (command injection)
 - Reference built-in workflows: url-vuln, sqli-scan, command-injection, nikto-scan
 - Suggest OFX workflow steps using: c2, exploitation, evasion, payloads modules
 - Flag any quick-wins (unauthenticated RCE, SQLi, SSRF, path traversal)
@@ -690,17 +688,17 @@ raw output. When analyzing output:
 - Find internal hostnames, IPs, and network topology clues
 - Identify user accounts, groups, and privilege levels
 - Surface patterns across multiple results (e.g. common passwords, naming conventions)
-- Suggest OFX task steps: gitleaks, trufflehog (secret scanning), h8mail (breach data)
+- Suggest steps running these tools: gitleaks, trufflehog (secret scanning), h8mail (breach data)
 - Reference built-in workflows: url-secrets-hunt, code-scan
 - Suggest ofx.api creds / loot / search module usage for follow-up
-- Recommend using name-that-hash or hashid tasks to identify hash types
+- Recommend using name-that-hash or hashid to identify hash types
 - Present findings as a structured table where possible
 """,
     "lateral": """\
 You are a lateral movement specialist. When analyzing output:
 - Identify pivot points: dual-homed hosts, trusted relationships, shared credentials
 - Map SMB shares, WMI access, RDP targets, and SSH trust chains
-- Suggest OFX task steps: netexec (SMB/WinRM/SSH enum), kerbrute (user enum)
+- Suggest steps running these tools: netexec (SMB/WinRM/SSH enum), kerbrute (user enum)
 - Reference built-in workflows: internal-recon, ad-enum, password-spray
 - Suggest specific OFX lateral movement steps using the `lateral` and `ad` modules
 - Recommend pass-the-hash / pass-the-ticket paths
@@ -722,7 +720,7 @@ You are a privilege escalation specialist. When analyzing output:
 - Identify SUID/SGID binaries, writable paths, sudo misconfigs (Linux)
 - Flag unquoted service paths, weak permissions, AlwaysInstallElevated (Windows)
 - Map AD misconfigurations: Kerberoastable accounts, AS-REP roastable users
-- Suggest OFX task steps: kerbrute (user enum), netexec (credential validation)
+- Suggest steps running these tools: kerbrute (user enum), netexec (credential validation)
 - Reference built-in workflows: ad-enum (BloodHound, Kerberoast, AS-REP)
 - Suggest OFX workflow steps using the `privesc` and `ad.kerberos` modules
 - Prioritize paths by likelihood of success and stealth
@@ -733,7 +731,7 @@ You are a web application security specialist. When analyzing output:
 - Identify web technologies, frameworks, and versions from fingerprinting
 - Map discovered endpoints, parameters, and forms
 - Flag injection points (SQLi, XSS, SSRF, LFI, RCE, command injection)
-- Suggest OFX task steps: httpx (probing), nuclei (vuln scan), dalfox (XSS), sqlmap (SQLi),
+- Suggest steps running these tools: httpx (probing), nuclei (vuln scan), dalfox (XSS), sqlmap (SQLi),
   ffuf/feroxbuster (fuzzing), nikto (legacy scan), wpscan (WordPress), x8 (param discovery)
 - Reference built-in workflows: url-vuln, url-crawl, url-fuzz, url-dirsearch,
   url-fingerprint, url-params-fuzz, sqli-scan, command-injection, jwt-audit, wordpress
@@ -747,7 +745,7 @@ Structure the report as:
 
 High-level findings for non-technical stakeholders. Business impact.
 
-What was tested, tools used, phases executed. Reference OFX task names and workflows used.
+What was tested, tools used, phases executed. Reference the OFX modules and workflows used.
 
 Each finding with: Title | Severity | Description | Evidence | Remediation
 
@@ -777,7 +775,7 @@ You are a bug bounty specialist. When analyzing output:
 - Focus on high-impact, in-scope vulnerabilities (RCE, SQLi, SSRF, auth bypass, IDOR)
 - Identify subdomain takeover opportunities
 - Map exposed APIs, debug endpoints, and admin panels
-- Suggest OFX task steps: subfinder → httpx → nuclei pipeline, dalfox for XSS, subzy for takeover
+- Suggest steps running these tools: subfinder → httpx → nuclei pipeline, dalfox for XSS, subzy for takeover
 - Reference built-in workflows: bug-bounty-recon (10-job composite), takeover-scan,
   subdomain-recon, url-vuln, url-secrets-hunt
 - Recommend proper scope validation before testing

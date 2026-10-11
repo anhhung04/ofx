@@ -1,7 +1,7 @@
 """Tests for flow commands: info, visualize, validate, lint, diff, init, list, search."""
 
-from pathlib import Path
 import importlib
+from pathlib import Path
 
 import pytest
 import typer
@@ -117,8 +117,8 @@ class TestFlowInfo:
         show_info("fallback")
 
     def test_step_type_label(self):
-        from ofx.runner.step_descriptors import step_type_label
         from ofx.models.step import Step
+        from ofx.runner.step_descriptors import step_type_label
 
         assert "module: " in step_type_label(Step(module="shell", run_with={"cmd": "echo hi"}, name="s"))
         assert step_type_label(Step(module="python", run_with={"script": "print(1)"}, name="s")) == "module: python"
@@ -228,6 +228,7 @@ class TestFlowDiff:
 class TestFlowVisualize:
     def test_visualize_json_prints_dag_structure(self, workflow_file: Path, monkeypatch):
         import json
+
         import ofx.commands.flow.visualize as visualize_mod
 
         console = Console(record=True, width=120)
@@ -264,6 +265,7 @@ class TestFlowVisualize:
 
     def test_visualize_json_writes_output_file(self, workflow_file: Path, tmp_path: Path, monkeypatch):
         import json
+
         import ofx.commands.flow.visualize as visualize_mod
 
         workflow = Workflow.model_validate(yaml.safe_load(workflow_file.read_text()))
@@ -829,7 +831,7 @@ class TestFlowRunExitCodes:
 
         import ofx.commands.flow.run as flow_run
         from ofx.commands.__init__ import _register_commands, app
-        from ofx.runner.context import RunResult, RunnerStatus
+        from ofx.runner.context import RunnerStatus, RunResult
 
         fake_result = RunResult(
             name="wf",
