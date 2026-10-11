@@ -20,18 +20,8 @@ HELP = "Manage Red Team projects."
 def init(
     name: Annotated[
         str,
-        typer.Argument(
-            help="Project name (optional with --cwd: defaults to the directory name)"
-        ),
-    ] = "",
-    cwd: Annotated[
-        bool,
-        typer.Option(
-            "--cwd",
-            help="Initialize the current working directory as the project "
-            "instead of creating a new one under the projects path",
-        ),
-    ] = False,
+        typer.Argument(help="Project name"),
+    ],
     use: Annotated[
         bool,
         typer.Option(
@@ -47,23 +37,9 @@ def init(
     from .handlers.init import InitHandler
     from .project_manager import ProjectManager
 
-    if cwd:
-        target = Path.cwd()
-        name = name or target.name
-        console.print(
-            f"[bold green]Initializing current directory as project '{name}'..."
-            f"[/bold green]"
-        )
-        base = ProjectManager.create_project_at(name, target)
-        # Name won't resolve from other directories — store the path instead.
-        active_ref = base
-    else:
-        if not name:
-            console.print("[red]Provide a project name or use --cwd.[/]")
-            raise typer.Exit(code=1)
-        console.print(f"[bold green]Creating project '{name}'...[/bold green]")
-        base = ProjectManager.create_project(name)
-        active_ref = name
+    console.print(f"[bold green]Creating project '{name}'...[/bold green]")
+    base = ProjectManager.create_project(name)
+    active_ref = name
 
     InitHandler.run_interactive(Path(base))
 
