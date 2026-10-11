@@ -72,7 +72,7 @@ jobs:
         }}'
     steps:
     - name: normalize
-      module: modules/normalize.py::run
+      module: local.normalize
       retry: 1
       retry-delay: 5
       continue-on-error: true
@@ -87,7 +87,7 @@ jobs:
       ssh_command: '{{ steps.aws-run.outputs.ssh_command | default('''', true) }}'
     steps:
     - name: generate cloud-init
-      module: modules/generate_cloud_init.py::run
+      module: local.generate_cloud_init
       retry: 1
       retry-delay: 5
       continue-on-error: true
@@ -97,7 +97,7 @@ jobs:
       retry: 2
       retry-delay: 15
       continue-on-error: true
-      module: modules/aws_run.py::run
+      module: local.aws_run
       with:
         instance_name: "{{ jobs['validate'].outputs.instance_name }}"
   digitalocean-provision:
@@ -116,7 +116,7 @@ jobs:
       retry: 2
       retry-delay: 15
       continue-on-error: true
-      module: modules/do_run.py::run
+      module: local.do_run
       with:
         instance_name: "{{ jobs['validate'].outputs.instance_name }}"
   summary:
@@ -127,7 +127,7 @@ jobs:
     - digitalocean-provision
     steps:
     - name: report
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: 'echo "=== CLOUD SETUP REPORT ==="
 

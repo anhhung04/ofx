@@ -29,21 +29,21 @@ jobs:
       count: '{{ steps.resolve.outputs.subdomain_count }}'
     steps:
     - name: alterx
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: alterx -l {{ inputs.target }} -o {{ env.OFX_RUN_DIR }}/permutations.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
     - name: dnsgen
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: dnsgen {{ inputs.target }} > {{ env.OFX_RUN_DIR }}/permutations_dnsgen.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
     - name: resolve
-      module: modules/resolve.py::run
+      module: local.resolve
     - name: puredns-resolve
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: puredns resolve {{ env.OFX_RUN_DIR }}/all_permutations.txt -w {{ env.OFX_RUN_DIR
           }}/resolved_permutations.txt{% if inputs.resolvers %} -r {{ inputs.resolvers }}{% endif %}

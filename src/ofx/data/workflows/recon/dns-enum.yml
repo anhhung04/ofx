@@ -25,11 +25,11 @@ jobs:
     name: DNS Resolution
     steps:
     - name: dnsx-resolve
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: dnsx -l {{ inputs.target }} -a -aaaa -cname -mx -ns -txt -soa -silent -o
           {{ env.OFX_RUN_DIR }}/dns_records.txt{% if inputs.resolvers %} -r {{ inputs.resolvers
           }}{% endif %}
       log-command: '{{ inputs.log_command }}'
     - name: parse-results
-      module: modules/parse_results.py::run
+      module: local.parse_results

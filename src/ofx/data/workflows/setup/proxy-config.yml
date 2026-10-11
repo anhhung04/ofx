@@ -73,7 +73,7 @@ jobs:
         }}'
     steps:
     - name: write-config
-      module: modules/write_config.py::run
+      module: local.write_config
   tor-setup:
     name: Configure TOR Routing
     run_if: '{{ inputs.mode == ''tor'' or inputs.mode == ''all'' }}'
@@ -83,7 +83,7 @@ jobs:
       tor_socks: '{{ steps["check-tor"].outputs.tor_socks | default("", true) }}'
     steps:
     - name: test-tor
-      module: modules/test_tor.py::run
+      module: local.test_tor
       with:
         tor_socks: "{{ steps['check-tor'].outputs.tor_socks }}"
   ssh-tunnel:
@@ -97,7 +97,7 @@ jobs:
     steps:
     - name: start-tunnel
       continue-on-error: true
-      module: modules/start_tunnel.py::run
+      module: local.start_tunnel
   vpn-check:
     name: Verify VPN Connectivity
     run_if: '{{ inputs.mode == ''vpn'' or inputs.mode == ''all'' }}'
@@ -109,7 +109,7 @@ jobs:
     steps:
     - name: check-vpn
       continue-on-error: true
-      module: modules/check_vpn.py::run
+      module: local.check_vpn
   summary:
     name: Proxy Configuration Summary
     needs:
@@ -119,7 +119,7 @@ jobs:
     - vpn-check
     steps:
     - name: report
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: 'echo "============================================"
 

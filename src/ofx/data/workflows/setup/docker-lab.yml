@@ -65,11 +65,11 @@ jobs:
     steps:
     - name: check-docker
       continue-on-error: true
-      module: modules/check_docker.py::run
+      module: local.check_docker
     - name: check-compose
-      module: modules/check_compose.py::run
+      module: local.check_compose
     - name: prepare-dir
-      module: modules/prepare_dir.py::run
+      module: local.prepare_dir
   generate-compose:
     name: Generate Docker Compose Configuration
     needs:
@@ -81,7 +81,7 @@ jobs:
         }}'
     steps:
     - name: write-compose
-      module: modules/write_compose.py::run
+      module: local.write_compose
       with:
         lab_dir: "{{ jobs.validate.outputs.lab_dir }}"
   launch-lab:
@@ -96,11 +96,11 @@ jobs:
     - name: launch
       retry: 2
       retry-delay: 10
-      module: modules/launch.py::run
+      module: local.launch
       with:
         compose_path: "{{ jobs.generate-compose.outputs.compose_path }}"
     - name: collect-endpoints
-      module: modules/collect_endpoints.py::run
+      module: local.collect_endpoints
   verify:
     name: Verify Lab Health
     needs:
@@ -111,14 +111,14 @@ jobs:
     steps:
     - name: health-check
       continue-on-error: true
-      module: modules/health_check.py::run
+      module: local.health_check
   summary:
     name: Lab Summary
     needs:
     - verify
     steps:
     - name: print-info
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: 'echo "============================================"
 
@@ -166,6 +166,6 @@ jobs:
     steps:
     - name: wait-and-destroy
       log-stdout: '{{ inputs.log_output | default(true) }}'
-      module: modules/wait_and_destroy.py::run
+      module: local.wait_and_destroy
       with:
         compose_path: "{{ jobs['generate-compose'].outputs.compose_path }}"

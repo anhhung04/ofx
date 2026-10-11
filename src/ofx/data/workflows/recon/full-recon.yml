@@ -35,7 +35,7 @@ jobs:
       target_type: '{{ steps.classify.outputs.target_type }}'
     steps:
     - name: classify
-      module: modules/classify.py::run
+      module: local.classify
   recon:
     name: Reconnaissance
     needs:
@@ -60,7 +60,7 @@ jobs:
       continue-on-error: true
     - name: merge_subs
       run_if: "{{ jobs.classify.outputs.target_type in ['domain', 'mixed'] }}"
-      module: modules/merge_subdomain_lists.py::run
+      module: local.merge_subdomain_lists
       with:
         passive_file: '{{ steps.passive.outputs.subdomain_file }}'
         brute_file: '{{ steps.brute.outputs.subdomains }}'
@@ -96,7 +96,7 @@ jobs:
       continue-on-error: true
     # --- web phase (all target types) ---
     - name: web_targets
-      module: modules/web_targets.py::run
+      module: local.web_targets
       with:
         target_type: '{{ jobs.classify.outputs.target_type }}'
         host_file: '{{ steps.host_discovery.outputs.host_file }}'

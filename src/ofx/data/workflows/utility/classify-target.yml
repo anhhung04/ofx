@@ -25,4 +25,4 @@ jobs:
       counts: '{{ steps.classify.outputs.counts }}'
     steps:
     - name: classify
-      module: modules/classify.py::run
+      module: local.classify

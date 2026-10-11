@@ -29,7 +29,7 @@ jobs:
     run_if: '{{ inputs.provider == ''aws'' or inputs.provider == ''all'' }}'
     steps:
     - name: s3scanner
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: s3scanner --bucket {{ inputs.target }} --enumerate 2>&1
       continue-on-error: true
@@ -38,7 +38,7 @@ jobs:
     name: Cloud Asset Enumeration
     steps:
     - name: cloudfox
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: cloudfox aws --profile default 2>&1
       continue-on-error: true

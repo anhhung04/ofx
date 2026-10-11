@@ -44,7 +44,7 @@ jobs:
     run_if: '{{ inputs.method == ''ssh-key'' }}'
     steps:
     - name: add-ssh-key
-      module: modules/add_ssh_key.py::run
+      module: local.add_ssh_key
       with:
         username: "{{ inputs.username }}"
         target: "{{ inputs.target }}"
@@ -53,7 +53,7 @@ jobs:
     run_if: '{{ inputs.method == ''cron'' }}'
     steps:
     - name: add-cron
-      module: modules/add_cron.py::run
+      module: local.add_cron
       with:
         lhost: "{{ inputs.lhost }}"
         lport: "{{ inputs.lport }}"

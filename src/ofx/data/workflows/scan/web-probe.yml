@@ -31,14 +31,14 @@ jobs:
     name: HTTP Probing
     steps:
     - name: httpx-probe
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: httpx -l {{ inputs.target }} -ports {{ inputs.ports }} -tech-detect -status-code
           -title -web-server -content-type -silent -threads {{ inputs.threads }} -o
           {{ env.OFX_RUN_DIR }}/httpx_results.txt
       log-command: '{{ inputs.log_command }}'
     - name: whatweb
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: whatweb -i {{ inputs.target }} --log-json={{ env.OFX_RUN_DIR }}/whatweb_results.json
           --color=never -q 2>&1
@@ -50,7 +50,7 @@ jobs:
     - http-probe
     steps:
     - name: gowitness
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: gowitness file -f {{ env.OFX_RUN_DIR }}/httpx_results.txt --destination
           {{ env.OFX_RUN_DIR }}/screenshots/ --no-http 2>&1

@@ -30,19 +30,19 @@ jobs:
       subfinder_out: '{{ steps.subfinder.outputs.stdout }}'
     steps:
     - name: amass
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: amass enum -passive -d {{ inputs.target }} -o {{ env.OFX_RUN_DIR }}/subdomains_amass.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
     - name: subfinder
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: subfinder -d {{ inputs.target }} -o {{ env.OFX_RUN_DIR }}/subdomains_subfinder.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
     - name: merge-subs
-      module: modules/merge_subdomains.py::run
+      module: local.merge_subdomains
   asn-discovery:
     name: ASN & IP Range Discovery
     needs:
@@ -51,13 +51,13 @@ jobs:
       cidr_file: '{{ steps.mapcidr.outputs.stdout }}'
     steps:
     - name: asnmap
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: asnmap -d {{ inputs.target }} -silent
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
     - name: mapcidr
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: cat {{ env.OFX_RUN_DIR }}/all_subdomains.txt | mapcidr -silent -o {{ env.OFX_RUN_DIR
           }}/cidr_ranges.txt

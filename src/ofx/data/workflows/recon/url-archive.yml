@@ -25,25 +25,25 @@ jobs:
       count: '{{ steps.merge.outputs.url_count }}'
     steps:
     - name: waybackurls
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: cat {{ inputs.target }} | waybackurls > {{ env.OFX_RUN_DIR }}/urls_wayback.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
       timeout: 120
     - name: gau
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: cat {{ inputs.target }} | gau --threads 5 > {{ env.OFX_RUN_DIR }}/urls_gau.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
       timeout: 120
     - name: katana-passive
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: katana -list {{ inputs.target }} -passive -silent -o {{ env.OFX_RUN_DIR }}/urls_katana.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
       timeout: 120
     - name: merge
-      module: modules/merge_urls.py::run
+      module: local.merge_urls

@@ -22,7 +22,7 @@ jobs:
     run_if: '{{ inputs.os_type == ''linux'' }}'
     steps:
     - name: system-info
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: echo "[+] System Info" && uname -a && cat /etc/os-release 2>/dev/null &&
           echo "" && echo "[+] Current User" && id && echo "" && echo "[+] Network"
@@ -39,7 +39,7 @@ jobs:
     run_if: '{{ inputs.os_type == ''windows'' }}'
     steps:
     - name: system-info
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: echo "[+] System Info" && systeminfo && echo "" && echo "[+] Current User"
           && whoami /all && echo "" && echo "[+] Network" && ipconfig /all && echo ""

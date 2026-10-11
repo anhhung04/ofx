@@ -22,13 +22,13 @@ jobs:
     name: Subdomain Takeover
     steps:
     - name: subzy
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: subzy run --targets {{ inputs.target }} --output {{ env.OFX_RUN_DIR }}/takeover_subzy.json
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
     - name: nuclei-takeovers
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: nuclei -l {{ inputs.target }} -t http/takeovers/ -silent -o {{ env.OFX_RUN_DIR
           }}/takeover_nuclei.txt

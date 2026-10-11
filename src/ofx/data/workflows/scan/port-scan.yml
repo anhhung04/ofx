@@ -31,14 +31,14 @@ jobs:
     name: Fast Port Discovery
     steps:
     - name: naabu
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: naabu -host {{ inputs.target }} -p {{ inputs.ports }} -rate {{ inputs.rate
           }} -silent -o {{ env.OFX_RUN_DIR }}/open_ports_naabu.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
     - name: rustscan
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: rustscan -a {{ inputs.target }} --range {{ inputs.ports }} -b 500 --accessible
           --greppable 2>&1 | tee {{ env.OFX_RUN_DIR }}/open_ports_rustscan.txt
@@ -50,7 +50,7 @@ jobs:
     - fast-scan
     steps:
     - name: nmap-svc
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: nmap -iL {{ env.OFX_RUN_DIR }}/open_ports_naabu.txt -sV -sC -O -oA {{ env.OFX_RUN_DIR
           }}/nmap_scan --stylesheet https://raw.githubusercontent.com/honze-net/nmap-bootstrap-xsl/main/nmap-bootstrap.xsl
@@ -59,4 +59,4 @@ jobs:
       log-command: '{{ inputs.log_command }}'
       timeout: 120
     - name: parse-nmap
-      module: modules/parse_nmap.py::run
+      module: local.parse_nmap

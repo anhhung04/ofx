@@ -27,18 +27,18 @@ jobs:
       cdn_count: '{{ steps.split.outputs.cdn_count }}'
     steps:
     - name: normalize
-      module: modules/normalize.py::run
+      module: local.normalize
     - name: cdncheck
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: cdncheck -l {{ env.OFX_RUN_DIR }}/waf_input.txt -cdn -waf -silent -resp -o {{ env.OFX_RUN_DIR }}/cdncheck_results.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
     - name: wafw00f
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: wafw00f -i {{ env.OFX_RUN_DIR }}/waf_input.txt -f json -o {{ env.OFX_RUN_DIR }}/wafw00f_results.json
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
     - name: split
-      module: modules/split.py::run
+      module: local.split

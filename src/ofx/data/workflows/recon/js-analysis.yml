@@ -22,22 +22,22 @@ jobs:
     name: JavaScript Analysis
     steps:
     - name: subjs
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: cat {{ inputs.target }} | subjs -silent > {{ env.OFX_RUN_DIR }}/js_files_subjs.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
     - name: katana-js
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: katana -list {{ inputs.target }} -em js -silent -o {{ env.OFX_RUN_DIR }}/js_files_katana.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
       timeout: 120
     - name: merge-js
-      module: modules/merge_js.py::run
+      module: local.merge_js
     - name: secretfinder
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: python3 SecretFinder.py -i {{ env.OFX_RUN_DIR }}/js_files.txt -o {{ env.OFX_RUN_DIR
           }}/js_secrets.html

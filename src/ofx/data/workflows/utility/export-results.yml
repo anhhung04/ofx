@@ -24,7 +24,7 @@ jobs:
     name: Export Results
     steps:
     - name: generate-report
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: 'echo "# Scan Results Report" > {{ env.OFX_RUN_DIR }}/report.md && echo
           "" >> {{ env.OFX_RUN_DIR }}/report.md && echo "Target: {{ inputs.target }}"

@@ -45,7 +45,7 @@ jobs:
     run_if: '{{ inputs.method == ''ssh'' }}'
     steps:
     - name: ssh-socks
-      module: modules/ssh_socks.py::run
+      module: local.ssh_socks
       with:
         lhost: "{{ inputs.lhost }}"
         lport: "{{ inputs.lport }}"
@@ -57,7 +57,7 @@ jobs:
     run_if: '{{ inputs.method == ''chisel'' }}'
     steps:
     - name: chisel-cmds
-      module: modules/chisel_cmds.py::run
+      module: local.chisel_cmds
       with:
         lhost: "{{ inputs.lhost }}"
         lport: "{{ inputs.lport }}"

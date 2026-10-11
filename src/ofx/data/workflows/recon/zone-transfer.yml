@@ -22,11 +22,11 @@ jobs:
     name: Zone Transfer Attempt
     steps:
     - name: axfr
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: for ns in $(dig +short NS {{ inputs.target }}); do echo "=== $ns ==="; dig
           @${ns} {{ inputs.target }} AXFR; done 2>&1 | tee {{ env.OFX_RUN_DIR }}/axfr_results.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
     - name: check
-      module: modules/check.py::run
+      module: local.check

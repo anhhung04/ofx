@@ -27,7 +27,7 @@ jobs:
     name: Static Analysis
     steps:
     - name: semgrep
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: semgrep --config auto --json -o {{ env.OFX_RUN_DIR }}/semgrep_results.json
           {{ inputs.target }} 2>&1
@@ -35,7 +35,7 @@ jobs:
       log-command: '{{ inputs.log_command }}'
       timeout: 120
     - name: gitleaks
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: gitleaks detect --source {{ inputs.target }} --no-git -v 2>&1
       continue-on-error: true

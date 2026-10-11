@@ -33,7 +33,7 @@ jobs:
       count: '{{ steps.merge.outputs.subdomain_count }}'
     steps:
     - name: puredns
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: puredns bruteforce {{ inputs.wordlist }} {{ inputs.target }} -w {{ env.OFX_RUN_DIR
           }}/brute_puredns.txt{% if inputs.resolvers %} -r {{ inputs.resolvers }}{% endif %}
@@ -41,7 +41,7 @@ jobs:
       log-command: '{{ inputs.log_command }}'
       timeout: 240
     - name: dnsx-brute
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: dnsx -d {{ inputs.target }} -w {{ inputs.wordlist }} -silent -o {{ env.OFX_RUN_DIR
           }}/brute_dnsx.txt{% if inputs.resolvers %} -r {{ inputs.resolvers }}{% endif %}
@@ -49,4 +49,4 @@ jobs:
       log-command: '{{ inputs.log_command }}'
       timeout: 240
     - name: merge
-      module: modules/merge_brute.py::run
+      module: local.merge_brute

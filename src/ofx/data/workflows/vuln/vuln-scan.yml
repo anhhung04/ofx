@@ -34,7 +34,7 @@ jobs:
     name: Nuclei Vulnerability Scan
     steps:
     - name: nuclei
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: nuclei -l {{ inputs.target }} -severity {{ inputs.severity }}{% if inputs.tags
           %} -tags {{ inputs.tags }}{% endif %} -rate-limit {{ inputs.rate_limit }}
@@ -44,4 +44,4 @@ jobs:
       log-command: '{{ inputs.log_command }}'
       timeout: 120
     - name: summarize
-      module: modules/summarize.py::run
+      module: local.summarize

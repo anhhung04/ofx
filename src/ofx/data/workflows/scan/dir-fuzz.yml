@@ -40,11 +40,11 @@ jobs:
         log_command: '{{ inputs.log_command }}'
       continue-on-error: true
     - name: pick_targets
-      module: modules/pick_targets.py::run
+      module: local.pick_targets
       with:
         clean_targets: '{{ steps.protection_check.outputs.clean_targets }}'
     - name: ffuf
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: while read -r u; do [ -z "$u" ] && continue; ffuf -u "${u%/}/FUZZ" -w {{ inputs.wordlist
           }} -e {{ inputs.extensions }} -ac -of csv -o "{{ env.OFX_RUN_DIR }}/ffuf_$(echo

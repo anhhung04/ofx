@@ -27,7 +27,7 @@ jobs:
     name: Image Vulnerability Scan
     steps:
     - name: trivy
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: trivy image --severity {{ inputs.severity }} -f json -o {{ env.OFX_RUN_DIR
           }}/trivy_results.json {{ inputs.target }} 2>&1
@@ -35,7 +35,7 @@ jobs:
       log-command: '{{ inputs.log_command }}'
       timeout: 120
     - name: grype
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: grype {{ inputs.target }} -o json --file {{ env.OFX_RUN_DIR }}/grype_results.json
           2>&1

@@ -23,21 +23,21 @@ jobs:
     name: TLS Analysis
     steps:
     - name: tlsx
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: tlsx -u {{ inputs.target }} -san -cn -silent -json -o {{ env.OFX_RUN_DIR
           }}/tls_certs.jsonl
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
     - name: sslscan
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: sslscan {{ inputs.target }} --no-colour --xml={{ env.OFX_RUN_DIR }}/sslscan_results.xml
           2>&1
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
     - name: testssl
-      module: shell
+      module: local.builtin.shell
       with:
         cmd: testssl.sh --jsonfile {{ env.OFX_RUN_DIR }}/testssl_results.json {{ inputs.target
           }} 2>&1
