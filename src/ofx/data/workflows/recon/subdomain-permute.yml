@@ -21,32 +21,63 @@ dispatch:
       type: string
       default: 'true'
       description: Enable command logging
+call:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: File of known subdomains
+      alias: t
+    resolvers:
+      type: string
+      default: ''
+      description: Custom DNS resolver file
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+    output_dir:
+      type: string
+      default: '{{ env.OFX_RUN_DIR }}'
+      description: Directory for generated artifacts
+  outputs:
+    subdomains: "{{ jobs.permute.outputs.subdomains }}"
+    subdomain_count: "{{ jobs.permute.outputs.subdomain_count }}"
+    resolved_file: "{{ jobs.permute.outputs.resolved_file }}"
 jobs:
   permute:
     name: Subdomain Permutations
     outputs:
       subdomains: '{{ steps.resolve.outputs.subdomain_file }}'
-      count: '{{ steps.resolve.outputs.subdomain_count }}'
+      subdomain_count: '{{ steps.resolve.outputs.subdomain_count }}'
+      resolved_file: '{{ inputs.output_dir or env.OFX_RUN_DIR }}/resolved_permutations.txt'
     steps:
     - name: alterx
       module: local.builtin.shell
       with:
-        cmd: alterx -l {{ inputs.target }} -o {{ env.OFX_RUN_DIR }}/permutations.txt
+        cmd: alterx -l {{ inputs.target }} -o {{ inputs.output_dir or env.OFX_RUN_DIR
+          }}/permutations.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
+      timeout: 120
     - name: dnsgen
       module: local.builtin.shell
       with:
-        cmd: dnsgen {{ inputs.target }} > {{ env.OFX_RUN_DIR }}/permutations_dnsgen.txt
+        cmd: dnsgen {{ inputs.target }} > {{ inputs.output_dir or env.OFX_RUN_DIR
+          }}/permutations_dnsgen.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
+      timeout: 120
     - name: resolve
       module: local.resolve
+      with:
+        output_dir: '{{ inputs.output_dir or env.OFX_RUN_DIR }}'
     - name: puredns-resolve
       module: local.builtin.shell
       with:
-        cmd: puredns resolve {{ env.OFX_RUN_DIR }}/all_permutations.txt -w {{ env.OFX_RUN_DIR
-          }}/resolved_permutations.txt{% if inputs.resolvers %} -r {{ inputs.resolvers }}{% endif %}
+        cmd: puredns resolve {{ inputs.output_dir or env.OFX_RUN_DIR }}/all_permutations.txt
+          -w {{ inputs.output_dir or env.OFX_RUN_DIR }}/resolved_permutations.txt{%
+          if inputs.resolvers %} -r {{ inputs.resolvers }}{% endif %}
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
       timeout: 240

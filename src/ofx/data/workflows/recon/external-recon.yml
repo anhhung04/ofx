@@ -1,6 +1,7 @@
 name: external-recon
 description: External reconnaissance — passive subdomain enumeration, ASN/IP range
-  discovery, and OSINT gathering on a target domain.
+  discovery, and OSINT gathering on a target domain. Fails when no source produced
+  results instead of reporting an empty target list.
 tags:
 - recon
 - osint
@@ -22,44 +23,86 @@ dispatch:
       type: string
       default: 'true'
       description: Enable output logging
+call:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target domain (e.g. example.com)
+      alias: t
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+    log_output:
+      type: string
+      default: 'true'
+      description: Enable output logging
+    output_dir:
+      type: string
+      default: '{{ env.OFX_RUN_DIR }}'
+      description: Directory for generated artifacts
+  outputs:
+    subdomain_file: "{{ jobs['subdomain-enum'].outputs.subdomain_file }}"
+    subdomain_count: "{{ jobs['subdomain-enum'].outputs.subdomain_count }}"
+    cidr_file: "{{ jobs['asn-discovery'].outputs.cidr_file }}"
+    cidr_count: "{{ jobs['asn-discovery'].outputs.cidr_count }}"
 jobs:
   subdomain-enum:
     name: Subdomain Enumeration
     outputs:
-      subdomains: '{{ steps.amass.outputs.stdout }}'
-      subfinder_out: '{{ steps.subfinder.outputs.stdout }}'
+      subdomain_file: "{{ steps['merge-subs'].outputs.subdomain_file }}"
+      subdomain_count: "{{ steps['merge-subs'].outputs.subdomain_count }}"
     steps:
     - name: amass
       module: local.builtin.shell
       with:
-        cmd: amass enum -passive -d {{ inputs.target }} -o {{ env.OFX_RUN_DIR }}/subdomains_amass.txt
+        cmd: amass enum -passive -d {{ inputs.target }} -o {{ inputs.output_dir
+          or env.OFX_RUN_DIR }}/subdomains_amass.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
+      timeout: 240
+      retry: 2
     - name: subfinder
       module: local.builtin.shell
       with:
-        cmd: subfinder -d {{ inputs.target }} -o {{ env.OFX_RUN_DIR }}/subdomains_subfinder.txt
+        cmd: subfinder -d {{ inputs.target }} -o {{ inputs.output_dir or env.OFX_RUN_DIR
+          }}/subdomains_subfinder.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
+      timeout: 240
+      retry: 2
     - name: merge-subs
       module: local.merge_subdomains
+      with:
+        output_dir: '{{ inputs.output_dir or env.OFX_RUN_DIR }}'
   asn-discovery:
     name: ASN & IP Range Discovery
     needs:
     - subdomain-enum
     outputs:
-      cidr_file: '{{ steps.mapcidr.outputs.stdout }}'
+      cidr_file: "{{ steps['asn-report'].outputs.cidr_file }}"
+      cidr_count: "{{ steps['asn-report'].outputs.cidr_count }}"
     steps:
     - name: asnmap
       module: local.builtin.shell
       with:
-        cmd: asnmap -d {{ inputs.target }} -silent
+        cmd: asnmap -d {{ inputs.target }} -silent -o {{ inputs.output_dir
+          or env.OFX_RUN_DIR }}/asn_cidrs.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
+      timeout: 240
+      retry: 2
     - name: mapcidr
       module: local.builtin.shell
       with:
-        cmd: cat {{ env.OFX_RUN_DIR }}/all_subdomains.txt | mapcidr -silent -o {{ env.OFX_RUN_DIR
-          }}/cidr_ranges.txt
+        cmd: mapcidr -cidr {{ inputs.output_dir or env.OFX_RUN_DIR }}/asn_cidrs.txt
+          -silent -o {{ inputs.output_dir or env.OFX_RUN_DIR }}/cidr_ranges.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
+      timeout: 240
+      retry: 2
+    - name: asn-report
+      module: local.asn_report
+      with:
+        output_dir: '{{ inputs.output_dir or env.OFX_RUN_DIR }}'

@@ -25,28 +25,58 @@ dispatch:
       type: string
       default: 'true'
       description: Enable command logging
+call:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Root domain (e.g. example.com)
+      alias: t
+    wordlist:
+      type: string
+      default: /usr/share/seclists/Discovery/DNS/subdomains-top1million-20000.txt
+      description: Subdomain wordlist path
+    resolvers:
+      type: string
+      default: ''
+      description: Custom DNS resolver file
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+    output_dir:
+      type: string
+      default: '{{ env.OFX_RUN_DIR }}'
+      description: Directory for generated artifacts
+  outputs:
+    subdomains: "{{ jobs.brute.outputs.subdomains }}"
+    subdomain_count: "{{ jobs.brute.outputs.subdomain_count }}"
 jobs:
   brute:
     name: Subdomain Brute Force
     outputs:
       subdomains: '{{ steps.merge.outputs.subdomain_file }}'
-      count: '{{ steps.merge.outputs.subdomain_count }}'
+      subdomain_count: '{{ steps.merge.outputs.subdomain_count }}'
     steps:
     - name: puredns
       module: local.builtin.shell
       with:
-        cmd: puredns bruteforce {{ inputs.wordlist }} {{ inputs.target }} -w {{ env.OFX_RUN_DIR
-          }}/brute_puredns.txt{% if inputs.resolvers %} -r {{ inputs.resolvers }}{% endif %}
+        cmd: puredns bruteforce {{ inputs.wordlist }} {{ inputs.target }} -w {{ inputs.output_dir
+          or env.OFX_RUN_DIR }}/brute_puredns.txt{% if inputs.resolvers %} -r {{ inputs.resolvers
+          }}{% endif %}
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
       timeout: 240
     - name: dnsx-brute
       module: local.builtin.shell
       with:
-        cmd: dnsx -d {{ inputs.target }} -w {{ inputs.wordlist }} -silent -o {{ env.OFX_RUN_DIR
-          }}/brute_dnsx.txt{% if inputs.resolvers %} -r {{ inputs.resolvers }}{% endif %}
+        cmd: dnsx -d {{ inputs.target }} -w {{ inputs.wordlist }} -silent -o {{ inputs.output_dir
+          or env.OFX_RUN_DIR }}/brute_dnsx.txt{% if inputs.resolvers %} -r {{ inputs.resolvers
+          }}{% endif %}
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
       timeout: 240
     - name: merge
       module: local.merge_brute
+      with:
+        output_dir: '{{ inputs.output_dir or env.OFX_RUN_DIR }}'

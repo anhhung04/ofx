@@ -21,6 +21,10 @@ dispatch:
 jobs:
   email-discovery:
     name: Email Discovery
+    outputs:
+      harvester_report: '{{ env.OFX_RUN_DIR }}/harvester_results.html'
+      h8mail_report: '{{ env.OFX_RUN_DIR }}/h8mail_results.txt'
+      osint_files: "{{ steps['email-report'].outputs.osint_files }}"
     steps:
     - name: theharvester
       module: local.builtin.shell
@@ -29,6 +33,7 @@ jobs:
           2>&1
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
+      timeout: 30
     - name: h8mail
       module: local.builtin.shell
       with:
@@ -36,6 +41,9 @@ jobs:
           2>&1
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
+      timeout: 30
+    - name: email-report
+      module: local.osint_report
   whois-lookup:
     name: WHOIS & Domain Info
     steps:
@@ -44,3 +52,5 @@ jobs:
       with:
         cmd: whois {{ inputs.target }} 2>&1 | tee {{ env.OFX_RUN_DIR }}/whois.txt
       log-command: '{{ inputs.log_command }}'
+      timeout: 30
+      retry: 2

@@ -20,6 +20,9 @@ dispatch:
 jobs:
   axfr:
     name: Zone Transfer Attempt
+    outputs:
+      vulnerable: '{{ steps.check.outputs.vulnerable }}'
+      status: '{{ steps.check.outputs.status }}'
     steps:
     - name: axfr
       module: local.builtin.shell
@@ -28,5 +31,6 @@ jobs:
           @${ns} {{ inputs.target }} AXFR; done 2>&1 | tee {{ env.OFX_RUN_DIR }}/axfr_results.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
+      timeout: 10
     - name: check
       module: local.check

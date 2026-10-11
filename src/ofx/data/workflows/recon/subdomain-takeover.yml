@@ -1,6 +1,6 @@
 name: subdomain-takeover
 description: Subdomain takeover detection — find dangling CNAMEs and unclaimed services
-  on discovered subdomains.
+  on discovered subdomains. Fails when the final detector cannot run.
 tags:
 - recon
 - subdomain
@@ -17,21 +17,43 @@ dispatch:
       type: string
       default: 'true'
       description: Enable command logging
+call:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: File of subdomains to test
+      alias: t
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+    output_dir:
+      type: string
+      default: '{{ env.OFX_RUN_DIR }}'
+      description: Directory for generated artifacts
+  outputs:
+    subzy_results: "{{ jobs.takeover.outputs.subzy_results }}"
+    nuclei_results: "{{ jobs.takeover.outputs.nuclei_results }}"
 jobs:
   takeover:
     name: Subdomain Takeover
+    outputs:
+      subzy_results: '{{ inputs.output_dir or env.OFX_RUN_DIR }}/takeover_subzy.json'
+      nuclei_results: '{{ inputs.output_dir or env.OFX_RUN_DIR }}/takeover_nuclei.txt'
     steps:
     - name: subzy
       module: local.builtin.shell
       with:
-        cmd: subzy run --targets {{ inputs.target }} --output {{ env.OFX_RUN_DIR }}/takeover_subzy.json
+        cmd: subzy run --targets {{ inputs.target }} --output {{ inputs.output_dir
+          or env.OFX_RUN_DIR }}/takeover_subzy.json
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
+      timeout: 120
     - name: nuclei-takeovers
       module: local.builtin.shell
       with:
-        cmd: nuclei -l {{ inputs.target }} -t http/takeovers/ -silent -o {{ env.OFX_RUN_DIR
-          }}/takeover_nuclei.txt
-      continue-on-error: true
+        cmd: nuclei -l {{ inputs.target }} -t http/takeovers/ -silent -o {{ inputs.output_dir
+          or env.OFX_RUN_DIR }}/takeover_nuclei.txt
       log-command: '{{ inputs.log_command }}'
       timeout: 120

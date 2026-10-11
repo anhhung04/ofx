@@ -17,33 +17,67 @@ dispatch:
       type: string
       default: 'true'
       description: Enable command logging
+call:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Domain or file of subdomains
+      alias: t
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+    output_dir:
+      type: string
+      default: '{{ env.OFX_RUN_DIR }}'
+      description: Directory for generated artifacts
+  outputs:
+    urls: "{{ jobs.archive.outputs.urls }}"
+    url_count: "{{ jobs.archive.outputs.url_count }}"
 jobs:
   archive:
     name: Archive URL Collection
     outputs:
       urls: '{{ steps.merge.outputs.url_file }}'
-      count: '{{ steps.merge.outputs.url_count }}'
+      url_count: '{{ steps.merge.outputs.url_count }}'
     steps:
     - name: waybackurls
       module: local.builtin.shell
       with:
-        cmd: cat {{ inputs.target }} | waybackurls > {{ env.OFX_RUN_DIR }}/urls_wayback.txt
+        cmd: if [ -f "{{ inputs.target }}" ]; then cat "{{ inputs.target }}"; else printf
+          '%s\n' "{{ inputs.target }}"; fi | waybackurls > {{ inputs.output_dir or
+          env.OFX_RUN_DIR }}/urls_wayback.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
       timeout: 120
+      retry: 2
+      retry-delay: 5
     - name: gau
       module: local.builtin.shell
       with:
-        cmd: cat {{ inputs.target }} | gau --threads 5 > {{ env.OFX_RUN_DIR }}/urls_gau.txt
+        cmd: if [ -f "{{ inputs.target }}" ]; then cat "{{ inputs.target }}"; else printf
+          '%s\n' "{{ inputs.target }}"; fi | gau --threads 5 > {{ inputs.output_dir
+          or env.OFX_RUN_DIR }}/urls_gau.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
       timeout: 120
+      retry: 2
+      retry-delay: 5
     - name: katana-passive
       module: local.builtin.shell
       with:
-        cmd: katana -list {{ inputs.target }} -passive -silent -o {{ env.OFX_RUN_DIR }}/urls_katana.txt
+        cmd: ( if [ -f "{{ inputs.target }}" ]; then cat "{{ inputs.target }}"; else
+          printf '%s\n' "{{ inputs.target }}"; fi ) > {{ inputs.output_dir or env.OFX_RUN_DIR
+          }}/url_archive_input.txt && katana -list {{ inputs.output_dir or env.OFX_RUN_DIR
+          }}/url_archive_input.txt -passive -silent -o {{ inputs.output_dir or env.OFX_RUN_DIR
+          }}/urls_katana.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
       timeout: 120
+      retry: 2
+      retry-delay: 5
     - name: merge
       module: local.merge_urls
+      with:
+        output_dir: '{{ inputs.output_dir or env.OFX_RUN_DIR }}'

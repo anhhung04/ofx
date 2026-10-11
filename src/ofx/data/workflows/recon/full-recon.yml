@@ -48,7 +48,7 @@ jobs:
       with:
         target: '{{ inputs.target }}'
         log_command: '{{ inputs.log_command }}'
-      continue-on-error: true
+        output_dir: '{{ env.OFX_RUN_DIR }}'
     - name: brute
       run_if: "{{ jobs.classify.outputs.target_type in ['domain', 'mixed'] }}"
       uses: recon/subdomain-brute
@@ -57,7 +57,7 @@ jobs:
         wordlist: '{{ inputs.wordlist }}'
         resolvers: '{{ inputs.resolvers }}'
         log_command: '{{ inputs.log_command }}'
-      continue-on-error: true
+        output_dir: '{{ env.OFX_RUN_DIR }}'
     - name: merge_subs
       run_if: "{{ jobs.classify.outputs.target_type in ['domain', 'mixed'] }}"
       module: local.merge_subdomain_lists
@@ -71,6 +71,7 @@ jobs:
         target: '{{ steps.merge_subs.outputs.subdomains }}'
         resolvers: '{{ inputs.resolvers }}'
         log_command: '{{ inputs.log_command }}'
+        output_dir: '{{ env.OFX_RUN_DIR }}'
       continue-on-error: true
     - name: takeover
       run_if: "{{ jobs.classify.outputs.target_type in ['domain', 'mixed'] }}"
@@ -78,6 +79,7 @@ jobs:
       with:
         target: '{{ steps.merge_subs.outputs.subdomains }}'
         log_command: '{{ inputs.log_command }}'
+        output_dir: '{{ env.OFX_RUN_DIR }}'
       continue-on-error: true
     # --- network path ---
     - name: host_discovery
@@ -86,13 +88,14 @@ jobs:
       with:
         target: '{{ inputs.target }}'
         log_command: '{{ inputs.log_command }}'
-      continue-on-error: true
+        output_dir: '{{ env.OFX_RUN_DIR }}'
     - name: port_scan
       run_if: "{{ jobs.classify.outputs.target_type in ['cidr', 'ip'] }}"
       uses: scan/port-scan
       with:
         target: '{{ inputs.target }}'
         log_command: '{{ inputs.log_command }}'
+        output_dir: '{{ env.OFX_RUN_DIR }}'
       continue-on-error: true
     # --- web phase (all target types) ---
     - name: web_targets
@@ -105,23 +108,26 @@ jobs:
       with:
         target: '{{ steps.web_targets.outputs.web_targets }}'
         log_command: '{{ inputs.log_command }}'
+        output_dir: '{{ env.OFX_RUN_DIR }}'
       continue-on-error: true
     - name: waf_detect
       uses: scan/waf-detect
       with:
         target: '{{ steps.web_targets.outputs.web_targets }}'
         log_command: '{{ inputs.log_command }}'
-      continue-on-error: true
+        output_dir: '{{ env.OFX_RUN_DIR }}'
     - name: url_archive
       run_if: "{{ jobs.classify.outputs.target_type in ['domain', 'subdomain', 'mixed'] }}"
       uses: recon/url-archive
       with:
         target: '{{ steps.web_targets.outputs.web_targets }}'
         log_command: '{{ inputs.log_command }}'
+        output_dir: '{{ env.OFX_RUN_DIR }}'
       continue-on-error: true
     - name: js_analysis
       uses: recon/js-analysis
       with:
         target: '{{ steps.web_targets.outputs.web_targets }}'
         log_command: '{{ inputs.log_command }}'
+        output_dir: '{{ env.OFX_RUN_DIR }}'
       continue-on-error: true
