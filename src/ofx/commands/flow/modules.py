@@ -24,6 +24,7 @@ from ofx.modules.refs import (
 )
 from ofx.modules.remote import (
     MANIFEST_FILENAME,
+    cache_dir_for,
     ensure_remote_module,
     ensure_remote_repo,
 )
@@ -211,8 +212,13 @@ def info(
         raise typer.BadParameter(str(exc)) from exc
     console = get_console()
     console.print(f"[bold]Module:[/bold] {ref.raw}")
-    console.print(f"[bold]File:[/bold] {entry.file}")
-    console.print(f"[bold]Function:[/bold] {entry.function}")
-    console.print(
-        f"[dim]Manifest: {entry.file.parent.parent / MANIFEST_FILENAME}[/dim]"
+    if entry.api_path:
+        console.print(f"[bold]API function:[/bold] ofx.api.{entry.api_path}")
+    else:
+        console.print(f"[bold]File:[/bold] {entry.file}")
+        console.print(f"[bold]Function:[/bold] {entry.function}")
+    manifest_path = (
+        (entry.file.parent.parent if entry.file else cache_dir_for(ref))
+        / MANIFEST_FILENAME
     )
+    console.print(f"[dim]Manifest: {manifest_path}[/dim]")
