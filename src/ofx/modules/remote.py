@@ -54,6 +54,8 @@ def cache_dir_for(ref: ModuleRef) -> Path:
     """
     if ref.kind != REMOTE_KIND:
         raise ValueError(f"Cannot cache non-remote module ref: {ref.raw!r}")
+    if not ref.owner or not ref.repo:  # defensive: remote refs always carry both
+        raise ValueError(f"Remote module ref missing owner/repo: {ref.raw!r}")
     return MODULES_DIR / ref.owner / ref.cache_key
 
 

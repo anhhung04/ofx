@@ -115,6 +115,11 @@ def resolve_udf_target(
                 f"('ofx.api.{entry.api_path}') and has no UDF file "
                 f"(spec {module!r})"
             )
+        if entry.file is None:  # defensive: non-api entries always have a file
+            raise ValueError(
+                f"Step '{step.name}' remote module '{module!r}' resolved "
+                "without an entry file"
+            )
         return entry.file, entry.function
     if ref.kind == LOCAL_NAMED_KIND:
         path = resolve_local_named_path(workflow_dir, ref.name or "")

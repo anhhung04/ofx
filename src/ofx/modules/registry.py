@@ -118,6 +118,10 @@ class ModuleRegistry:
                     callable=resolve_api_callable(entry.api_path),
                     function=entry.function,
                 )
+            if entry.file is None:  # defensive: non-api entries always have a file
+                raise ValueError(
+                    f"Remote module '{ref.raw}' resolved without an entry file"
+                )
             return load_module_file(entry.file, entry.function, name=ref.raw)
 
         raise ValueError(  # pragma: no cover - defensive
