@@ -133,12 +133,14 @@ jobs:
   opsec-check:
     steps:
       - name: clean tracks
-        script: |
-          from ofx.api.opsec import clean_history_commands, clean_linux_logs
-          import subprocess
+        module: python
+        with:
+          script: |
+            from ofx.api.opsec import clean_history_commands, clean_linux_logs
+            import subprocess
 
-          for cmd in clean_history_commands() + clean_linux_logs():
-              subprocess.run(cmd, shell=True)
+            for cmd in clean_history_commands() + clean_linux_logs():
+                subprocess.run(cmd, shell=True)
 ```
 
 ---

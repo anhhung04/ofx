@@ -35,12 +35,16 @@ outputs:
 jobs:
   scan:
     steps:
-      - run: nmap -sV {{ inputs.target }}
+      - module: shell
+        with:
+          cmd: nmap -sV {{ inputs.target }}
 
   analyze:
     needs: [scan]
     steps:
-      - run: python analyze.py
+      - module: shell
+        with:
+          cmd: python analyze.py
 ```
 
 ---
@@ -137,7 +141,7 @@ defaults:
   shell: /bin/bash
   working-directory: /opt/scans
   profile: stealth              # Execution profile (rate limits, proxy, etc.)
-  store-creds: true             # Auto-store UserAccount credentials from tasks
+  store-creds: true             # Auto-store user_account credentials from modules
   durable:
     enabled: true
     resume: true

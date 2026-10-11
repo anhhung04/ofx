@@ -117,12 +117,14 @@ jobs:
   recon:
     steps:
       - name: port scan
-        script: |
-          from ofx.api.recon import port_scan, TOP_100_PORTS
-          results = port_scan("{{ inputs.target }}", TOP_100_PORTS)
-          for r in results:
-              if r.open:
-                  print(f"{r.port}/tcp open")
+        module: python
+        with:
+          script: |
+            from ofx.api.recon import port_scan, TOP_100_PORTS
+            results = port_scan("{{ inputs.target }}", TOP_100_PORTS)
+            for r in results:
+                if r.open:
+                    print(f"{r.port}/tcp open")
 ```
 
 ---

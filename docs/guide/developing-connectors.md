@@ -439,18 +439,20 @@ jobs:
   scan:
     steps:
       - name: Run exploit
-        script: |
-          from ofx.api.exploitation.exploit import ExploitRunner, ExploitMode
-          
-          runner = ExploitRunner()
-          result = runner.run_exploit(
-              connector="webmin_rce",
-              target="{{ inputs.target }}",
-              mode=ExploitMode.VERIFY
-          )
-          
-          if result.success:
-              print("Vulnerable!")
+        module: python
+        with:
+          script: |
+            from ofx.api.exploitation.exploit import ExploitRunner, ExploitMode
+
+            runner = ExploitRunner()
+            result = runner.run_exploit(
+                connector="webmin_rce",
+                target="{{ inputs.target }}",
+                mode=ExploitMode.VERIFY
+            )
+
+            if result.success:
+                print("Vulnerable!")
 ```
 
 ## Quick Reference

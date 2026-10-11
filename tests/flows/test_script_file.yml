@@ -12,26 +12,36 @@ jobs:
     name: Test Script File Feature
     steps:
       - name: Run Python script from default scripts directory
-        script_file: example_script.py
+        module: python
+        with:
+          script_file: example_script.py
         log_stdout: true
 
       - name: Run inline Python script
-        script: |
-          from ofx.settings import settings
-          print(f"Inline script in {settings.app_branding}")
+        module: python
+        with:
+          script: |
+            from ofx.settings import settings
+            print(f"Inline script in {settings.app_branding}")
         log_stdout: true
 
       - name: Create temporary script
-        run: |
-          cat > /tmp/test_script.py << 'EOF'
-          #!/usr/bin/env python3
-          import secrets
-          print(f"Random string: {secrets.token_hex(8)}")
-          EOF
+        module: shell
+        with:
+          cmd: |
+            cat > /tmp/test_script.py << 'EOF'
+            #!/usr/bin/env python3
+            import secrets
+            print(f"Random string: {secrets.token_hex(8)}")
+            EOF
 
       - name: Run script from absolute path
-        script_file: /tmp/test_script.py
+        module: python
+        with:
+          script_file: /tmp/test_script.py
         log_stdout: true
 
       - name: Cleanup
-        run: rm -f /tmp/test_script.py
+        module: shell
+        with:
+          cmd: rm -f /tmp/test_script.py

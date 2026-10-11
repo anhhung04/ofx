@@ -263,6 +263,9 @@ class FlowRunHandler:
 
         elapsed = time.time() - start_time
         summary["elapsed_seconds"] = round(elapsed, 1)
+        # __summary__ is built in post_run while the workflow state machine is
+        # still RUNNING; the final result status is authoritative.
+        summary["status"] = result.status.value.upper()
 
         panel = execution_summary_panel(summary)
         console.print()

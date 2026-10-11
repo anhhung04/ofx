@@ -79,7 +79,9 @@ jobs:
   recon:
     cloud: do-small
     steps:
-      - run: nmap -sV {{ inputs.target }} -oN {{ ctx.output_path }}/scan.txt
+      - module: shell
+        with:
+          cmd: nmap -sV {{ inputs.target }} -oN {{ ctx.output_path }}/scan.txt
 ```
 
 ## Inline Cloud Config
@@ -98,7 +100,9 @@ jobs:
       ssh_key: ~/.ssh/aws-key.pem
       auto_destroy: true
     steps:
-      - run: whoami
+      - module: shell
+        with:
+          cmd: whoami
 ```
 
 ## Multi-Cloud Workflows
@@ -110,17 +114,23 @@ jobs:
   us-scan:
     cloud: aws-east
     steps:
-      - run: nmap -sV {{ inputs.target }}
+      - module: shell
+        with:
+          cmd: nmap -sV {{ inputs.target }}
 
   eu-scan:
     cloud: do-amsterdam
     steps:
-      - run: nmap -sV {{ inputs.target }}
+      - module: shell
+        with:
+          cmd: nmap -sV {{ inputs.target }}
 
   analyze:
     needs: [us-scan, eu-scan]    # Runs locally
     steps:
-      - run: python merge_results.py
+      - module: shell
+        with:
+          cmd: python merge_results.py
 ```
 
 ## Instance Lifecycle Control

@@ -72,9 +72,12 @@ jobs:
 
 | Type | Key | Use Case |
 |---|---|---|
-| Shell | `run:` | Any shell command |
-| Python inline | `script:` | Multi-line Python logic |
-| Python file | `script_file:` | Path to `.py` file |
+| Shell | `module: shell` + `with.cmd` | Any shell command |
+| Python inline | `module: python` + `with.script` | Multi-line Python logic |
+| Python file | `module: python` + `with.script_file` | Path to `.py` file |
+| User-defined | `module: path/to.py::func` | Custom Python function (defaults to `run`) |
+| Local named | `module: local.<name>` | Workflow-local `modules/<name>.py` (defaults to `run`) |
+| Remote module | `module: <owner>.<repo>.<module>[@<ref>][::<func>]` | GitHub-published module (cloned to `~/.ofx/modules/`; arbitrary code — prefer pinned `@<tag>`) |
 | Subworkflow | `uses:` | Reference another workflow YAML |
 | Remote (SSH) | `remote:` | Run on remote host via SSH |
 | Remote (WinRM) | `remote:` | Run on remote host via WinRM |
@@ -83,16 +86,18 @@ jobs:
 
 ```yaml
 - name: Step name
-  run: echo hello
+  module: shell
+  with:
+    cmd: echo hello
   shell: /bin/bash          # default: /bin/bash
   working-directory: /tmp   # optional
   timeout: 5                # minutes, 0 = no timeout
   retry: 3                  # retry count
-  retry-delay: 10           # seconds between retries
+  retry-delay: 10           # seconds between retries (exponential backoff + jitter)
   continue-on-error: true   # don't fail job on error
-  if: success()             # success() | failure() | always()
+  if: success()             # success() | failure() | canceled() | always()
   log-command: true         # log the command itself
-  log-output: true          # log stdout/stderr
+  log-stdout: true          # save stdout to stdout_<job>_<step>.log
 ```
 
 ## Remote Execution (SSH / WinRM)
@@ -171,7 +176,9 @@ jobs:
     cloud: do-nyc              # references a cloud profile
     cloud-timeout: 30          # VPS teardown timeout in minutes
     steps:
-      - run: nmap -sV {{ inputs.target }}
+      - module: shell
+        with:
+          cmd: nmap -sV {{ inputs.target }}
 ```
 
 ### Fleet Distribution (Multi-VPS)
@@ -190,8 +197,10 @@ jobs:
         expand_cidrs: true             # expand CIDR ranges to individual IPs
         exclude: ['10.0.0.1']          # skip specific targets
     steps:
-      - run: |
-          cat $FLEET_INPUT_FILE | xargs -I{} nmap -p{{ matrix.port }} {}
+      - module: shell
+        with:
+          cmd: |
+            cat $FLEET_INPUT_FILE | xargs -I{} nmap -p{{ matrix.port }} {}
 ```
 
 `$FLEET_INPUT_FILE` is auto-uploaded to each VPS with its chunk of targets.
@@ -217,7 +226,9 @@ jobs:
           method: PATCH
           extra_header: 'X-Custom: 1'
     steps:
-      - run: 'curl -X {{ matrix.method }} https://{{ matrix.target }}'
+      - module: shell
+        with:
+          cmd: 'curl -X {{ matrix.method }} https://{{ matrix.target }}'
 ```
 
 Matrix variables are available as `{{ matrix.<key> }}` in templates.
@@ -244,31 +255,39 @@ jobs:
       hosts: '{{ steps["nmap-scan"].outputs.hosts }}'
     steps:
       - name: nmap-scan
-        run: nmap -sL {{ inputs.range }} -oG -
-        # Use add_outputs() in script steps to set outputs:
+        module: shell
+        with:
+          cmd: nmap -sL {{ inputs.range }} -oG -
+        # Use add_outputs() in python module steps to set outputs:
       - name: parse
-        script: |
-          hosts = []
-          # ... parse logic ...
-          add_outputs(hosts='\n'.join(hosts), count=len(hosts))
+        module: python
+        with:
+          script: |
+            hosts = []
+            # ... parse logic ...
+            add_outputs(hosts='\n'.join(hosts), count=len(hosts))
 
   report:
     needs: scan
     steps:
-      - run: echo "Found {{ jobs['scan'].outputs.count }} hosts"
+      - module: shell
+        with:
+          cmd: echo "Found {{ jobs['scan'].outputs.count }} hosts"
 ```
 
-### API Module Access in Scripts
+### API Module Access in Python Modules
 
-Python `script:` steps can import `ofx.api` modules directly. They're auto-bundled for cloud execution:
+Python `module: python` steps can import `ofx.api` modules directly. They're auto-bundled for cloud execution:
 
 ```yaml
 - name: DNS enumeration
-  script: |
-    from ofx.api.dns import resolve, bruteforce
-    records = resolve("example.com", record_type="A")
-    subs = bruteforce("example.com", wordlist="/usr/share/wordlists/subdomains.txt")
-    add_outputs(a_records=records, subdomains=subs)
+  module: python
+  with:
+    script: |
+      from ofx.api.dns import resolve, bruteforce
+      records = resolve("example.com", record_type="A")
+      subs = bruteforce("example.com", wordlist="/usr/share/wordlists/subdomains.txt")
+      add_outputs(a_records=records, subdomains=subs)
 ```
 
 ## Built-in API Module Categories
@@ -386,7 +405,9 @@ jobs:
         target: '{{ inputs.targets | fromjson }}'
       max_parallel: 10
     steps:
-      - run: nmap -sV -p- {{ matrix.target }}
+      - module: shell
+        with:
+          cmd: nmap -sV -p- {{ matrix.target }}
 ```
 
 ### Conditional Cleanup
@@ -411,7 +432,7 @@ jobs:
 - **Job name collisions** — Job names must be unique within a workflow.
 - **Circular dependencies** — `needs` cycles cause validation errors.
 - **Unquoted template expressions** — Wrap `{{ }}` in quotes in YAML: `'{{ inputs.target }}'`.
-- **Step type ambiguity** — Each step must have exactly one of: `run`, `script`, `script_file`, `uses`, `remote`.
+- **Step type ambiguity** — Each step must have exactly one of: `module`, `uses`, `pipe`.
 - **Matrix variable clashes** — Don't name matrix variables the same as `dispatch.inputs` keys.
 - **Cloud without profile** — `cloud:` references must match an existing `ofx cloud profile` name.
 - **Fleet without cloud** — `strategy.fleet` requires `cloud:` on the job.

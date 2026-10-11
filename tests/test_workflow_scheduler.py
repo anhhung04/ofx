@@ -83,7 +83,7 @@ class TestWorkflowScheduler:
         from ofx.models.step import Step
 
         return Job(
-            steps=[Step(run="echo test")],
+            steps=[Step(module="shell", run_with={"cmd": "echo test"})],
             needs=needs or [],
         )
 

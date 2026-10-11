@@ -1,0 +1,44 @@
+name: module-chain-example
+description: >
+  Demo of the module system: builtin shell + python modules and a custom
+  user-defined function (UDF) module chained with retries and branching.
+tags: [example, modules]
+
+jobs:
+  chain:
+    name: module chain
+    steps:
+      - name: recon
+        module: shell
+        with:
+          cmd: echo "22,80,443"
+        log-stdout: true
+
+      - name: parse
+        module: python
+        with:
+          script: |
+            ports = "{{ steps.recon.outputs.stdout }}".strip()
+            add_outputs(open_ports=ports)
+
+      - name: plan
+        module: my_module.py::run
+        with:
+          ports: "{{ steps.parse.outputs.open_ports }}"
+        retry: 2
+        retry-delay: 1
+
+      - name: exploit-branch
+        if: success()
+        module: shell
+        with:
+          cmd: echo "planned {{ steps.plan.outputs.planned }} attack(s)"
+        log-stdout: true
+
+      - name: fallback-branch
+        if: failure()
+        module: shell
+        continue-on-error: true
+        with:
+          cmd: echo "planning failed — falling back to manual triage"
+        log-stdout: true

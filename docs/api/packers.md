@@ -21,13 +21,13 @@ raw = packers.b64_gzip_unpack(packed)
 ```yaml
 steps:
   - name: pack payload
-    run: |
-      python - <<'PY'
-      from ofx.api import packers
-      data = b"SECRET"
-      encoded = packers.b64_gzip_pack(data)
-      print(encoded)
-      restored = packers.b64_gzip_unpack(encoded)
-      print(restored)
-      PY
+    module: python
+    with:
+      script: |
+        from ofx.api import packers
+        data = b"SECRET"
+        encoded = packers.b64_gzip_pack(data)
+        print(encoded)
+        restored = packers.b64_gzip_unpack(encoded)
+        print(restored)
 ```

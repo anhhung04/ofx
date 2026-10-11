@@ -27,8 +27,12 @@ name: Exec Results
 jobs:
   test_job:
     steps:
-      - run: echo "ok"
-      - run: echo "ok2"
+      - module: shell
+        with:
+          cmd: echo "ok"
+      - module: shell
+        with:
+          cmd: echo "ok2"
 """
     workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
     runner = WorkflowRunner(workflow, RunContext())

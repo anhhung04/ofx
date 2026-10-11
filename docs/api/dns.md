@@ -22,15 +22,15 @@ hits = await dns.bruteforce_subdomains("corp.local", ["vpn", "mail"], concurrenc
 ```yaml
 steps:
   - name: dns bruteforce
-    run: |
-      python - <<'PY'
-      from ofx.api import dns
-      hits = dns.bruteforce_subdomains_sync(
-          "corp.local",
-          ["vpn", "mail", "git"],
-          concurrency=50,
-          jitter=0.05,
-      )
-      print(hits)
-      PY
+    module: python
+    with:
+      script: |
+        from ofx.api import dns
+        hits = dns.bruteforce_subdomains_sync(
+            "corp.local",
+            ["vpn", "mail", "git"],
+            concurrency=50,
+            jitter=0.05,
+        )
+        print(hits)
 ```

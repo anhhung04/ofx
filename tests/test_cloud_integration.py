@@ -465,7 +465,9 @@ jobs:
         tool: [nmap, masscan]
         target: [10.0.0.1, 10.0.0.2]
     steps:
-      - run: echo test
+      - module: shell
+        with:
+          cmd: echo test
 """
         wf = Workflow.model_validate(yaml.safe_load(wf_yaml))
         job = wf.jobs["scan"]
@@ -496,7 +498,9 @@ jobs:
         input: "10.0.0.1,10.0.0.2,10.0.0.3"
         distribution: round-robin
     steps:
-      - run: echo test
+      - module: shell
+        with:
+          cmd: echo test
 """
         wf = Workflow.model_validate(yaml.safe_load(wf_yaml))
         job = wf.jobs["recon"]
@@ -527,7 +531,9 @@ jobs:
         input: "10.0.0.1,10.0.0.2,10.0.0.3,10.0.0.4"
         distribution: chunk
     steps:
-      - run: echo test
+      - module: shell
+        with:
+          cmd: echo test
 """
         wf = Workflow.model_validate(yaml.safe_load(wf_yaml))
         job = wf.jobs["multi"]
@@ -541,7 +547,7 @@ class TestJobCloudField:
     def test_job_with_cloud_string(self):
         from ofx.models.job import Job
 
-        job = Job(jid="test", cloud="my-profile", steps=[{"run": "echo hi"}])
+        job = Job(jid="test", cloud="my-profile", steps=[{"module": "shell", "with": {"cmd": "echo hi"}}])
         assert job.cloud is not None
         assert job.cloud.profile == "my-profile"
 
@@ -551,7 +557,7 @@ class TestJobCloudField:
         job = Job(
             jid="test",
             cloud={"provider": "aws", "region": "us-west-2"},
-            steps=[{"run": "echo hi"}],
+            steps=[{"module": "shell", "with": {"cmd": "echo hi"}}],
         )
         assert job.cloud is not None
         assert job.cloud.provider == "aws"
@@ -559,7 +565,7 @@ class TestJobCloudField:
     def test_job_without_cloud(self):
         from ofx.models.job import Job
 
-        job = Job(jid="test", steps=[{"run": "echo hi"}])
+        job = Job(jid="test", steps=[{"module": "shell", "with": {"cmd": "echo hi"}}])
         assert job.cloud is None
 
 class TestWaitForLogin:

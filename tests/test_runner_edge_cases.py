@@ -194,7 +194,9 @@ defaults:
 jobs:
   test:
     steps:
-      - run: echo "test"
+      - module: shell
+        with:
+          cmd: echo "test"
 """
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         workflow_runner = WorkflowRunner(workflow, RunContext())
@@ -223,7 +225,9 @@ defaults:
 jobs:
   test:
     steps:
-      - run: echo \"test\"
+      - module: shell
+        with:
+          cmd: echo \"test\"
 """
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         workflow_runner = WorkflowRunner(workflow, RunContext())
@@ -333,7 +337,9 @@ defaults:
 jobs:
   test:
     steps:
-      - run: echo \"test\"
+      - module: shell
+        with:
+          cmd: echo \"test\"
 """
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         workflow_runner = WorkflowRunner(workflow, RunContext())
@@ -1040,7 +1046,7 @@ class TestStepRetryProfileDefaults:
         from ofx.profiles.models import OFXProfile
         from ofx.runner.step import StepRunner
 
-        step = Step.model_validate({"name": "s1", "run": "echo hi"})
+        step = Step.model_validate({"name": "s1", "module": "shell", "with": {"cmd": "echo hi"}})
         parent = type(
             "P",
             (),
@@ -1063,7 +1069,13 @@ class TestStepRetryProfileDefaults:
         from ofx.runner.step import StepRunner
 
         step = Step.model_validate(
-            {"name": "s1", "run": "echo hi", "retry": 9, "retry-delay": 11}
+            {
+                "name": "s1",
+                "module": "shell",
+                "with": {"cmd": "echo hi"},
+                "retry": 9,
+                "retry-delay": 11,
+            }
         )
         parent = type(
             "P",
@@ -1087,20 +1099,26 @@ class TestStepDynamicTimeout:
     def test_step_timeout_accepts_int(self):
         from ofx.models.step import Step
 
-        step = Step.model_validate({"name": "s1", "run": "echo hi", "timeout": 30})
+        step = Step.model_validate(
+            {"name": "s1", "module": "shell", "with": {"cmd": "echo hi"}, "timeout": 30}
+        )
         assert step.timeout == 30
 
     def test_step_timeout_accepts_string(self):
         from ofx.models.step import Step
 
-        step = Step.model_validate({"name": "s1", "run": "echo hi", "timeout": "45"})
+        step = Step.model_validate(
+            {"name": "s1", "module": "shell", "with": {"cmd": "echo hi"}, "timeout": "45"}
+        )
         assert step.timeout == "45"
 
     def test_step_timeout_accepts_template_expression(self):
         from ofx.models.step import Step
 
         expr = "{{ (steps['x'].outputs.count | default(50, true) | int / 50 * 15 + 30) | int }}"
-        step = Step.model_validate({"name": "s1", "run": "echo hi", "timeout": expr})
+        step = Step.model_validate(
+            {"name": "s1", "module": "shell", "with": {"cmd": "echo hi"}, "timeout": expr}
+        )
         assert step.timeout == expr
 
     @pytest.mark.asyncio

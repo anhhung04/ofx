@@ -13,8 +13,13 @@ from typing import TYPE_CHECKING, Any
 
 from ofx.cloud.runtime import remote_join
 from ofx.cloud.script_runtime import (
+    _MODULE_OUTPUTS_SENTINEL,
+    build_module_step_payload,
     build_python_step_payload,
-    is_python_step_run_type,
+    is_python_module_step,
+    is_shell_module_step,
+    is_udf_module_step,
+    parse_module_outputs_sentinel,
 )
 from ofx.cloud.temp_upload import upload_temp_content
 from ofx.models.step import RunType
@@ -70,7 +75,16 @@ class _RemoteHandlerRunner:
             ),
             timeout=timeout_seconds + _NETWORK_GRACE_SECONDS,
         )
-        outputs_dict: dict[str, Any] = {"stdout": output}
+        # UDF module steps return a (cleaned_stdout, parsed_outputs) tuple so
+        # the sentinel-parsed outputs can be merged into the step OUTPUTS
+        # alongside the cleaned stdout.
+        if isinstance(output, tuple):
+            stdout, parsed_outputs = output
+        else:
+            stdout, parsed_outputs = output, {}
+        outputs_dict: dict[str, Any] = {"stdout": stdout}
+        if parsed_outputs:
+            outputs_dict.update(parsed_outputs)
         await self._outer.reg_set(
             RunnerRegistryKeys.OUTPUTS,
             outputs_dict,
@@ -225,27 +239,9 @@ class CloudStepRunner(StepRunnerMixin, Runner):
         timeout_seconds: int,
     ) -> str:
         """Dispatch the current step to the appropriate remote execution path."""
-        if is_python_step_run_type(run_type):
-            cloud_config = getattr(self.parent, "_cloud_config", None)
-            workflow_dir = self.ctx.workflow_dir or Path.cwd()
-            opsec_mode = bool(cloud_config and cloud_config.opsec_mode)
-            payload = build_python_step_payload(
-                self.model,
-                workflow_dir=workflow_dir,
-                opsec_mode=opsec_mode,
-                obfuscate_sources=opsec_mode,
-            )
-            return await self._run_remote_python_payload(payload, timeout=timeout_seconds)
-
-        command: str | None = None
-        if run_type == RunType.COMMAND:
-            command = self.model.run
-
-        if command is not None:
-            return await asyncio.to_thread(
-                self._remote.run,
-                self._build_remote_exec_command(command),
-                timeout_seconds,
+        if run_type == RunType.MODULE:
+            return await self._execute_remote_module(
+                timeout_seconds=timeout_seconds
             )
         if run_type == RunType.WORKFLOW:
             raise RuntimeError(
@@ -254,7 +250,7 @@ class CloudStepRunner(StepRunnerMixin, Runner):
         if run_type == RunType.PIPE:
             raise RuntimeError(
                 "Pipe steps run locally - they are not supported in cloud job mode. "
-                "Use a 'script:' step for remote data processing."
+                "Use a 'module: python' step for remote data processing."
             )
 
         valid = ", ".join(rt.value for rt in RunType)
@@ -262,6 +258,75 @@ class CloudStepRunner(StepRunnerMixin, Runner):
         raise RuntimeError(
             f"Unsupported run type '{run_type_name}' for cloud step "
             f"'{self.model.name}'. Valid types: {valid}"
+        )
+
+    async def _execute_remote_module(
+        self, *, timeout_seconds: int
+    ) -> str | tuple[str, dict[str, Any]]:
+        """Dispatch a ``module:`` step to its remote execution path.
+
+        Python and user-defined (UDF) module steps are bundled and executed
+        with a remote Python interpreter. UDF wrappers additionally emit a
+        ``__OFX_MODULE_OUTPUTS__`` sentinel line that is parsed and merged
+        into the step OUTPUTS, so the UDF branch returns a
+        ``(cleaned_stdout, parsed_outputs)`` tuple. Shell modules run their
+        ``with: {cmd: ...}`` command over the remote connection. Any other
+        module spec is rejected.
+        """
+        cloud_config = getattr(self.parent, "_cloud_config", None)
+        workflow_dir = self.ctx.workflow_dir or Path.cwd()
+        opsec_mode = bool(cloud_config and cloud_config.opsec_mode)
+
+        if is_python_module_step(self.model):
+            payload = build_python_step_payload(
+                self.model,
+                workflow_dir=workflow_dir,
+                opsec_mode=opsec_mode,
+                obfuscate_sources=opsec_mode,
+            )
+            return await self._run_remote_python_payload(
+                payload,
+                timeout=timeout_seconds,
+            )
+
+        if is_udf_module_step(self.model):
+            payload = build_module_step_payload(
+                self.model,
+                workflow_dir=workflow_dir,
+                inputs=dict(self.model.run_with or {}),
+                secrets=dict(self.ctx.secrets),
+                opsec_mode=opsec_mode,
+                obfuscate_sources=opsec_mode,
+            )
+            raw_output = await self._run_remote_python_payload(
+                payload,
+                timeout=timeout_seconds,
+            )
+            cleaned_stdout, parsed_outputs = parse_module_outputs_sentinel(raw_output)
+            if _MODULE_OUTPUTS_SENTINEL in raw_output and not parsed_outputs:
+                self._log_debug(
+                    "Failed to parse UDF module outputs sentinel; keeping raw stdout"
+                )
+            return cleaned_stdout, parsed_outputs
+
+        if is_shell_module_step(self.model):
+            cmd = (self.model.run_with or {}).get("cmd")
+            if not cmd:
+                raise RuntimeError(
+                    f"Module step '{self.model.name}' uses the shell module "
+                    "without a 'cmd' argument; cloud execution requires "
+                    "'with: {cmd: ...}'."
+                )
+            return await asyncio.to_thread(
+                self._remote.run,
+                self._build_remote_exec_command(str(cmd)),
+                timeout_seconds,
+            )
+
+        raise RuntimeError(
+            f"Module '{self.model.module}' is not supported in cloud job mode. "
+            "Only 'builtin.python', 'builtin.shell', and UDF module steps "
+            "('<file>.py' or '<file>.py::<function>') can run remotely."
         )
 
     def _create_runner(self) -> _RemoteHandlerRunner:

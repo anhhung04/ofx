@@ -268,7 +268,7 @@
           "description": "Default run configuration for the workflow"
         },
         "workflows_base_dir": {
-          "default": "/home/hah4/.ofx/workflows",
+          "default": "/home/devusr/.ofx/workflows",
           "description": "Base directory for workflows (if applicable)",
           "format": "path",
           "title": "Workflows Base Dir",
@@ -487,6 +487,22 @@
           "minItems": 1,
           "title": "Steps",
           "type": "array"
+        },
+        "modules": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "User-defined Python modules (UDFs) available to steps in this job, as '<file.py>::<func>' references loaded relative to the workflow.",
+          "title": "Modules"
         },
         "jid": {
           "default": "",
@@ -767,7 +783,7 @@
           "description": "Select a workflow to run as part of a step in the job",
           "title": "Uses"
         },
-        "run": {
+        "module": {
           "anyOf": [
             {
               "type": "string"
@@ -777,51 +793,12 @@
             }
           ],
           "default": null,
-          "description": "Command(s) to run in the step",
-          "title": "Run"
-        },
-        "script": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Script to run in the step (if applicable)",
-          "title": "Script"
-        },
-        "script_file": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Path to a Python script file to execute",
-          "title": "Script File"
-        },
-        "task": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Name of a registered task (pre-built tool wrapper) to execute",
-          "title": "Task"
+          "description": "Module to run in the step. Either a builtin name ('builtin.<name>' or a bare builtin name) or a user-defined function reference ('<file.py>::<func>').",
+          "title": "Module"
         },
         "with": {
           "additionalProperties": true,
-          "description": "Define inputs for the step if it uses a reusable workflow",
+          "description": "Arguments passed to the step. For 'module' steps these are the module arguments (e.g. {'cmd': ...} for the shell module, {'script': ...} for the python module); for 'uses' steps they are the reusable workflow inputs.",
           "title": "With",
           "type": "object"
         },
@@ -862,7 +839,7 @@
             }
           ],
           "default": null,
-          "description": "Store discovered UserAccount credentials from task outputs into the credential store. Overrides the global auto_store_creds setting. Only applies to task steps.",
+          "description": "Store discovered UserAccount credentials into the credential store. Overrides the global auto_store_creds setting.",
           "title": "Store-Creds"
         },
         "step_index": {

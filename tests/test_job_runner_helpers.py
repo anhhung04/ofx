@@ -16,7 +16,7 @@ def _job() -> Job:
     return Job(
         jid="scan",
         name="scan job",
-        steps=[{"run": "echo hi"}],
+        steps=[{"module": "shell", "with": {"cmd": "echo hi"}}],
         env={"MODE": "base"},
     )
 

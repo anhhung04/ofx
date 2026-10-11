@@ -309,26 +309,28 @@ jobs:
   remote-ops:
     steps:
       - name: bundle and deliver
-        script: |
-          from ofx.api.bundle import run_remote
-          from ofx.api.post.runners.ssh import PostSSH
+        module: python
+        with:
+          script: |
+            from ofx.api.bundle import run_remote
+            from ofx.api.post.runners.ssh import PostSSH
 
-          runner = PostSSH(
-              host="{{ inputs.target }}",
-              user="{{ secrets.ssh_user }}",
-              password="{{ secrets.ssh_pass }}"
-          )
+            runner = PostSSH(
+                host="{{ inputs.target }}",
+                user="{{ secrets.ssh_user }}",
+                password="{{ secrets.ssh_pass }}"
+            )
 
-          op_script = """
-          from ofx.api.recon import port_scan, TOP_100_PORTS
-          results = port_scan('127.0.0.1', TOP_100_PORTS)
-          for r in results:
-              if r.open:
-                  print(f'{r.port}/tcp open')
-          """
+            op_script = """
+            from ofx.api.recon import port_scan, TOP_100_PORTS
+            results = port_scan('127.0.0.1', TOP_100_PORTS)
+            for r in results:
+                if r.open:
+                    print(f'{r.port}/tcp open')
+            """
 
-          output = run_remote(op_script, runner, obfuscate=True)
-          print(output)
+            output = run_remote(op_script, runner, obfuscate=True)
+            print(output)
 ```
 
 ---

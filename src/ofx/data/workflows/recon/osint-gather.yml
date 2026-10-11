@@ -23,18 +23,24 @@ jobs:
     name: Email Discovery
     steps:
     - name: theharvester
-      run: theHarvester -d {{ inputs.target }} -b all -f {{ env.OFX_RUN_DIR }}/harvester_results.html
-        2>&1
+      module: shell
+      with:
+        cmd: theHarvester -d {{ inputs.target }} -b all -f {{ env.OFX_RUN_DIR }}/harvester_results.html
+          2>&1
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
     - name: h8mail
-      run: h8mail -t {{ inputs.target }} -o {{ env.OFX_RUN_DIR }}/h8mail_results.txt
-        2>&1
+      module: shell
+      with:
+        cmd: h8mail -t {{ inputs.target }} -o {{ env.OFX_RUN_DIR }}/h8mail_results.txt
+          2>&1
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
   whois-lookup:
     name: WHOIS & Domain Info
     steps:
     - name: whois
-      run: whois {{ inputs.target }} 2>&1 | tee {{ env.OFX_RUN_DIR }}/whois.txt
+      module: shell
+      with:
+        cmd: whois {{ inputs.target }} 2>&1 | tee {{ env.OFX_RUN_DIR }}/whois.txt
       log-command: '{{ inputs.log_command }}'

@@ -21,10 +21,10 @@ profiles = loot.list_browser_profiles("/mnt/share")
 ```yaml
 steps:
   - name: list loot
-    run: |
-      python - <<'PY'
-      from ofx.api import loot
-      print(loot.find_minidumps('/mnt/share'))
-      print(loot.list_browser_profiles('/mnt/share'))
-      PY
+    module: python
+    with:
+      script: |
+        from ofx.api import loot
+        print(loot.find_minidumps('/mnt/share'))
+        print(loot.list_browser_profiles('/mnt/share'))
 ```

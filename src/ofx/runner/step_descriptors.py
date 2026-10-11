@@ -6,27 +6,18 @@ from typing import Any
 
 _STEP_SOURCE_FIELDS: tuple[tuple[str, str], ...] = (
     ("uses", "workflow"),
-    ("script", "script"),
-    ("script_file", "script_file"),
-    ("run", "command"),
+    ("module", "module"),
 )
 
 _STEP_LABEL_PREFIXES: dict[str, str] = {
     "workflow": "uses: ",
-    "script_file": "script_file: ",
+    "module": "module: ",
     "pipe": "pipe: → ",
 }
 
-_STEP_HEADER_PREFIXES: dict[str, str] = {
-    "command": ">> command: ",
-    "workflow": ">> workflow: ",
-    "script_file": ">> script_file: ",
-}
-
 _TIMELINE_COMMAND_PREFIXES: dict[str, str] = {
-    "script": "script:",
+    "module": "module:",
     "workflow": "uses:",
-    "script_file": "script_file:",
     "pipe": "pipe:",
 }
 
@@ -45,14 +36,6 @@ def step_source_kind_and_value(step: Any) -> tuple[str, Any]:
 def step_type_label(step: Any, *, command_preview_chars: int = 60) -> str:
     """Return a human-readable summary label for a workflow step."""
     kind, value = step_source_kind_and_value(step)
-    if kind == "command":
-        lines = str(value).strip().splitlines()
-        first = lines[0][:command_preview_chars]
-        if len(lines) > 1 or len(lines[0]) > command_preview_chars:
-            first += "…"
-        return f"run: {first}"
-    if kind == "script":
-        return "script"
     if kind in _STEP_LABEL_PREFIXES:
         return f"{_STEP_LABEL_PREFIXES[kind]}{value}"
     return "unknown"
@@ -66,12 +49,8 @@ def step_timeline_params(
     outputs = outputs or {}
     kind, value = step_source_kind_and_value(step)
 
-    if kind == "command":
-        command = str(value or "")
-        tool = ""
-        target = ""
-    elif kind in _TIMELINE_COMMAND_PREFIXES:
-        if kind in {"script", "pipe"}:
+    if kind in _TIMELINE_COMMAND_PREFIXES:
+        if kind == "pipe":
             suffix = getattr(step, "name", None) or "inline"
         else:
             suffix = value or ""

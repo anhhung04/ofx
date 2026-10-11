@@ -27,12 +27,16 @@ jobs:
     name: Static Analysis
     steps:
     - name: semgrep
-      run: semgrep --config auto --json -o {{ env.OFX_RUN_DIR }}/semgrep_results.json
-        {{ inputs.target }} 2>&1
+      module: shell
+      with:
+        cmd: semgrep --config auto --json -o {{ env.OFX_RUN_DIR }}/semgrep_results.json
+          {{ inputs.target }} 2>&1
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
       timeout: 120
     - name: gitleaks
-      run: gitleaks detect --source {{ inputs.target }} --no-git -v 2>&1
+      module: shell
+      with:
+        cmd: gitleaks detect --source {{ inputs.target }} --no-git -v 2>&1
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'

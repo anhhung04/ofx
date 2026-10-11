@@ -16,9 +16,7 @@ BASE_STEP_TEMPLATE_FIELDS: tuple[str, ...] = (
 
 RUN_TYPE_TEMPLATE_FIELDS: dict[RunType, list[str]] = {
     RunType.WORKFLOW: ["uses"],
-    RunType.SCRIPT: ["script"],
-    RunType.COMMAND: ["run"],
-    RunType.SCRIPT_FILE: ["script_file"],
+    RunType.MODULE: ["module", "run_with"],
     RunType.PIPE: [],
 }
 

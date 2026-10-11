@@ -65,28 +65,11 @@ jobs:
     steps:
     - name: check-docker
       continue-on-error: true
-      script: "import subprocess, tempfile, os\nresult = subprocess.run('if ! command\
-        \ -v docker 2 then echo \"ERROR: Docker is not installed\" exit 1 fi DOCKER_VERSION=$(docker\
-        \ --version | head -1) echo \"docker_version=$DOCKER_VERSION\" echo \"Docker:\
-        \ $DOCKER_VERSION\"', shell=True, capture_output=True, text=True)\nprint(result.stdout)\n\
-        if result.stderr:\n    print(result.stderr, file=__import__(\"sys\").stderr)"
+      module: modules/check_docker.py::run
     - name: check-compose
-      script: "import subprocess, tempfile, os\nresult = subprocess.run('COMPOSE_VERSION=\"\
-        \" if docker compose version 2 then COMPOSE_VERSION=$(docker compose version\
-        \ --short', shell=True, capture_output=True, text=True)\nprint(result.stdout)\n\
-        if result.stderr:\n    print(result.stderr, file=__import__(\"sys\").stderr)"
+      module: modules/check_compose.py::run
     - name: prepare-dir
-      script: 'import os, tempfile, shutil, pathlib
-
-        lab_dir = pathlib.Path(tempfile.mkdtemp(prefix="ofx_lab_"))
-
-        lab_dir.chmod(0o755)
-
-        add_outputs(lab_dir=str(lab_dir))
-
-        print(f"Lab directory: {lab_dir}")
-
-        '
+      module: modules/prepare_dir.py::run
   generate-compose:
     name: Generate Docker Compose Configuration
     needs:
@@ -98,42 +81,9 @@ jobs:
         }}'
     steps:
     - name: write-compose
-      script: "import os, json, pathlib\n\nlab_dir = pathlib.Path(\"{{ jobs.validate.outputs.lab_dir\
-        \ }}\")\ncompose_file_input = \"{{ inputs.compose_file }}\"\n\nif compose_file_input\
-        \ and pathlib.Path(compose_file_input).exists():\n    compose_path = pathlib.Path(compose_file_input)\n\
-        \    shutil.copy(compose_path, lab_dir / \"docker-compose.yml\")\n    add_outputs(compose_path=str(lab_dir\
-        \ / \"docker-compose.yml\"), target_list=\"custom\")\n    print(f\"Using custom\
-        \ compose file: {compose_path}\")\nelse:\n    targets = [t.strip() for t in\
-        \ \"{{ inputs.targets }}\".split(\",\") if t.strip()]\n    network_subnet\
-        \ = \"{{ inputs.network }}\"\n    expose = \"{{ inputs.expose_ports }}\" ==\
-        \ \"true\"\n\n    services = {}\n    target_info = {\n        \"juice-shop\"\
-        : {\"image\": \"bkimminich/juice-shop:latest\", \"port\": 3000, \"desc\":\
-        \ \"OWASP Juice Shop\"},\n        \"dvwa\": {\"image\": \"vulnerables/web-dvwa:latest\"\
-        , \"port\": 80, \"desc\": \"Damn Vulnerable Web App\"},\n        \"metasploitable2\"\
-        : {\"image\": \"tleemcjr/metasploitable2:latest\", \"port\": 80, \"desc\"\
-        : \"Metasploitable 2\"},\n        \"mutillidae\": {\"image\": \"citizenstig/nowasp:latest\"\
-        , \"port\": 80, \"desc\": \"Mutillidae\"},\n        \"webgoat\": {\"image\"\
-        : \"webgoat/goatandwolf:latest\", \"port\": 8080, \"desc\": \"WebGoat\"},\n\
-        \        \"vulnbank\": {\"image\": \"vulnbank/vulnbank:latest\", \"port\"\
-        : 8080, \"desc\": \"VulnBank\"},\n    }\n\n    for target in targets:\n  \
-        \      info = target_info.get(target)\n        if info:\n            port_key\
-        \ = f\"{'%04d' % info['port']}\"\n            services[target] = {\n     \
-        \           \"image\": info[\"image\"],\n                \"container_name\"\
-        : f\"{target}\",\n                \"networks\": {\"lab-net\": {}},\n     \
-        \           \"restart\": \"unless-stopped\",\n            }\n            if\
-        \ expose:\n                services[target][\"ports\"] = [f\"{info['port']}:{info['port']}\"\
-        ]\n\n    compose = {\n        \"version\": \"3.9\",\n        \"services\"\
-        : services,\n        \"networks\": {\n            \"lab-net\": {\n       \
-        \         \"driver\": \"bridge\",\n                \"ipam\": {\n         \
-        \           \"config\": [{\"subnet\": network_subnet}]\n                }\n\
-        \            }\n        }\n    }\n\n    compose_yaml = json.dumps(compose,\
-        \ indent=2)\n\n    # Convert JSON-like dict to proper YAML manually for simple\
-        \ case\n    import yaml\n    compose_path = lab_dir / \"docker-compose.yml\"\
-        \n    compose_path.write_text(yaml.dump(compose, default_flow_style=False,\
-        \ sort_keys=False))\n\n    target_desc = \", \".join(\n        f\"{t} ({target_info[t]['desc']})\"\
-        \ for t in targets if t in target_info\n    )\n    add_outputs(compose_path=str(compose_path),\
-        \ target_list=target_desc)\n    print(f\"Generated lab with: {target_desc}\"\
-        )\n    print(f\"Compose file: {compose_path}\")\n"
+      module: modules/write_compose.py::run
+      with:
+        lab_dir: "{{ jobs.validate.outputs.lab_dir }}"
   launch-lab:
     name: Launch Lab Environment
     needs:
@@ -146,27 +96,11 @@ jobs:
     - name: launch
       retry: 2
       retry-delay: 10
-      script: "import subprocess, tempfile, os\nresult = subprocess.run('set -euo\
-        \ pipefail cd \"{{ jobs.generate-compose.outputs.compose_path | dirname }}\"\
-        \ COMPOSE_CMD=\"docker compose\" if ! docker compose version 2 then COMPOSE_CMD=\"\
-        docker-compose\" fi echo \"[*] Pulling images...\" $COMPOSE_CMD pull -q ||\
-        \ true echo \"[*] Starting lab...\" $COMPOSE_CMD -p \"{{ inputs.lab_name }}\"\
-        \ up -d --wait --wait-timeout 120 2 RUNNING=$(docker ps --filter \"name={{\
-        \ inputs.lab_name }}\" --format \\'{{ \\'{{.Names}}\\' }}\\' | wc -l) echo\
-        \ \"containers=$RUNNING\" echo \"Running containers: $RUNNING\"', shell=True,\
-        \ capture_output=True, text=True)\nprint(result.stdout)\nif result.stderr:\n\
-        \    print(result.stderr, file=__import__(\"sys\").stderr)"
+      module: modules/launch.py::run
+      with:
+        compose_path: "{{ jobs.generate-compose.outputs.compose_path }}"
     - name: collect-endpoints
-      script: "import subprocess, json\n\nlab_name = \"{{ inputs.lab_name }}\"\nresult\
-        \ = subprocess.run(\n    [\"docker\", \"ps\", \"--filter\", f\"name={lab_name}\"\
-        , \"--format\", \"{{ '{{json .}}' }}\"],\n    capture_output=True, text=True\n\
-        )\n\nendpoints = []\nfor line in result.stdout.strip().splitlines():\n   \
-        \ if not line.strip():\n        continue\n    try:\n        data = json.loads(line)\n\
-        \        name = data.get(\"Names\", \"\")\n        ports = data.get(\"Ports\"\
-        , \"\")\n        status = data.get(\"Status\", \"unknown\")\n        endpoints.append(f\"\
-        {name}: {ports} [{status}]\")\n    except json.JSONDecodeError:\n        continue\n\
-        \nadd_outputs(endpoints=\"\\n\".join(endpoints))\nfor ep in endpoints:\n \
-        \   print(f\"  {ep}\")\n"
+      module: modules/collect_endpoints.py::run
   verify:
     name: Verify Lab Health
     needs:
@@ -177,54 +111,52 @@ jobs:
     steps:
     - name: health-check
       continue-on-error: true
-      script: "import subprocess, tempfile, os\nresult = subprocess.run('HEALTHY=0\
-        \ FAILED=0 for c in $(docker ps --filter \"name={{ inputs.lab_name }}\" --format\
-        \ \\'{{ \\'{{.Names}}\\' }}\\'); do STATE=$(docker inspect -f \\'{{ \\'{{.State.Health.Status}}\\\
-        ' }}\\' \"$c\"', shell=True, capture_output=True, text=True)\nprint(result.stdout)\n\
-        if result.stderr:\n    print(result.stderr, file=__import__(\"sys\").stderr)"
+      module: modules/health_check.py::run
   summary:
     name: Lab Summary
     needs:
     - verify
     steps:
     - name: print-info
-      run: 'echo "============================================"
+      module: shell
+      with:
+        cmd: 'echo "============================================"
 
-        echo " DOCKER LAB: {{ inputs.lab_name }}"
+          echo " DOCKER LAB: {{ inputs.lab_name }}"
 
-        echo "============================================"
+          echo "============================================"
 
-        echo ""
+          echo ""
 
-        echo "Targets: {{ jobs[''generate-compose''].outputs.target_list }}"
+          echo "Targets: {{ jobs[''generate-compose''].outputs.target_list }}"
 
-        echo "Containers: {{ jobs[''launch-lab''].outputs.containers }}"
+          echo "Containers: {{ jobs[''launch-lab''].outputs.containers }}"
 
-        echo "Healthy: {{ jobs[''verify''].outputs.healthy }}"
+          echo "Healthy: {{ jobs[''verify''].outputs.healthy }}"
 
-        echo ""
+          echo ""
 
-        echo "Endpoints:"
+          echo "Endpoints:"
 
-        echo "{{ jobs[''launch-lab''].outputs.endpoints }}"
+          echo "{{ jobs[''launch-lab''].outputs.endpoints }}"
 
-        echo ""
+          echo ""
 
-        echo "Management:"
+          echo "Management:"
 
-        echo "  docker compose -p {{ inputs.lab_name }} ps"
+          echo "  docker compose -p {{ inputs.lab_name }} ps"
 
-        echo "  docker compose -p {{ inputs.lab_name }} logs -f"
+          echo "  docker compose -p {{ inputs.lab_name }} logs -f"
 
-        echo "  docker compose -p {{ inputs.lab_name }} down"
+          echo "  docker compose -p {{ inputs.lab_name }} down"
 
-        echo ""
+          echo ""
 
-        echo "Compose file: {{ jobs[''generate-compose''].outputs.compose_path }}"
+          echo "Compose file: {{ jobs[''generate-compose''].outputs.compose_path }}"
 
-        echo "============================================"
+          echo "============================================"
 
-        '
+          '
       log-stdout: '{{ inputs.log_output | default(true) }}'
   teardown:
     name: Teardown Lab
@@ -234,11 +166,6 @@ jobs:
     steps:
     - name: wait-and-destroy
       log-stdout: '{{ inputs.log_output | default(true) }}'
-      script: "import subprocess, tempfile, os\nresult = subprocess.run('echo \"[*]\
-        \ Waiting {{ inputs.teardown_delay }}s before teardown...\" sleep {{ inputs.teardown_delay\
-        \ }} cd \"$(dirname \"{{ jobs[\\'generate-compose\\'].outputs.compose_path\
-        \ }}\")\" COMPOSE_CMD=\"docker compose\" if ! docker compose version 2 then\
-        \ COMPOSE_CMD=\"docker-compose\" fi $COMPOSE_CMD -p \"{{ inputs.lab_name }}\"\
-        \ down -v --remove-orphans echo \"[+] Lab \\'{{ inputs.lab_name }}\\' destroyed\"\
-        ', shell=True, capture_output=True, text=True)\nprint(result.stdout)\nif result.stderr:\n\
-        \    print(result.stderr, file=__import__(\"sys\").stderr)"
+      module: modules/wait_and_destroy.py::run
+      with:
+        compose_path: "{{ jobs['generate-compose'].outputs.compose_path }}"

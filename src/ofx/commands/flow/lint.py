@@ -91,11 +91,12 @@ def _lint_workflow(path: Path) -> LintResult:
                     )
                 )
 
-            if step.run and len(step.run) > 500:
+            cmd = (step.run_with or {}).get("cmd") if step.module else None
+            if isinstance(cmd, str) and len(cmd) > 500:
                 result.issues.append(
                     LintIssue(
                         "info",
-                        f"Step '{step.name}' has a long run command ({len(step.run)} chars) — consider script",
+                        f"Step '{step.name}' has a long shell command ({len(cmd)} chars) — consider the python module",
                         location=jid,
                     )
                 )

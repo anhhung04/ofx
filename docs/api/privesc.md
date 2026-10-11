@@ -137,16 +137,18 @@ jobs:
   privesc-check:
     steps:
       - name: linux privesc enum
-        script: |
-          from ofx.api.privesc import suid_commands, sudo_check_command
-          from ofx.api.post.runners.ssh import PostSSH
+        module: python
+        with:
+          script: |
+            from ofx.api.privesc import suid_commands, sudo_check_command
+            from ofx.api.post.runners.ssh import PostSSH
 
-          runner = PostSSH(host="{{ inputs.target }}", user="{{ secrets.user }}")
-          for cmd in suid_commands():
-              output = runner.run(cmd)
-              if output.strip():
-                  print(f"[SUID] {output}")
-          print(runner.run(sudo_check_command()))
+            runner = PostSSH(host="{{ inputs.target }}", user="{{ secrets.user }}")
+            for cmd in suid_commands():
+                output = runner.run(cmd)
+                if output.strip():
+                    print(f"[SUID] {output}")
+            print(runner.run(sudo_check_command()))
 ```
 
 ---

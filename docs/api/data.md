@@ -21,11 +21,11 @@ print(parts)
 ```yaml
 steps:
   - name: archive loot
-    run: |
-      python - <<'PY'
-      from ofx.api import data
-      archive = data.archive_path("/tmp/loot")
-      parts = data.split_file(archive, chunk_mb=50)
-      print(parts)
-      PY
+    module: python
+    with:
+      script: |
+        from ofx.api import data
+        archive = data.archive_path("/tmp/loot")
+        parts = data.split_file(archive, chunk_mb=50)
+        print(parts)
 ```

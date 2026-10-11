@@ -21,6 +21,8 @@ jobs:
     name: Parse Targets
     steps:
     - name: parse
-      run: cat {{ inputs.target }} | grep -E "^[0-9]" | sort -u > {{ env.OFX_RUN_DIR
-        }}/ips.txt; cat {{ inputs.target }} | grep -vE "^[0-9]" | sort -u > {{ env.OFX_RUN_DIR
-        }}/domains.txt; echo Done
+      module: shell
+      with:
+        cmd: cat {{ inputs.target }} | grep -E "^[0-9]" | sort -u > {{ env.OFX_RUN_DIR
+          }}/ips.txt; cat {{ inputs.target }} | grep -vE "^[0-9]" | sort -u > {{ env.OFX_RUN_DIR
+          }}/domains.txt; echo Done

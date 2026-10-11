@@ -39,7 +39,7 @@ class TestCloudFleetRunner:
             jid="test-job",
             cloud={"provider": "static", "host": "10.0.0.1"},
             strategy=strategy,
-            steps=[{"run": "echo hi"}],
+            steps=[{"module": "shell", "with": {"cmd": "echo hi"}}],
         )
 
         class _ParentStub:
@@ -250,7 +250,7 @@ class TestCloudFleetRunner:
                     strategy=MatrixStrategy(
                         fleet=FleetStrategy(count=2, input="10.0.0.1,10.0.0.2"),
                     ),
-                    steps=[{"run": "echo hi"}],
+                    steps=[{"module": "shell", "with": {"cmd": "echo hi"}}],
                 )
                 self.parent = SimpleNamespace()
                 self._runners = {}
@@ -284,7 +284,7 @@ class TestCloudMatrixProduceLog:
         runner.model = Job(
             jid="fleet-job",
             cloud={"provider": "static", "host": "10.0.0.1"},
-            steps=[{"run": "echo hi"}],
+            steps=[{"module": "shell", "with": {"cmd": "echo hi"}}],
         )
         runner.parent = None
         runner.ctx = RunContext()
@@ -304,7 +304,7 @@ class TestCloudMatrixProduceLog:
             jid="test-job",
             cloud={"provider": "static", "host": "10.0.0.1"},
             strategy=MatrixStrategy(matrix={"tool": ["nmap"]}),
-            steps=[{"run": "echo hi"}],
+            steps=[{"module": "shell", "with": {"cmd": "echo hi"}}],
         )
         runner = CloudMatrixJobRunner.__new__(CloudMatrixJobRunner)
         runner.model = job
@@ -333,7 +333,7 @@ class TestCloudMatrixProduceLog:
             jid="test-job",
             cloud={"provider": "static", "host": "10.0.0.1"},
             strategy=MatrixStrategy(matrix={"tool": ["nmap"]}),
-            steps=[{"run": "echo hi"}],
+            steps=[{"module": "shell", "with": {"cmd": "echo hi"}}],
         )
         runner = CloudMatrixJobRunner.__new__(CloudMatrixJobRunner)
         runner.model = job
@@ -359,7 +359,7 @@ class TestCloudMatrixProduceLog:
         runner.model = Job(
             jid="cloud-job",
             cloud={"provider": "static", "host": "10.0.0.1"},
-            steps=[{"run": "echo hi"}],
+            steps=[{"module": "shell", "with": {"cmd": "echo hi"}}],
         )
         runner.parent = _ParentStub()
         runner.ctx = RunContext()
@@ -533,7 +533,7 @@ class TestCloudMatrixExpansion:
             jid="test-job",
             cloud={"provider": "static", "host": "10.0.0.1"},
             strategy=strategy,
-            steps=[{"run": "echo hi"}],
+            steps=[{"module": "shell", "with": {"cmd": "echo hi"}}],
         )
         runner = CloudMatrixJobRunner.__new__(CloudMatrixJobRunner)
         runner.model = job
@@ -557,7 +557,7 @@ class TestCloudMatrixExpansion:
             jid="test-job",
             cloud={"provider": "static", "host": "10.0.0.1"},
             strategy=strategy,
-            steps=[{"run": "echo hi"}],
+            steps=[{"module": "shell", "with": {"cmd": "echo hi"}}],
         )
         runner = CloudMatrixJobRunner.__new__(CloudMatrixJobRunner)
         runner.model = job
@@ -579,7 +579,7 @@ class TestCloudMatrixExpansion:
             jid="test-job",
             cloud={"provider": "static", "host": "10.0.0.1"},
             strategy=strategy,
-            steps=[{"run": "echo hi"}],
+            steps=[{"module": "shell", "with": {"cmd": "echo hi"}}],
         )
         runner = CloudMatrixJobRunner.__new__(CloudMatrixJobRunner)
         runner.model = job
@@ -598,7 +598,7 @@ class TestCloudMatrixExpansion:
             jid="test-job",
             cloud={"provider": "static", "host": "10.0.0.1"},
             strategy=MatrixStrategy(),
-            steps=[{"run": "echo hi"}],
+            steps=[{"module": "shell", "with": {"cmd": "echo hi"}}],
         )
         runner = CloudMatrixJobRunner.__new__(CloudMatrixJobRunner)
         runner.model = job
@@ -644,7 +644,7 @@ class TestCloudStepRunnerEnvPrefix:
         from ofx.runner import RunContext
         from ofx.runner.cloud_step import CloudStepRunner
 
-        step = Step(step_index=0, run="echo hi", env=step_env or {})
+        step = Step(step_index=0, module="shell", run_with={"cmd": "echo hi"}, env=step_env or {})
 
         class _ParentStub:
             model = type("J", (), {"jid": "job", "env": {}, "defaults": None})()
@@ -752,7 +752,7 @@ class TestCloudMatrixFailFast:
             jid="test-job",
             cloud={"provider": "static", "host": "10.0.0.1"},
             strategy=strategy,
-            steps=[{"run": "echo hi"}],
+            steps=[{"module": "shell", "with": {"cmd": "echo hi"}}],
         )
 
         class _ParentStub:
@@ -808,7 +808,7 @@ class TestDiscoverPythonCache:
         parent_job = object.__new__(CloudJobRunner)
         parent_job._cached_python = None
 
-        step = Step(run="echo hi", step_index=0)
+        step = Step(module="shell", run_with={"cmd": "echo hi"}, step_index=0)
         ctx = RunContext()
 
         class _FakeRemote:
@@ -890,7 +890,7 @@ class TestFleetInputUploadFailure:
         job = Job(
             jid="fleet-job",
             cloud={"provider": "static", "host": "10.0.0.1"},
-            steps=[{"run": "echo hi"}],
+            steps=[{"module": "shell", "with": {"cmd": "echo hi"}}],
         )
         ctx = RunContext()
         ctx.vars["fleet"] = {
@@ -935,7 +935,7 @@ class TestFleetInputUploadFailure:
         job = Job(
             jid="fleet-job",
             cloud={"provider": "static", "host": "10.0.0.1"},
-            steps=[{"run": "echo hi"}],
+            steps=[{"module": "shell", "with": {"cmd": "echo hi"}}],
         )
         ctx = RunContext()
         ctx.vars["fleet"] = {"fleet_input_file": str(chunk), "fleet_name": "test"}
@@ -972,7 +972,7 @@ class TestFleetInputUploadFailure:
         runner.model = Job(
             jid="fleet-job",
             cloud={"provider": "static", "host": "10.0.0.1"},
-            steps=[{"run": "echo hi"}],
+            steps=[{"module": "shell", "with": {"cmd": "echo hi"}}],
         )
         runner.ctx = RunContext()
 
@@ -997,7 +997,7 @@ class TestFleetInputUploadFailure:
         runner.model = Job(
             jid="fleet-job",
             cloud={"provider": "static", "host": "10.0.0.1"},
-            steps=[{"run": "echo hi"}],
+            steps=[{"module": "shell", "with": {"cmd": "echo hi"}}],
         )
         runner.ctx = RunContext(vars={"fleet": {"fleet_input_file": str(chunk)}})
         runner.parent = None
@@ -1034,7 +1034,7 @@ class TestFleetInputUploadFailure:
         runner.model = Job(
             jid="fleet-job",
             cloud={"provider": "static", "host": "10.0.0.1"},
-            steps=[{"run": "echo hi"}],
+            steps=[{"module": "shell", "with": {"cmd": "echo hi"}}],
         )
         runner.ctx = RunContext(
             vars={
@@ -1073,7 +1073,7 @@ class TestFleetInputUploadFailure:
         runner.model = Job(
             jid="fleet-job",
             cloud={"provider": "static", "host": "10.0.0.1"},
-            steps=[{"run": "echo hi"}],
+            steps=[{"module": "shell", "with": {"cmd": "echo hi"}}],
         )
         runner.ctx = RunContext(
             vars={
@@ -1107,7 +1107,7 @@ class TestFleetInputUploadFailure:
         job = Job(
             jid="fleet-job",
             cloud={"provider": "static", "host": "10.0.0.1"},
-            steps=[{"run": "echo hi"}],
+            steps=[{"module": "shell", "with": {"cmd": "echo hi"}}],
         )
         ctx = RunContext()
         ctx.vars["fleet"] = {"fleet_input_file": str(chunk), "fleet_name": "test"}
@@ -1142,7 +1142,7 @@ class TestCloudStepRunIfContext:
         from ofx.runner import RunContext
         from ofx.runner.cloud_step import CloudStepRunner
 
-        step = Step(run="echo hi", step_index=step_index)
+        step = Step(module="shell", run_with={"cmd": "echo hi"}, step_index=step_index)
         ctx = RunContext()
 
         step_runner = CloudStepRunner.__new__(CloudStepRunner)
@@ -1219,7 +1219,7 @@ class TestCloudStepRunIfContext:
         assert "job=job-a" in msg
         assert "step=2" in msg
         assert "[recon-step]" in msg
-        assert "[command]" in msg
+        assert "[module]" in msg
         assert "hello" in msg
 
 class TestCloudStepWindowsSupport:
@@ -1236,7 +1236,7 @@ class TestCloudStepWindowsSupport:
             def run(self, cmd, timeout=None):
                 return "ok"
 
-        step = Step(run="echo hi", step_index=0)
+        step = Step(module="shell", run_with={"cmd": "echo hi"}, step_index=0)
         ctx = RunContext()
 
         parent_job = object.__new__(CloudJobRunner)

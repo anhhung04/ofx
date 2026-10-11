@@ -24,7 +24,9 @@ name: test
 jobs:
   j1:
     steps:
-      - run: echo hi
+      - module: shell
+        with:
+          cmd: echo hi
 """)
     runner = job_runner_class(job)(job, RunContext(), parent=MagicMock())
     assert isinstance(runner, JobRunner)
@@ -40,7 +42,9 @@ jobs:
       matrix:
         target: [a, b]
     steps:
-      - run: echo hi
+      - module: shell
+        with:
+          cmd: echo hi
 """)
     runner = job_runner_class(job)(job, RunContext(), parent=MagicMock())
     assert isinstance(runner, MatrixJobRunner)
@@ -56,7 +60,9 @@ jobs:
       provider: static
       ssh_host: 1.2.3.4
     steps:
-      - run: echo hi
+      - module: shell
+        with:
+          cmd: echo hi
 """)
     runner = job_runner_class(job)(job, RunContext(), parent=MagicMock())
     assert isinstance(runner, CloudJobRunner)
@@ -75,7 +81,9 @@ jobs:
       matrix:
         target: [a, b]
     steps:
-      - run: echo hi
+      - module: shell
+        with:
+          cmd: echo hi
 """)
     runner = job_runner_class(job)(job, RunContext(), parent=MagicMock())
     assert isinstance(runner, CloudMatrixJobRunner)
@@ -95,7 +103,9 @@ jobs:
         count: 2
         input: "1.1.1.1\\n2.2.2.2"
     steps:
-      - run: echo hi
+      - module: shell
+        with:
+          cmd: echo hi
 """)
     runner = job_runner_class(job)(job, RunContext(), parent=MagicMock())
     assert isinstance(runner, CloudFleetRunner)
@@ -108,7 +118,9 @@ name: test
 jobs:
   j1:
     steps:
-      - run: echo hi
+      - module: shell
+        with:
+          cmd: echo hi
 """)
     cloud = _job("""
 name: test
@@ -118,7 +130,9 @@ jobs:
       provider: static
       ssh_host: 1.2.3.4
     steps:
-      - run: echo hi
+      - module: shell
+        with:
+          cmd: echo hi
 """)
     matrix = _job("""
 name: test
@@ -128,7 +142,9 @@ jobs:
       matrix:
         target: [a, b]
     steps:
-      - run: echo hi
+      - module: shell
+        with:
+          cmd: echo hi
 """)
     fleet = _job("""
 name: test
@@ -139,7 +155,9 @@ jobs:
         count: 2
         input: "1.1.1.1"
     steps:
-      - run: echo hi
+      - module: shell
+        with:
+          cmd: echo hi
 """)
 
     assert job_runner_class(plain) is JobRunner

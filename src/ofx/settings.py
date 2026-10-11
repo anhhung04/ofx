@@ -45,6 +45,7 @@ USER_SHELLCODE_CONNECTORS_DIR = BASE_DATA_DIR / "shellcode" / "connectors"
 USER_WEBSHELL_CONNECTORS_DIR = BASE_DATA_DIR / "webshell" / "connectors"
 SESSIONS_DIR = BASE_DATA_DIR / "sessions"
 COLLECTIONS_DIR = BASE_DATA_DIR / "collections"
+MODULES_DIR = Path(os.getenv("OFX_MODULES_DIR", BASE_DATA_DIR / "modules"))
 CHANNELS_DIR = TEMP_DIR / "channels"
 
 ALLOWED_WORKFLOW_FILE_EXTENSIONS = (".yml", ".yaml")
@@ -144,6 +145,7 @@ def _ensure_default_layout() -> None:
         USER_WEBSHELL_CONNECTORS_DIR,
         SESSIONS_DIR,
         COLLECTIONS_DIR,
+        MODULES_DIR,
     ):
         ensure_dir(path)
 

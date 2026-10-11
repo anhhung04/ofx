@@ -6,8 +6,8 @@ import json
 
 from ofx.commands.flow.info import _find_workflow_fuzzy
 from ofx.models.job import Job
-from ofx.models.workflow import Workflow
 from ofx.settings import get_console
+
 
 def visualize(
     workflow_name: str,
@@ -18,6 +18,7 @@ def visualize(
     """Visualize workflow dependencies and execution flow."""
     from rich.panel import Panel
     from rich.table import Table
+
     from ofx.runner.workflow_scheduler import WorkflowScheduler
 
     console = get_console()
@@ -115,13 +116,9 @@ def visualize(
                         kind = (
                             "pipe"
                             if step.pipe
-                            else "task"
-                            if step.task
+                            else "module"
+                            if step.module
                             else "uses"
-                            if step.uses
-                            else "run"
-                            if step.run
-                            else "script"
                         )
                         box_lines.append(f"  • {step.name} [{kind}]")
                     if job.outputs:

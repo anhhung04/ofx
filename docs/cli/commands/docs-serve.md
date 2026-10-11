@@ -101,7 +101,9 @@ jobs:
     name: Setup Environment
     steps:
       - name: Install tools
-        run: echo "Installing custom tools..."
+        module: shell
+        with:
+          cmd: echo "Installing custom tools..."
 ```
 
 ### Adding Custom Secrets

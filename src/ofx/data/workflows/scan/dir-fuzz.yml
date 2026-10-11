@@ -40,33 +40,15 @@ jobs:
         log_command: '{{ inputs.log_command }}'
       continue-on-error: true
     - name: pick_targets
-      script: |
-        import os, shutil
-        rd = os.environ["OFX_RUN_DIR"]
-        clean = "{{ steps.protection_check.outputs.clean_targets }}"
-        force = str(__inputs__.get("force", "false")).lower() == "true"
-        src = str(__inputs__.get("target", ""))
-        out = os.path.join(rd, "fuzz_targets.txt")
-        if force or not clean or not os.path.isfile(clean):
-            if os.path.isfile(src):
-                shutil.copy(src, out)
-            else:
-                open(out, "w").write(src.strip() + "\n")
-            if not force and not clean:
-                print("no WAF/CDN filter available — fuzzing all targets")
-        else:
-            shutil.copy(clean, out)
-            skipped = open(src).read().splitlines() if os.path.isfile(src) else [src]
-            skipped = [s for s in skipped if s.strip() and s not in open(out).read()]
-            for s in skipped:
-                print(f"skipped (WAF/CDN): {s}")
-        count = len([line for line in open(out).read().splitlines() if line.strip()])
-        print(f"fuzz list: {count} targets")
-        add_outputs(fuzz_targets=out)
+      module: modules/pick_targets.py::run
+      with:
+        clean_targets: '{{ steps.protection_check.outputs.clean_targets }}'
     - name: ffuf
-      run: while read -r u; do [ -z "$u" ] && continue; ffuf -u "${u%/}/FUZZ" -w {{ inputs.wordlist
-        }} -e {{ inputs.extensions }} -ac -of csv -o "{{ env.OFX_RUN_DIR }}/ffuf_$(echo
-        "$u" | md5sum | cut -c1-8).csv"; done < {{ env.OFX_RUN_DIR }}/fuzz_targets.txt
+      module: shell
+      with:
+        cmd: while read -r u; do [ -z "$u" ] && continue; ffuf -u "${u%/}/FUZZ" -w {{ inputs.wordlist
+          }} -e {{ inputs.extensions }} -ac -of csv -o "{{ env.OFX_RUN_DIR }}/ffuf_$(echo
+          "$u" | md5sum | cut -c1-8).csv"; done < {{ env.OFX_RUN_DIR }}/fuzz_targets.txt
       run_if: "{{ steps.pick_targets.outputs.fuzz_targets != '' }}"
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'

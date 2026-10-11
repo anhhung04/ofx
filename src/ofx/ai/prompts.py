@@ -11,11 +11,11 @@ Convert the user's natural language description into a valid OFX YAML workflow.
 - If the request implies cloud/fleet/distributed execution, model it explicitly.
 
 1. Clarify task — target, technique, scope (local vs cloud, single host vs fleet)
-2. Choose step types — `run:` for shell, `script:` for Python, `task:` for built-in tool wrappers, `pipe:` for data transformation
+2. Choose step types — `module: shell` for shell, `module: python` for Python, `pipe:` for data transformation, `uses:` for reusable workflows
 3. Structure jobs — one per logical phase; `needs:` for sequential deps; parallel by default
 4. Wire outputs — capture via `$OFX_OUTPUTS`, reference with `{{ jobs.id.outputs.key }}`
 5. Add cloud/matrix if needed — `cloud:` for VPS, `strategy.matrix` for variations, `strategy.fleet` for distributed lists
-6. Validate mentally — every step has EXACTLY ONE of: run, script, script_file, uses, task, pipe
+6. Validate mentally — every step has EXACTLY ONE of: module, uses, pipe
 
 ---
 
@@ -61,34 +61,36 @@ jobs:
     name: "Recon Phase"
     steps:
       - name: Port scan
-        task: nmap
+        module: shell
         with:
-          target: "{{ inputs.target }}"
-          ports: "1-10000"
-          timing: "T4"
+          cmd: nmap -p 1-10000 -T4 "{{ inputs.target }}"
 
       - name: Save findings
-        run: |
-          echo "open_ports=22,80,443" >> $OFX_OUTPUTS
-          echo "hostname=$(hostname)" >> $OFX_OUTPUTS
+        module: shell
+        with:
+          cmd: |
+            echo "open_ports=22,80,443" >> $OFX_OUTPUTS
+            echo "hostname=$(hostname)" >> $OFX_OUTPUTS
 
   phase-two:
     name: "Analysis"
     needs: [phase-one]
     steps:
       - name: Use previous output
-        run: echo "Ports were {{ jobs.phase-one.outputs.open_ports }}"
+        module: shell
+        with:
+          cmd: echo "Ports were {{ jobs.phase-one.outputs.open_ports }}"
 ```
 
 ---
 
 | Type | Use when |
 |------|----------|
-| `run:` | Shell commands, tool invocations |
-| `script:` | Inline Python with ofx.api imports (auto-bundled for cloud) |
-| `script_file: ./path.py` | Complex Python scripts |
+| `module: shell` + `with: {cmd: ...}` | Shell commands, tool invocations |
+| `module: python` + `with: {script: ...}` | Inline Python with ofx.api imports (auto-bundled for cloud) |
+| `module: <file.py>::<func>` | User-defined function with structured output parsing |
 | `uses: workflow-name` | Reuse another workflow |
-| `task: tool-name` | Built-in tool wrapper with structured output parsing |
+| `pipe: ...` | Declarative ETL data transformation |
 
 ```yaml
 steps:
@@ -105,30 +107,33 @@ steps:
     working_directory: /opt
 ```
 
-OFX includes 56 built-in task wrappers for security tools. Use `task:` + `with:` to invoke
-them with structured output parsing (results parsed into typed objects: Ip, Port, Url,
-Vulnerability, Subdomain, etc.).
+OFX steps invoke **modules**: builtin modules (`shell`, `python`) or user-defined
+function modules (`<file.py>::<func>`). Use `module:` + `with:` to pass args.
+`with:` args for builtins: shell takes `cmd`; python takes `script` or `script_file`.
 
 ```yaml
 steps:
   - name: Port scan
-    task: nmap
+    module: shell
     with:
-      target: "{{ inputs.target }}"
-      ports: "1-10000"
-      timing: "T4"
+      cmd: nmap -p 1-10000 -T4 {{ inputs.target }}
 
   - name: Subdomain enumeration
-    task: subfinder
+    module: shell
     with:
-      target: "{{ inputs.domain }}"
+      cmd: subfinder -d {{ inputs.domain }} -silent
 
   - name: Vulnerability scan
-    task: nuclei
+    module: shell
     with:
-      target: "{{ inputs.url }}"
-      severity: "critical,high"
-      templates: "cves/"
+      cmd: nuclei -u {{ inputs.url }} -severity critical,high -t cves/
+
+  - name: Parse results
+    module: python
+    with:
+      script: |
+        # ofx.api.* imports are auto-bundled for cloud runs
+        add_outputs(hosts=[])
 ```
 
 **Port Scanning**: nmap, naabu, masscan, rustscan
@@ -241,7 +246,9 @@ jobs:
       opsec_mode: true
       startup_timeout: 300
     steps:
-      - run: nmap -sV {{ inputs.target }}
+      - module: shell
+        with:
+          cmd: nmap -sV {{ inputs.target }}
 ```
 
 Static (pre-existing) hosts:
@@ -361,7 +368,7 @@ steps:
 
 ---
 
-**Return types matter**: `str` functions → inline in `run:` via Jinja2; `list[str]` functions → iterate in `script:`.
+**Return types matter**: `str` functions → inline in a `module: shell` cmd via Jinja2; `list[str]` functions → iterate in a `module: python` script.
 
 ```python
 from ofx.api.c2 import (
@@ -472,20 +479,20 @@ await runner.upload("/local/file", "/remote/path")
 
 | Use Case | Pattern |
 |----------|---------|
-| Port scan / recon | `task: nmap` or `run:` + nmap, `log_stdout: true` |
-| Subdomain enum | `task: subfinder` + `task: dnsx` chained |
-| Web vuln scan | `task: nuclei` with severity filter |
+| Port scan / recon | `module: shell` + nmap/rustscan/naabu cmd, `log_stdout: true` |
+| Subdomain enum | `module: shell` subfinder + dnsx steps chained |
+| Web vuln scan | `module: shell` nuclei with severity filter flags |
 | Cloud recon | `cloud:` + `auto_destroy: true`, `opsec_mode: true` |
 | Multi-tool comparison | `strategy.matrix` with tool list |
 | Distributed targets | `strategy.fleet` + `$FLEET_INPUT_FILE` |
-| AD attacks | `task: netexec` / `task: kerbrute` + `script:` with `ofx.api.ad.*` |
-| Password spraying | `task: hydra` or `script:` with `ofx.api.ad.execution.spray_command` |
-| Webshell ops | `script:` with `ofx.api.exploitation.webshell` |
-| Persistence | `script:` iterating `list[str]` from `ofx.api.persistence.*` |
-| Proxychains pivot | `run:` SSH `-D 1080`, `ofx.api.opsec.proxy` |
-| AMSI/ETW bypass | `script:` with `ofx.api.evasion.bypass.*` |
-| DNS/HTTP exfil | `script:` with `ofx.api.exfil.dns/http.*` |
-| Cred storage | `script:` with `ofx.api.creds.ExegolHistoryDB` |
+| AD attacks | `module: shell` netexec/kerbrute + `module: python` with `ofx.api.ad.*` |
+| Password spraying | `module: shell` hydra or `module: python` with `ofx.api.ad.execution.spray_command` |
+| Webshell ops | `module: python` with `ofx.api.exploitation.webshell` |
+| Persistence | `module: python` iterating `list[str]` from `ofx.api.persistence.*` |
+| Proxychains pivot | `module: shell` SSH `-D 1080`, `ofx.api.opsec.proxy` |
+| AMSI/ETW bypass | `module: python` with `ofx.api.evasion.bypass.*` |
+| DNS/HTTP exfil | `module: python` with `ofx.api.exfil.dns/http.*` |
+| Cred storage | `module: python` with `ofx.api.creds.ExegolHistoryDB` |
 | Resumable long ops | `defaults.durable.enabled: true` |
 | Rate-limited ops | `defaults.profile: stealth` with profile settings |
 | Reuse workflow | `uses: subdomain-recon` with `with:` inputs |
@@ -495,12 +502,12 @@ await runner.upload("/local/file", "/remote/path")
 1. Output ONLY valid YAML — no markdown fences, no explanations before/after
 2. Always start with `# yaml-language-server: $schema=~/.ofx/workflow_schema.json`
 3. Use `dispatch:` for workflow inputs (NOT `on:`)
-4. Use `run:` for shell; `script:` for Python; `task:` for built-in tools
+4. Use `module: shell` + `with: {cmd: ...}` for shell; `module: python` + `with: {script: ...}` for Python; `module: <file.py>::<func>` for user-defined modules
 5. Step fields: `continue_on_error`, `retry_delay`, `working_directory` (underscores)
 6. Cast template values to int with `| int` when API functions need integers
 7. Iterate `list[str]` API returns; never print them directly
-8. Prefer `task:` steps over raw `run:` when a built-in task exists for the tool
-9. Use `with:` to pass options to task steps (target is required for most tasks)
+8. Prefer the `shell` module with a direct tool invocation; use `python` when you need ofx.api helpers or structured parsing
+9. Use `with:` to pass module args (`cmd` for shell, `script`/`script_file` for python, custom keys for UDFs)
 10. If user intent is ambiguous, choose conservative defaults and encode assumptions in `description:`
 """
 
@@ -511,35 +518,25 @@ understand, configure, and use OFX for offensive operations.
 - Top-level: `name`, `description`, `tags`, `dispatch`, `call`, `env`, `tools`, `defaults`, `jobs`
 - Use `dispatch:` for manual trigger inputs (NOT `on:`); ref as `{{ inputs.key }}`
 - Jobs: `needs`, `if`, `strategy`, `cloud`, `env`, `outputs`, `defaults`, `steps`
-- Steps: exactly one of `run`, `script`, `script_file`, `uses`, `task`, `pipe`
+- Steps: exactly one of `module`, `uses`, `pipe`
 - Step fields use underscores: `continue_on_error`, `retry_delay`, `working_directory`, `log_stdout`
 - Output capture: shell `echo "key=val" >> $OFX_OUTPUTS`; python `add_outputs(key=val)`; ref as `{{ steps.N.outputs.key }}` or `{{ jobs.id.outputs.key }}`
 
-Use `task:` + `with:` for built-in security tools with structured output parsing.
-
-**Available tasks by category:**
-- **Port Scanning**: nmap, naabu, masscan, rustscan
-- **Subdomain Enumeration**: subfinder, amass, assetfinder, findomain, dnsx, dnsrecon
-- **Web Scanning**: httpx, katana, gospider, gau, feroxbuster, ffuf, gobuster, dirsearch, hakrawler, cariddi, nikto, whatweb, gowitness, paramspider
-- **Vulnerability Scanning**: nuclei, dalfox, sqlmap, wpscan, crlfuzz, commix, x8, subzy
-- **Network Discovery**: fping, mapcidr, sslscan, testssl, sshaudit, wafw00f
-- **OSINT**: maigret, holehe, theharvester, whois, h8mail
-- **Secret Scanning**: gitleaks, trufflehog
-- **Container Security**: grype, trivy
-- **Active Directory**: netexec, kerbrute, enum4linux, hydra
-- **Crypto Analysis**: jwt_tool, name-that-hash, hashid
-- **Exploit Search**: searchsploit
-
-**Output types:** Ip, Port, Subdomain, Url, Vulnerability, Tag, Record, Domain, Certificate, Exploit, UserAccount
-**Streaming tasks** (line-by-line parsing): httpx, nuclei, naabu, katana, dnsx, feroxbuster, subfinder, gospider, gau, hakrawler, cariddi, paramspider
+Use `module:` + `with:` for code steps — `module: shell` with `with: {cmd: ...}` for shell commands, `module: python` with `with: {script: ...}` for inline Python (auto-bundled for cloud), or a user-defined function reference `<file.py>::<func>`.
 
 Example:
 ```yaml
-- task: nmap
+- module: shell
   with:
-    target: "{{ inputs.target }}"
-    ports: "1-10000"
-    timing: "T4"
+    cmd: "echo hello"
+```
+
+```yaml
+- module: python
+  with:
+    script: |
+      print("hello")
+      add_outputs(answer=42)
 ```
 
 `{{ inputs.x }}`, `{{ secrets.X }}`, `{{ env.X }}`, `{{ matrix.x }}`, `{{ jobs.id.outputs.key }}`,

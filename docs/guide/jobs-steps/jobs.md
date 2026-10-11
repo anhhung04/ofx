@@ -10,11 +10,15 @@ Jobs are the main building blocks of an OFX workflow. Each job contains one or m
 jobs:
   recon:
     steps:
-      - run: nmap {{ inputs.target }}
+      - module: shell
+        with:
+          cmd: nmap {{ inputs.target }}
   exploit:
     needs: recon
     steps:
-      - run: python exploit.py
+      - module: shell
+        with:
+          cmd: python exploit.py
 ```
 
 ---
@@ -26,7 +30,7 @@ jobs:
 | `name` | str | `""` | Display name for the job |
 | `steps` | list | — | **Required.** List of steps to execute (min 1) |
 | `needs` | str/list | `[]` | Job dependencies — other jobs that must complete first |
-| `if` | bool/str | `true` | Conditional execution (`success()`, `failure()`, `always()`, or Jinja2 expression) |
+| `if` | bool/str | `true` | Conditional execution (`success()`, `failure()`, `canceled()`, `always()`, or Jinja2 expression) |
 | `strategy` | object | `null` | Matrix strategy for running multiple job variations |
 | `env` | dict | `{}` | Environment variables available to all steps in the job |
 | `outputs` | dict | `{}` | Job outputs — template expressions promoting step outputs |
@@ -44,17 +48,23 @@ jobs:
   # Stage 1: scan_tcp and scan_udp run in parallel
   scan_tcp:
     steps:
-      - run: nmap -sS {{ inputs.target }}
+      - module: shell
+        with:
+          cmd: nmap -sS {{ inputs.target }}
 
   scan_udp:
     steps:
-      - run: nmap -sU {{ inputs.target }}
+      - module: shell
+        with:
+          cmd: nmap -sU {{ inputs.target }}
 
   # Stage 2: analyze waits for both scans
   analyze:
     needs: [scan_tcp, scan_udp]
     steps:
-      - run: python analyze.py
+      - module: shell
+        with:
+          cmd: python analyze.py
 ```
 
 ---
@@ -67,25 +77,32 @@ Control whether a job runs using `if`:
 jobs:
   scan:
     steps:
-      - run: nmap {{ inputs.target }}
+      - module: shell
+        with:
+          cmd: nmap {{ inputs.target }}
 
   notify:
     needs: [scan]
     if: failure()
     steps:
-      - run: echo "Scan failed!" | notify
+      - module: shell
+        with:
+          cmd: echo "Scan failed!" | notify
 
   cleanup:
     needs: [scan]
     if: always()
     steps:
-      - run: ./cleanup.sh
+      - module: shell
+        with:
+          cmd: ./cleanup.sh
 ```
 
 | Condition | Runs when... |
 |-----------|-------------|
 | `success()` | All dependencies succeeded (default) |
 | `failure()` | Any dependency failed |
+| `canceled()` | Any dependency was canceled (e.g. its `if:` skipped it) |
 | `always()` | Regardless of dependency outcomes |
 | Jinja2 expression | Expression evaluates truthy |
 
@@ -102,13 +119,17 @@ jobs:
       open_ports: "{{ steps['port-scan'].outputs.open_ports }}"
     steps:
       - name: port-scan
-        run: |
-          echo "open_ports=22,80,443" >> $OFX_OUTPUTS
+        module: shell
+        with:
+          cmd: |
+            echo "open_ports=22,80,443" >> $OFX_OUTPUTS
 
   exploit:
     needs: [scan]
     steps:
-      - run: echo "Ports: {{ jobs.scan.outputs.open_ports }}"
+      - module: shell
+        with:
+          cmd: 'echo "Ports: {{ jobs.scan.outputs.open_ports }}"'
 ```
 
 ---
@@ -122,15 +143,16 @@ jobs:
   remote-scan:
     cloud: do-nyc              # Profile from ~/.ofx/cloud.yml
     steps:
-      - task: nmap
+      - module: shell
         with:
-          target: "10.0.0.0/24"
-          ports: "1-65535"
+          cmd: nmap -p 1-65535 10.0.0.0/24
 
   local-analysis:
     needs: [remote-scan]
     steps:
-      - run: python analyze.py  # Runs locally
+      - module: shell
+        with:
+          cmd: python analyze.py  # Runs locally
 ```
 
 `cloud` accepts a profile name (string) or an inline config object. See [Cloud Runners](../cloud-runners.md).

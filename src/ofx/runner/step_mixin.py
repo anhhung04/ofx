@@ -179,7 +179,7 @@ class StepRunnerMixin:
 
         format_typed_outputs(
             typed_outputs,
-            task_name=self.model.name or self.model.task or "",
+            task_name=self.model.name or self.model.module or "",
             console=get_console(),
         )
         return True

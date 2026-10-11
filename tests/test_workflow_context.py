@@ -87,7 +87,9 @@ jobs:
     name: Test Job
     steps:
       - name: Test step
-        run: echo "test"
+        module: shell
+        with:
+          cmd: echo "test"
 """
         workflow = yaml.safe_load(test_workflow_content)
         from ofx.models.workflow import Workflow
@@ -113,7 +115,9 @@ jobs:
     name: Test Job
     steps:
       - name: Test step
-        run: echo "test"
+        module: shell
+        with:
+          cmd: echo "test"
 """
         workflow = yaml.safe_load(test_workflow_content)
         from ofx.models.workflow import Workflow
@@ -135,7 +139,9 @@ defaults:
 jobs:
   test:
     steps:
-      - run: echo test
+      - module: shell
+        with:
+          cmd: echo test
 """
         workflow = yaml.safe_load(test_workflow_content)
         from ofx.models.workflow import Workflow
@@ -161,7 +167,9 @@ defaults:
 jobs:
   test:
     steps:
-      - run: echo test
+      - module: shell
+        with:
+          cmd: echo test
 """
         workflow = yaml.safe_load(test_workflow_content)
         from ofx.models.workflow import Workflow
@@ -189,7 +197,9 @@ jobs:
     name: Test Job
     steps:
       - name: Test step
-        run: echo "test"
+        module: shell
+        with:
+          cmd: echo "test"
 """
         workflow = yaml.safe_load(test_workflow_content)
         from ofx.models.workflow import Workflow
@@ -219,7 +229,9 @@ jobs:
     name: Test Job
     steps:
       - name: Test step
-        run: echo "test"
+        module: shell
+        with:
+          cmd: echo "test"
 """
         workflow_file = tmp_path / "test.yml"
         workflow_file.write_text(workflow_content)
@@ -242,7 +254,9 @@ jobs:
     name: Test Job
     steps:
       - name: Test step
-        run: echo "test"
+        module: shell
+        with:
+          cmd: echo "test"
 """
         workflow_file = tmp_path / "myworkflow.yml"
         workflow_file.write_text(workflow_content)
@@ -296,7 +310,9 @@ jobs:
     name: Test Job
     steps:
       - name: Test step
-        run: echo "test"
+        module: shell
+        with:
+          cmd: echo "test"
 """
         workflow_file = tmp_path / "cached.yml"
         workflow_file.write_text(workflow_content)
@@ -321,7 +337,9 @@ jobs:
     name: Test Job
     steps:
       - name: Test step
-        run: echo "test"
+        module: shell
+        with:
+          cmd: echo "test"
 """
         workflow_file = tmp_path / "multi.yml"
         workflow_file.write_text(workflow_content)
@@ -350,7 +368,9 @@ jobs:
     name: Test Job
     steps:
       - name: Test step
-        run: echo "test"
+        module: shell
+        with:
+          cmd: echo "test"
 """
         workflow_file = tmp_path / "parent.yml"
         workflow_file.write_text(workflow_content)
@@ -386,7 +406,9 @@ jobs:
   test:
     steps:
       - name: Test step
-        run: echo "test"
+        module: shell
+        with:
+          cmd: echo "test"
 """
         workflow_file = tmp_path / "dispatch.yml"
         workflow_file.write_text(workflow_content)
@@ -418,7 +440,9 @@ jobs:
   test:
     steps:
       - name: Test step
-        run: "echo ${{ inputs.target }}"
+        module: shell
+        with:
+          cmd: "echo ${{ inputs.target }}"
 """
         workflow_file = tmp_path / "dispatch-matrix.yml"
         workflow_file.write_text(workflow_content)
@@ -460,7 +484,9 @@ jobs:
   test:
     steps:
       - name: Test step
-        run: echo "test"
+        module: shell
+        with:
+          cmd: echo "test"
 """
         workflow_file = tmp_path / "reusable.yml"
         workflow_file.write_text(workflow_content)

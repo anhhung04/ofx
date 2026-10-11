@@ -174,28 +174,24 @@ class TestSaveOutputFile:
         step = SimpleNamespace(
             name="test-step",
             step_index=0,
-            run="echo hello",
+            module="shell",
             uses=None,
-            script_file=None,
-            script=None,
-            task=None,
+            pipe=None,
         )
         result = save_output_file(tmp_path, "job1", step, "hello world", {})
         assert result is not None
         assert result.exists()
         content = result.read_text()
-        assert ">> command: echo hello" in content
+        assert ">> module: shell" in content
         assert "hello world" in content
 
     def test_save_with_metadata_flags(self, tmp_path):
         step = SimpleNamespace(
             name="s",
             step_index=0,
-            run="cmd",
+            module="shell",
             uses=None,
-            script_file=None,
-            script=None,
-            task=None,
+            pipe=None,
         )
         outputs = {
             "binary_output": True,
@@ -234,69 +230,56 @@ class TestSaveOutputFile:
         step = SimpleNamespace(
             name="py",
             step_index=0,
-            run=None,
+            module="python",
             uses=None,
-            script_file=None,
-            script="print('hi')",
-            task=None,
+            pipe=None,
         )
         result = save_output_file(tmp_path, "j", step, "hi")
         content = result.read_text()
-        assert ">> script (base64):" in content
+        assert ">> module: python" in content
 
 class TestStepDescriptors:
     def test_public_descriptor_helpers_cover_non_command_cases(self, tmp_path):
-        task_step = SimpleNamespace(
-            task="nmap",
+        module_step = SimpleNamespace(
+            module="shell",
             pipe=None,
             uses=None,
-            script=None,
-            script_file=None,
-            run=None,
         )
         pipe_step = SimpleNamespace(
             pipe=SimpleNamespace(format="yaml"),
-            task=None,
+            module=None,
             uses=None,
-            script=None,
-            script_file=None,
-            run=None,
         )
-        command_step = SimpleNamespace(
+        shell_step = SimpleNamespace(
             name="command",
-            run="echo hi",
+            module="shell",
             uses=None,
-            script_file=None,
-            script=None,
-            task=None,
             pipe=None,
         )
-        script_file_step = SimpleNamespace(
+        python_step = SimpleNamespace(
             name="script-file",
-            run=None,
+            module="python",
             uses=None,
-            script_file="worker.py",
-            script=None,
-            task=None,
             pipe=None,
         )
 
         assert step_type_label(pipe_step) == "pipe: → yaml"
-        command_log = save_output_file(tmp_path, "job", command_step, "ok")
-        script_file_log = save_output_file(tmp_path, "job", script_file_step, "ok")
+        assert step_type_label(module_step) == "module: shell"
+        command_log = save_output_file(tmp_path, "job", shell_step, "ok")
+        python_log = save_output_file(tmp_path, "job", python_step, "ok")
 
         assert command_log is not None
-        assert script_file_log is not None
-        assert command_log.read_text().startswith(">> command: echo hi\n>>===<<\nok")
-        assert script_file_log.read_text().startswith(">> script_file: worker.py\n>>===<<\nok")
+        assert python_log is not None
+        assert command_log.read_text().startswith(">> module: shell\n>>===<<\nok")
+        assert python_log.read_text().startswith(">> module: python\n>>===<<\nok")
 
     def test_step_type_label_for_pipe(self):
-        step = SimpleNamespace(pipe=SimpleNamespace(format="yaml"), task=None, uses=None, script=None, script_file=None, run=None)
+        step = SimpleNamespace(pipe=SimpleNamespace(format="yaml"), module=None, uses=None)
 
         assert step_type_label(step) == "pipe: → yaml"
 
     def test_save_output_file_uses_workflow_header(self, tmp_path):
-        step = SimpleNamespace(run=None, uses="./child.yml", script_file=None, script=None, task=None, pipe=None)
+        step = SimpleNamespace(module=None, uses="./child.yml", pipe=None)
 
         result = save_output_file(tmp_path, "job", step, "ok")
 
@@ -305,11 +288,8 @@ class TestStepDescriptors:
 
     def test_step_timeline_params_for_pipe(self):
         step = SimpleNamespace(
-            run=None,
+            module=None,
             uses=None,
-            script_file=None,
-            script=None,
-            task=None,
             pipe=SimpleNamespace(format="yaml"),
             name="transform",
         )
@@ -322,11 +302,8 @@ class TestStepDescriptors:
 
     def test_step_timeline_params_for_workflow_uses_workflow_source_not_step_name(self):
         step = SimpleNamespace(
-            run=None,
+            module=None,
             uses="./child.yml",
-            script_file=None,
-            script=None,
-            task=None,
             pipe=None,
             name="child-runner",
         )
@@ -337,19 +314,16 @@ class TestStepDescriptors:
             "target": "",
         }
 
-    def test_step_timeline_params_for_script_file_uses_script_path_not_step_name(self):
+    def test_step_timeline_params_for_python_module_uses_module_value(self):
         step = SimpleNamespace(
-            run=None,
+            module="python",
             uses=None,
-            script_file="worker.py",
-            script=None,
-            task=None,
             pipe=None,
             name="script-step",
         )
 
         assert step_timeline_params(step, outputs={}) == {
-            "command": "script_file:worker.py",
+            "command": "module:python",
             "tool": "",
             "target": "",
         }

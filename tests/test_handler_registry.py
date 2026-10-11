@@ -10,12 +10,12 @@ def test_register_supports_multiple_run_types() -> None:
     registry = HandlerRegistry()
     calls: list[str] = []
 
-    @registry.register(RunType.SCRIPT, RunType.SCRIPT_FILE)
+    @registry.register(RunType.MODULE, RunType.PIPE)
     def handler(step_runner):
         calls.append(step_runner)
         return "runner"
 
-    assert registry.get(RunType.SCRIPT) is handler
-    assert registry.get(RunType.SCRIPT_FILE) is handler
-    assert registry.get(RunType.SCRIPT_FILE)("step-runner") == "runner"
+    assert registry.get(RunType.MODULE) is handler
+    assert registry.get(RunType.PIPE) is handler
+    assert registry.get(RunType.PIPE)("step-runner") == "runner"
     assert calls == ["step-runner"]

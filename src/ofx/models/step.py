@@ -11,13 +11,12 @@ from pydantic import Field, model_validator
 from ofx.models.base import OFXBaseModel
 from ofx.settings import DEFAULT_SHELL
 
+
 class RunType(Enum):
     """Type of step execution."""
 
-    SCRIPT = "script"
-    COMMAND = "command"
     WORKFLOW = "workflow"
-    SCRIPT_FILE = "script_file"
+    MODULE = "module"
     PIPE = "pipe"
 
 class Step(OFXBaseModel):
@@ -74,16 +73,22 @@ class Step(OFXBaseModel):
         default=None,
         description="Select a workflow to run as part of a step in the job",
     )
-    run: str | None = Field(default=None, description="Command(s) to run in the step")
-    script: str | None = Field(
-        default=None, description="Script to run in the step (if applicable)"
-    )
-    script_file: str | None = Field(
-        default=None, description="Path to a Python script file to execute"
+    module: str | None = Field(
+        default=None,
+        description=(
+            "Module to run in the step. Either a builtin name ('builtin.<name>' "
+            "or a bare builtin name) or a user-defined function reference "
+            "('<file.py>::<func>')."
+        ),
     )
     run_with: dict[str, Any] = Field(
         default_factory=dict,
-        description="Define inputs for the step if it uses a reusable workflow",
+        description=(
+            "Arguments passed to the step. For 'module' steps these are the "
+            "module arguments (e.g. {'cmd': ...} for the shell module, "
+            "{'script': ...} for the python module); for 'uses' steps they are "
+            "the reusable workflow inputs."
+        ),
         alias="with",
     )
     secrets: dict[str, str] | Literal["inherit"] = Field(
@@ -117,19 +122,19 @@ class Step(OFXBaseModel):
     def check_run_type(self):
         """Validate step configuration.
 
-        - Exactly one of 'run', 'script', 'uses', 'script_file', or 'pipe'.
+        - Exactly one of 'module', 'uses', or 'pipe'.
         - timeout must be positive (when numeric).
         - retry/retry_delay must be non-negative.
         """
         defined_fields = sum(
             1
-            for field in ["run", "script", "uses", "script_file", "pipe"]
+            for field in ["module", "uses", "pipe"]
             if getattr(self, field) is not None
         )
         if defined_fields != 1:
             raise ValueError(
-                f"Step '{self.name}' must have exactly one of 'run', 'script', "
-                f"'script_file', 'uses', or 'pipe' defined."
+                f"Step '{self.name}' must have exactly one of 'module', "
+                f"'uses', or 'pipe' defined."
             )
 
         if isinstance(self.timeout, int) and self.timeout <= 0:
@@ -161,15 +166,10 @@ class Step(OFXBaseModel):
     def get_run_type(self) -> RunType:
         if self.uses:
             return RunType.WORKFLOW
-        elif self.script:
-            return RunType.SCRIPT
-        elif self.script_file:
-            return RunType.SCRIPT_FILE
         elif self.pipe is not None:
             return RunType.PIPE
-        elif self.run:
-            return RunType.COMMAND
+        elif self.module:
+            return RunType.MODULE
         raise ValueError(
-            f"Step '{self.name}' must have one of 'run', 'script', 'script_file', "
-            f"'uses', or 'pipe' defined."
+            f"Step '{self.name}' must have one of 'module', 'uses', or 'pipe' defined."
         )

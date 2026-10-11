@@ -42,18 +42,20 @@ resp = fetch("https://example.com")
 write_file("result.html", str(resp))
 ```
 
-## Example: using APIs in workflow `script`
+## Example: using APIs in a `module: python` step
 
 ```yaml
 jobs:
   enrich:
     steps:
-      - script: |
-          from ofx.api.http import fetch
-          from ofx.api.file import write_file
+      - module: python
+        with:
+          script: |
+            from ofx.api.http import fetch
+            from ofx.api.file import write_file
 
-          body = fetch("https://example.com")
-          write_file(f"{{ ctx.output_path }}/page.txt", str(body))
+            body = fetch("https://example.com")
+            write_file(f"{{ ctx.output_path }}/page.txt", str(body))
 ```
 
 ## Discover APIs from CLI

@@ -5,17 +5,16 @@ from __future__ import annotations
 import json
 import logging
 import tempfile
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from ofx.runner.context import context_copy
 from ofx.runner.executors import Executor
-from ofx.runner.registry_keys import RunnerRegistryKeys
 from ofx.runner.profile_env import (
     build_profile_env_overrides,
     build_profile_var_overrides,
 )
+from ofx.runner.registry_keys import RunnerRegistryKeys
 from ofx.settings import settings
 from ofx.utils.file_cleanup import remove_tree
 from ofx.utils.workflow_utils import workflow_dirs_with_path
@@ -160,9 +159,9 @@ class WorkflowExecutor(Executor):
 
     async def do_run(self, runner) -> None:
         await self.plan_jobs(runner)
-        from ofx.runner.workflow_execution import WorkflowExecutionManager
-        from ofx.runner.runner import Runner
         from ofx.runner.error_helpers import extract_root_error
+        from ofx.runner.runner import Runner
+        from ofx.runner.workflow_execution import WorkflowExecutionManager
 
         result = await WorkflowExecutionManager(runner).run(
             runner._schedule,
@@ -360,7 +359,7 @@ class WorkflowExecutor(Executor):
             for job in runner.model.jobs.values():
                 references_input = False
                 for step in job.steps:
-                    fields = [step.run, step.script, step.script_file]
+                    fields = [step.module]
                     if step.run_with:
                         fields.extend(step.run_with.values())
                     if any(field and needle in str(field) for field in fields):

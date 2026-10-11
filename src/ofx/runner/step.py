@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ofx.cloud.script_runtime import is_python_step_run_type
 from ofx.models.job import Job
 from ofx.models.step import RunType, Step
 from ofx.runner.context import RunContext
@@ -39,10 +38,9 @@ class StepRunner(StepRunnerMixin, Runner[Step]):
     async def _pre_run(self) -> None:
         self._run_type = self.model.get_run_type()
 
-        if (
-            self._run_type == RunType.COMMAND
-            or is_python_step_run_type(self._run_type)
-        ):
+        # Module steps capture step outputs through the RUNNER_OUTPUTS env
+        # file; workflow and pipe steps do not.
+        if self._run_type == RunType.MODULE:
             from ofx.runner.commands.command_executor import prepare_outputs_file_env
 
             self._outputs_file = prepare_outputs_file_env(

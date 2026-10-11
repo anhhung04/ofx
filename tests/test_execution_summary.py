@@ -39,12 +39,20 @@ name: Summary Workflow
 jobs:
   job1:
     steps:
-      - run: echo "ok"
-      - run: echo "ok2"
+      - module: shell
+        with:
+          cmd: echo "ok"
+      - module: shell
+        with:
+          cmd: echo "ok2"
   job2:
     steps:
-      - run: exit 1
-      - run: echo "ok3"
+      - module: shell
+        with:
+          cmd: exit 1
+      - module: shell
+        with:
+          cmd: echo "ok3"
         run_if: failure()
 """
     workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
@@ -76,7 +84,9 @@ jobs:
       matrix:
         target: [a, b, c]
     steps:
-      - run: echo "{{ matrix.target }}"
+      - module: shell
+        with:
+          cmd: echo "{{ matrix.target }}"
 """
     workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
     runner = WorkflowRunner(workflow, RunContext())

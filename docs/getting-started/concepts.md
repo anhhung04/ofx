@@ -25,7 +25,9 @@ call:
 jobs:            # Execution units
   scan:
     steps:
-      - run: nmap -sV {{ inputs.target }}
+      - module: shell
+        with:
+          cmd: nmap -sV {{ inputs.target }}
 ```
 
 ---
@@ -48,12 +50,16 @@ Jobs are independent execution units that can run in parallel.
 jobs:
   recon:
     steps:
-      - run: nmap -sV {{ inputs.target }}
+      - module: shell
+        with:
+          cmd: nmap -sV {{ inputs.target }}
   
   exploit:
     needs: [recon]  # Waits for recon to complete
     steps:
-      - run: python exploit.py
+      - module: shell
+        with:
+          cmd: python exploit.py
 ```
 
 ---
@@ -64,11 +70,11 @@ Steps execute commands within a job. Each step uses exactly **one** of:
 
 | Type | Description |
 |------|-------------|
-| `run` | Shell command |
-| `script` | Python code |
-| `script_file` | Python file path |
+| `module: shell` | Shell command (`with.cmd`) |
+| `module: python` | Python code (`with.script`) or file (`with.script_file`) |
+| `module: <file>::<func>` | User-defined function module |
 | `uses` | Subflow reference |
-| `task` | Pre-built security tool wrapper |
+| `pipe` | Declarative ETL pipeline |
 
 ### Step Properties
 
@@ -81,7 +87,7 @@ Steps execute commands within a job. Each step uses exactly **one** of:
 | `continue-on-error` | Continue on failure |
 | `working-directory` | Execution directory |
 | `env` | Step environment variables |
-| `store-creds` | Auto-store discovered credentials (task steps) |
+| `store-creds` | Auto-store discovered credentials from module outputs |
 
 ### Examples
 
@@ -89,14 +95,18 @@ Steps execute commands within a job. Each step uses exactly **one** of:
 steps:
   # Shell command
   - name: Scan ports
-    run: nmap -sS {{ inputs.target }}
+    module: shell
+    with:
+      cmd: nmap -sS {{ inputs.target }}
     timeout: 300
 
   # Python script
   - name: Process results
-    script: |
-      publish('status', {'state': 'running'})
-      data = wait_for('config', lambda d: d.get('ready'))
+    module: python
+    with:
+      script: |
+        publish('status', {'state': 'running'})
+        data = wait_for('config', lambda d: d.get('ready'))
 
   # Subflow
   - name: Run recon module
@@ -162,15 +172,15 @@ Control execution order with `needs`:
 ```yaml
 jobs:
   a:
-    steps: [{ run: echo "A" }]
+    steps: [{ module: shell, with: {cmd: echo "A"} }]
   
   b:
     needs: [a]  # Runs after A
-    steps: [{ run: echo "B" }]
+    steps: [{ module: shell, with: {cmd: echo "B"} }]
   
   c:
     needs: [a]  # Also runs after A (parallel with B)
-    steps: [{ run: echo "C" }]
+    steps: [{ module: shell, with: {cmd: echo "C"} }]
 ```
 
 **Execution flow:**
@@ -196,26 +206,32 @@ env:
 jobs:
   job1:
     steps:
-      - run: echo $GLOBAL_VAR  # Available everywhere
+      - module: shell
+        with:
+          cmd: echo $GLOBAL_VAR  # Available everywhere
 ```
 
 ### Job Level
 ```yaml
 jobs:
   job1:
- env:
+    env:
       JOB_VAR: "value"
     steps:
-      - run: echo $JOB_VAR  # Available in this job
+      - module: shell
+        with:
+          cmd: echo $JOB_VAR  # Available in this job
 ```
 
 ### Step Level
 ```yaml
 steps:
   - name: With custom env
- env:
+    env:
       STEP_VAR: "value"
-    run: echo $STEP_VAR  # Available in this step only
+    module: shell
+    with:
+      cmd: echo $STEP_VAR  # Available in this step only
 ```
 
 ---
@@ -227,16 +243,22 @@ steps:
 jobs:
   resilient:
     steps:
-      - run: may-fail-command
+      - module: shell
+        with:
+          cmd: may-fail-command
         continue-on-error: true
-      - run: echo "Still runs even if above fails"
+      - module: shell
+        with:
+          cmd: echo "Still runs even if above fails"
 ```
 
 ### Retry on Failure
 ```yaml
 steps:
   - name: Flaky API call
-    run: curl https://api.example.com
+    module: shell
+    with:
+      cmd: curl https://api.example.com
     retry: 3
     retry-delay: 5  # seconds
 ```
@@ -245,7 +267,9 @@ steps:
 ```yaml
 steps:
   - name: Long operation
-    run: long-running-command
+    module: shell
+    with:
+      cmd: long-running-command
     timeout: 300  # 5 minutes
 ```
 
@@ -267,8 +291,12 @@ Access runtime information via `ctx`:
 | `ctx.system.user` | Current user |
 
 ```yaml
-- run: echo "Run ID: {{ ctx.run_id }}"
-- run: cp results.txt {{ ctx.output_path }}/
+- module: shell
+  with:
+    cmd: 'echo "Run ID: {{ ctx.run_id }}"'
+- module: shell
+  with:
+    cmd: cp results.txt {{ ctx.output_path }}/
 ```
 
 ---
@@ -283,7 +311,9 @@ jobs:
   subdomain-discovery:
     steps:
       - name: Run subfinder for subdomain discovery
-        run: subfinder -d {{ inputs.target }}
+        module: shell
+        with:
+          cmd: subfinder -d {{ inputs.target }}
 
 # ❌ Bad
 name: scan
@@ -291,7 +321,9 @@ jobs:
   job1:
     steps:
       - name: step1
-        run: subfinder -d {{ inputs.target }}
+        module: shell
+        with:
+          cmd: subfinder -d {{ inputs.target }}
 ```
 
 ### Document Inputs
@@ -311,15 +343,15 @@ dispatch:
 ```yaml
 jobs:
   setup:
-    steps: [{ run: mkdir -p results }]
+    steps: [{ module: shell, with: {cmd: mkdir -p results} }]
   
   scan:
     needs: [setup]
-    steps: [{ run: nmap -oN results/scan.txt target }]
+    steps: [{ module: shell, with: {cmd: nmap -oN results/scan.txt target} }]
   
   cleanup:
     needs: [scan]
-    steps: [{ run: tar -czf results.tar.gz results/ }]
+    steps: [{ module: shell, with: {cmd: tar -czf results.tar.gz results/} }]
 ```
 
 ---

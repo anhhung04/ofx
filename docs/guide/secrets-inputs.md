@@ -46,10 +46,12 @@ call:
 
 ```yaml
 - name: Validate target
-  script: |
-    import re, sys
-    t = '{{ inputs.target }}'
-    sys.exit(0 if re.match(r'^[A-Za-z0-9.-]+$', t) else 1)
+  module: python
+  with:
+    script: |
+      import re, sys
+      t = '{{ inputs.target }}'
+      sys.exit(0 if re.match(r'^[A-Za-z0-9.-]+$', t) else 1)
 ```
 
 ---
@@ -82,11 +84,13 @@ jobs:
   scan:
     steps:
       - name: Run scan
-        run: |
-          nmap {{ inputs.target }} \
-            -p {{ inputs.ports }} \
-            -T3 \
-            -o{{ inputs.output_format }} {{ ctx.output_path }}/scan.{{ inputs.output_format }}
+        module: shell
+        with:
+          cmd: |
+            nmap {{ inputs.target }} \
+              -p {{ inputs.ports }} \
+              -T3 \
+              -o{{ inputs.output_format }} {{ ctx.output_path }}/scan.{{ inputs.output_format }}
 ```
 
 ### Secrets Example
@@ -108,33 +112,37 @@ jobs:
   passive_recon:
     steps:
       - name: Query Shodan
-        script: |
-          import requests
-          api_key = '{{ secrets.SHODAN_API_KEY }}'
-          if not api_key:
-            print("Shodan key not provided, skipping")
-          else:
-            r = requests.get(
-              f'https://api.shodan.io/shodan/host/{{ inputs.target }}',
-              params={'key': api_key}
-            )
-            print(r.json())
+        module: python
+        with:
+          script: |
+            import requests
+            api_key = '{{ secrets.SHODAN_API_KEY }}'
+            if not api_key:
+              print("Shodan key not provided, skipping")
+            else:
+              r = requests.get(
+                f'https://api.shodan.io/shodan/host/{{ inputs.target }}',
+                params={'key': api_key}
+              )
+              print(r.json())
 
       - name: Query Censys
-        script: |
-          import requests
-          from requests.auth import HTTPBasicAuth
-          api_id = '{{ secrets.CENSYS_API_ID }}'
-          api_secret = '{{ secrets.CENSYS_API_SECRET }}'
-          if not api_id or not api_secret:
-            print("Censys credentials not provided, skipping")
-          else:
-            r = requests.get(
-              'https://search.censys.io/api/v2/hosts/search',
-              auth=HTTPBasicAuth(api_id, api_secret),
-              params={'q': '{{ inputs.target }}'}
-            )
-            print(r.json())
+        module: python
+        with:
+          script: |
+            import requests
+            from requests.auth import HTTPBasicAuth
+            api_id = '{{ secrets.CENSYS_API_ID }}'
+            api_secret = '{{ secrets.CENSYS_API_SECRET }}'
+            if not api_id or not api_secret:
+              print("Censys credentials not provided, skipping")
+            else:
+              r = requests.get(
+                'https://search.censys.io/api/v2/hosts/search',
+                auth=HTTPBasicAuth(api_id, api_secret),
+                params={'q': '{{ inputs.target }}'}
+              )
+              print(r.json())
 ```
 
 ---
@@ -182,14 +190,16 @@ Error: Invalid port number: abc
 jobs:
   validate:
     steps:
-      - script: |
-          try:
-            port = int('{{ inputs.port }}')
-            if port < 1 or port > 65535:
-              raise ValueError
-          except:
-            print("Port must be 1-65535")
-            sys.exit(1)
+      - module: python
+        with:
+          script: |
+            try:
+              port = int('{{ inputs.port }}')
+              if port < 1 or port > 65535:
+                raise ValueError
+            except:
+              print("Port must be 1-65535")
+              sys.exit(1)
 ```
 
 ---

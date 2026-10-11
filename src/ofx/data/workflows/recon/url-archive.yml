@@ -25,33 +25,25 @@ jobs:
       count: '{{ steps.merge.outputs.url_count }}'
     steps:
     - name: waybackurls
-      run: cat {{ inputs.target }} | waybackurls > {{ env.OFX_RUN_DIR }}/urls_wayback.txt
+      module: shell
+      with:
+        cmd: cat {{ inputs.target }} | waybackurls > {{ env.OFX_RUN_DIR }}/urls_wayback.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
       timeout: 120
     - name: gau
-      run: cat {{ inputs.target }} | gau --threads 5 > {{ env.OFX_RUN_DIR }}/urls_gau.txt
+      module: shell
+      with:
+        cmd: cat {{ inputs.target }} | gau --threads 5 > {{ env.OFX_RUN_DIR }}/urls_gau.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
       timeout: 120
     - name: katana-passive
-      run: katana -list {{ inputs.target }} -passive -silent -o {{ env.OFX_RUN_DIR }}/urls_katana.txt
+      module: shell
+      with:
+        cmd: katana -list {{ inputs.target }} -passive -silent -o {{ env.OFX_RUN_DIR }}/urls_katana.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
       timeout: 120
     - name: merge
-      script: |
-        import os
-        rd = os.environ["OFX_RUN_DIR"]
-        seen = set()
-        for name in ("urls_wayback.txt", "urls_gau.txt", "urls_katana.txt"):
-            try:
-                with open(os.path.join(rd, name)) as fh:
-                    seen.update(line.strip() for line in fh if line.strip())
-            except FileNotFoundError:
-                pass
-        out = os.path.join(rd, "all_urls.txt")
-        with open(out, "w") as fh:
-            fh.write("\n".join(sorted(seen)))
-        print(f"collected {len(seen)} unique URLs")
-        add_outputs(url_file=out, url_count=len(seen))
+      module: modules/merge_urls.py::run

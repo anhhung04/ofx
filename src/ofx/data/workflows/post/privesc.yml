@@ -28,13 +28,17 @@ jobs:
     run_if: '{{ inputs.os_type == ''linux'' }}'
     steps:
     - name: linpeas
-      run: linpeas.sh -a 2>&1 | tee {{ env.OFX_RUN_DIR }}/linpeas_results.txt
+      module: shell
+      with:
+        cmd: linpeas.sh -a 2>&1 | tee {{ env.OFX_RUN_DIR }}/linpeas_results.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
       timeout: 120
     - name: linux-smart
-      run: curl -sL https://raw.githubusercontent.com/diego-treitos/linux-smart-enumeration/master/lse.sh
-        | bash 2>&1 | tee {{ env.OFX_RUN_DIR }}/lse_results.txt
+      module: shell
+      with:
+        cmd: curl -sL https://raw.githubusercontent.com/diego-treitos/linux-smart-enumeration/master/lse.sh
+          | bash 2>&1 | tee {{ env.OFX_RUN_DIR }}/lse_results.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
   windows-privesc:
@@ -42,7 +46,9 @@ jobs:
     run_if: '{{ inputs.os_type == ''windows'' }}'
     steps:
     - name: winpeas
-      run: winPEASx64.exe 2>&1 | tee {{ env.OFX_RUN_DIR }}/winpeas_results.txt
+      module: shell
+      with:
+        cmd: winPEASx64.exe 2>&1 | tee {{ env.OFX_RUN_DIR }}/winpeas_results.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
       timeout: 120

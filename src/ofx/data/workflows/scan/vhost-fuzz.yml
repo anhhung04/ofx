@@ -39,13 +39,17 @@ jobs:
     name: Virtual Host Fuzzing
     steps:
     - name: cdn-check
-      run: echo {{ inputs.target }} | cdncheck -cdn -silent -resp
+      module: shell
+      with:
+        cmd: echo {{ inputs.target }} | cdncheck -cdn -silent -resp
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
     - name: ffuf-vhost
-      run: 'ffuf -u {{ inputs.scheme }}://{{ inputs.target }}:{{ inputs.port }}/ -H
-        "Host: FUZZ.{{ inputs.base_domain }}" -w {{ inputs.wordlist }} -ac -of csv -o
-        {{ env.OFX_RUN_DIR }}/vhost_results.csv'
+      module: shell
+      with:
+        cmd: 'ffuf -u {{ inputs.scheme }}://{{ inputs.target }}:{{ inputs.port }}/ -H
+          "Host: FUZZ.{{ inputs.base_domain }}" -w {{ inputs.wordlist }} -ac -of csv -o
+          {{ env.OFX_RUN_DIR }}/vhost_results.csv'
 
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'

@@ -20,10 +20,10 @@ print(info)
 ```yaml
 steps:
   - name: banner grab 8443
-    run: |
-      python - <<'PY'
-      from ofx.api import service
-      info = service.scan_banner("10.0.0.5", 8443, tls=True)
-      print(info)
-      PY
+    module: python
+    with:
+      script: |
+        from ofx.api import service
+        info = service.scan_banner("10.0.0.5", 8443, tls=True)
+        print(info)
 ```

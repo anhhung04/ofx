@@ -31,15 +31,16 @@ class MyAssetConnector:
 **YAML usage:**
 ```yaml
 steps:
-	- name: Fetch Assets
-		run: |
-			from ofx.api.connectors.myassets import MyAssetConnector
-			assets = MyAssetConnector().fetch_assets("prod")
-			for host in assets:
-					print(host)
-		script:
-		outputs:
-			hosts: "{{ step.stdout_lines }}"
+  - name: Fetch Assets
+    module: python
+    with:
+      script: |
+        from ofx.api.connectors.myassets import MyAssetConnector
+        assets = MyAssetConnector().fetch_assets("prod")
+        for host in assets:
+            print(host)
+    outputs:
+      hosts: "{{ step.stdout_lines }}"
 ```
 
 ---

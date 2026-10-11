@@ -121,17 +121,19 @@ jobs:
   ad-enum:
     steps:
       - name: bloodhound collection
-        script: |
-          from ofx.api.ad import bloodhound_collection_command
-          from ofx.api.post.runners.ssh import PostSSH
+        module: python
+        with:
+          script: |
+            from ofx.api.ad import bloodhound_collection_command
+            from ofx.api.post.runners.ssh import PostSSH
 
-          runner = PostSSH(
-              host="{{ inputs.target }}",
-              user="{{ secrets.ad_user }}",
-              password="{{ secrets.ad_pass }}"
-          )
-          cmd = bloodhound_collection_command(domain="{{ inputs.domain }}")
-          print(runner.run(cmd))
+            runner = PostSSH(
+                host="{{ inputs.target }}",
+                user="{{ secrets.ad_user }}",
+                password="{{ secrets.ad_pass }}"
+            )
+            cmd = bloodhound_collection_command(domain="{{ inputs.domain }}")
+            print(runner.run(cmd))
 ```
 
 ---

@@ -11,4 +11,6 @@ jobs:
   durable_job:
     steps:
       - name: Write durable marker
-        run: printf "run\n" >> {{ ctx.output_path }}/durable.txt
+        module: shell
+        with:
+          cmd: printf "run\n" >> {{ ctx.output_path }}/durable.txt

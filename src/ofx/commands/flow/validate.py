@@ -71,16 +71,13 @@ def _validate_one(path: Path, check_tasks: bool) -> ValidationResult:
         if not job.steps:
             result.warnings.append(f"Job '{jid}' has no steps")
 
-        for step in job.steps:
-            pass  # Step validation is handled by the Step model
-
     if not result.has_dispatch and not result.has_call:
         result.warnings.append("No dispatch or call trigger defined")
 
     if check_tasks and result.task_refs:
         result.warnings.append(
             "Task validation is no longer supported (task system removed). "
-            "Use 'script:' or 'run:' steps instead."
+            "Use 'module: python' or 'module: shell' steps instead."
         )
 
     return result
@@ -90,8 +87,9 @@ def validate_workflows(
     check_tasks: bool = False,
 ) -> None:
     """Validate one or all workflows with detailed diagnostics."""
-    from ofx.commands.ui_helpers import error_exit, print_info, print_warning
     from rich.table import Table
+
+    from ofx.commands.ui_helpers import error_exit, print_info, print_warning
 
     console = get_console()
 

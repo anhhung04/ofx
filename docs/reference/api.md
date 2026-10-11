@@ -28,8 +28,12 @@ The `ofx.api` module exposes dozens of functions for:
 		jobs:
 			recon:
 				steps:
-					- run: echo "IP: {{ api.get_ip() }}"
-					- run: echo "OS: {{ api.detect_os() }}"
+					- module: shell
+					  with:
+					    cmd: echo "IP: {{ api.get_ip() }}"
+					- module: shell
+					  with:
+					    cmd: echo "OS: {{ api.detect_os() }}"
 		```
 
 ---
