@@ -56,23 +56,23 @@ def analyze(ctx):
 """
 
 
+_KERBEROAST_BODY = "def run(ctx):\n    return {'krb': True}\n"
+
+_REPO_MODULES = {
+    "parse_nmap.py": MODULE_BODY,
+    "kerberoast.py": _KERBEROAST_BODY,
+}
+
+
 def _write_repo(target: Path, manifest: str = MANIFEST) -> Path:
     """Create a fake cloned repo layout (manifest + modules)."""
     target.mkdir(parents=True, exist_ok=True)
     (target / MANIFEST_FILENAME).write_text(manifest)
     modules_dir = target / "modules"
     modules_dir.mkdir(exist_ok=True)
-    (modules_dir / "parse_nmap.py").write_text(MODULE_BODY)
-    (modules_dir / "kerberoast.py").write_text(
-        "def run(ctx):\n    return {'krb': True}\n"
-    )
+    for name, source in _REPO_MODULES.items():
+        (modules_dir / name).write_text(source)
     return target
-
-
-_REPO_MODULES = {
-    "parse_nmap.py": MODULE_BODY,
-    "kerberoast.py": "def run(ctx):\n    return {'krb': True}\n",
-}
 
 
 def _install_fake_git(monkeypatch, *, fail_clone: bool = False, clone_hook=None):

@@ -38,7 +38,7 @@ steps:
 
 Your script can import `ofx` modules and external dependencies already installed in the environment. Environment variables and secrets provided to the step are available in the process environment.
 
-Python files executed via `script_file` have access to the same injected variables and channel communication functions as inline `script` steps.
+Python files executed via `script_file` have access to the same injected variables and channel communication functions as inline `module: python` steps.
 
 ### Available Variables in Scripts
 

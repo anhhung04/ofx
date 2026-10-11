@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from conftest import _FakeExecutor, _shared_executor_override
 
 from ofx.models.command import Command, Script
 from ofx.models.workflow import ToolConfig
@@ -15,35 +16,13 @@ from ofx.runner.commands.command import CommandRunner, ScriptRunner
 from ofx.runner.tool_installer import ToolInstallation, ToolInstallerRunner
 from ofx.settings import settings
 
+
 async def _capture_script_exec_invocation(script: ScriptRunner):
-    submitted: list[tuple[object, tuple]] = []
-
-    class _Future:
-        def result(self):
-            return "future-result"
-
-    class _Executor:
-        def submit(self, fn, *args):
-            submitted.append((fn, args))
-            return _Future()
-
-    import ofx.runner.commands.command as command_module
-
-    original_shared_executor = command_module._shared_executor
-    command_module._shared_executor = _Executor()
-    loop = asyncio.get_running_loop()
-    original_run_in_executor = loop.run_in_executor
-
-    async def _fake_run_in_executor(_executor, fn, *args):
-        return fn(*args)
-
-    try:
-        loop.run_in_executor = _fake_run_in_executor
+    executor = _FakeExecutor()
+    with _shared_executor_override(executor):
         await script._exec_script()
-        return submitted[0][1][0]
-    finally:
-        loop.run_in_executor = original_run_in_executor
-        command_module._shared_executor = original_shared_executor
+    return executor.submitted[0][1][0]
+
 
 class TestCommandRunnerEdgeCases:
     """Test CommandRunner edge cases"""
@@ -610,25 +589,12 @@ print("Injected variables work!")
                 submitted.append((fn, args))
                 return _Future()
 
-        import ofx.runner.commands.command as command_module
-
-        original_shared_executor = command_module._shared_executor
-        command_module._shared_executor = _Executor()
-        original_run_in_executor = asyncio.get_running_loop().run_in_executor
-
-        async def _fake_run_in_executor(_executor, fn, *args):
-            return fn(*args)
-
-        try:
-            asyncio.get_running_loop().run_in_executor = _fake_run_in_executor
+        with _shared_executor_override(_Executor()):
             result = await script._exec_script()
-            assert result == "future-result"
-            invocation = submitted[0][1][0]
-            assert invocation.script == "print('hi')"
-            assert invocation.working_directory == "/tmp/work"
-        finally:
-            asyncio.get_running_loop().run_in_executor = original_run_in_executor
-            command_module._shared_executor = original_shared_executor
+        assert result == "future-result"
+        invocation = submitted[0][1][0]
+        assert invocation.script == "print('hi')"
+        assert invocation.working_directory == "/tmp/work"
 
     @pytest.mark.asyncio
     async def test_exec_script_waits_for_future_result_via_executor(self):
@@ -648,22 +614,8 @@ print("Injected variables work!")
                 assert invocation.working_directory == "/tmp/work"
                 return _Future()
 
-        import ofx.runner.commands.command as command_module
-
-        original_shared_executor = command_module._shared_executor
-        command_module._shared_executor = _Executor()
-        loop = asyncio.get_running_loop()
-        original_run_in_executor = loop.run_in_executor
-
-        async def _fake_run_in_executor(_executor, fn, *args):
-            return fn(*args)
-
-        try:
-            loop.run_in_executor = _fake_run_in_executor
+        with _shared_executor_override(_Executor()):
             result = await script._exec_script()
-        finally:
-            loop.run_in_executor = original_run_in_executor
-            command_module._shared_executor = original_shared_executor
 
         assert result.exit_code == 0
         assert result.stdout == "ok"
@@ -763,7 +715,6 @@ print("Injected variables work!")
         assert callable(captured_globals["wait_for"])
 
     def test_exec_script_in_process_restores_cwd_and_captures_error(self, tmp_path):
-        import os
 
         from ofx.runner.commands.command import (
             exec_script_in_process,
@@ -829,22 +780,12 @@ print("Injected variables work!")
 
         import ofx.runner.commands.command as command_module
 
-        original_shared_executor = command_module._shared_executor
-        loop = asyncio.get_running_loop()
-        original_run_in_executor = loop.run_in_executor
-        monkeypatch.setattr(command_module, "_shared_executor", None)
         monkeypatch.setattr(command_module, "ProcessPoolExecutor", lambda **kwargs: _Executor())
         monkeypatch.setattr(command_module.atexit, "register", lambda fn, *args, **kwargs: registered.append((fn, args, kwargs)))
 
-        async def _fake_run_in_executor(_executor, fn, *args):
-            return fn(*args)
-
-        try:
-            loop.run_in_executor = _fake_run_in_executor
+        # Start from no shared executor: the runner must build one.
+        with _shared_executor_override(None):
             await script._exec_script()
-        finally:
-            loop.run_in_executor = original_run_in_executor
-            command_module._shared_executor = original_shared_executor
 
         registered_fn, registered_args, registered_kwargs = registered[0]
         assert registered_args == ()
