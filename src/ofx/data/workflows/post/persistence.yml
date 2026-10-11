@@ -1,27 +1,25 @@
 name: persistence
-description: Persistence mechanisms — establish persistent access via scheduled tasks,
-  services, SSH keys, and WMI subscriptions.
+description: 'Persistence payload generator — generates an SSH public key or a cron
+  reverse-shell payload plus manual install instructions. This workflow establishes
+  no persistence itself: no remote host is modified. Requires explicit authorization
+  (approved input).'
 tags:
 - post
 - persistence
-- backdoor
-- scheduled-task
+- generator
 - ssh
+- cron
 dispatch:
   inputs:
     target:
       required: true
       type: string
-      description: Target host
+      description: Target host the instructions are generated for
       alias: t
     username:
       required: true
       type: string
-      description: Admin username
-    password:
-      type: string
-      default: ''
-      description: Password
+      description: Account on the target used in the install instructions
     lhost:
       required: true
       type: string
@@ -33,7 +31,11 @@ dispatch:
     method:
       type: string
       default: ssh-key
-      description: 'Method: ssh-key, scheduled-task, wmi, cron'
+      description: 'Method: ssh-key or cron (scheduled tasks/WMI are not implemented)'
+    approved:
+      required: true
+      type: boolean
+      description: Explicit authorization for this action (required)
     log_command:
       type: string
       default: 'true'
@@ -41,19 +43,27 @@ dispatch:
 jobs:
   ssh-persistence:
     name: SSH Key Persistence
-    run_if: '{{ inputs.method == ''ssh-key'' }}'
+    run_if: '{{ inputs.approved and inputs.method == ''ssh-key'' }}'
     steps:
     - name: add-ssh-key
       module: local.add_ssh_key
       with:
         username: "{{ inputs.username }}"
         target: "{{ inputs.target }}"
+      continue-on-error: false
+      log-command: '{{ inputs.log_command }}'
+      timeout: 10
   cron-persistence:
     name: Cron Job Persistence
-    run_if: '{{ inputs.method == ''cron'' }}'
+    run_if: '{{ inputs.approved and inputs.method == ''cron'' }}'
     steps:
     - name: add-cron
       module: local.add_cron
       with:
         lhost: "{{ inputs.lhost }}"
         lport: "{{ inputs.lport }}"
+        username: "{{ inputs.username }}"
+        target: "{{ inputs.target }}"
+      continue-on-error: false
+      log-command: '{{ inputs.log_command }}'
+      timeout: 10

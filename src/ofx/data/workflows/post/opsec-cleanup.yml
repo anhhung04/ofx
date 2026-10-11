@@ -1,6 +1,8 @@
 name: opsec-cleanup
-description: OPSEC cleanup — clear shell history, wipe logs, timestomp files, and
-  remove forensic artifacts.
+description: 'OPSEC cleanup — clears shell history, logs, and other forensic artifacts
+  ON THE LOCAL HOST RUNNING OFX (there is no remote targeting in this workflow: every
+  command runs on the operator machine). Requires explicit authorization and a
+  confirm_local acknowledgement. Timestomping is not implemented.'
 tags:
 - post
 - opsec
@@ -17,6 +19,15 @@ dispatch:
       type: boolean
       default: false
       description: Aggressive mode — wipes wtmp/btmp/lastlog (more detectable)
+    confirm_local:
+      required: true
+      type: boolean
+      description: 'Explicit acknowledgement that cleanup commands run on THIS local
+        host (required; set true to proceed)'
+    approved:
+      required: true
+      type: boolean
+      description: Explicit authorization for this action (required)
     log_command:
       type: string
       default: 'true'
@@ -24,53 +35,69 @@ dispatch:
 jobs:
   linux-cleanup:
     name: Linux Cleanup
-    run_if: '{{ inputs.os_type == ''linux'' }}'
+    run_if: '{{ inputs.approved and inputs.confirm_local and inputs.os_type == ''linux'' }}'
     steps:
     - name: history
       module: local.builtin.shell
       with:
         cmd: unset HISTFILE && export HISTSIZE=0 && history -c && rm -f ~/.bash_history
-          ~/.zsh_history ~/.mysql_history ~/.psql_history ~/.python_history 2>/dev/null;
-          echo "History cleared"
+          ~/.zsh_history ~/.mysql_history ~/.psql_history ~/.python_history
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
     - name: logs
       module: local.builtin.shell
       with:
         cmd: for log in /var/log/auth.log /var/log/secure /var/log/syslog /var/log/messages
-          /var/log/kern.log; do truncate -s 0 "$log" 2>/dev/null && echo "Wiped $log";
-          done{% if inputs.aggressive %}; for log in /var/log/wtmp /var/log/btmp /var/log/lastlog
-          /var/run/utmp; do truncate -s 0 "$log" 2>/dev/null && echo "Wiped $log"; done{%
-          endif %}
+          /var/log/kern.log; do truncate -s 0 "$log" 2>/dev/null; done{% if inputs.aggressive
+          %}; for log in /var/log/wtmp /var/log/btmp /var/log/lastlog /var/run/utmp;
+          do truncate -s 0 "$log" 2>/dev/null; done{% endif %}
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
     - name: ssh-known-hosts
       module: local.builtin.shell
       with:
-        cmd: rm -f ~/.ssh/known_hosts 2>/dev/null && echo "Removed SSH known_hosts"
+        cmd: rm -f ~/.ssh/known_hosts
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
+    - name: verify
+      module: local.verify_cleanup
+      with:
+        os_type: linux
+        aggressive: "{{ inputs.aggressive }}"
+      continue-on-error: false
+      log-command: '{{ inputs.log_command }}'
+      timeout: 10
   windows-cleanup:
     name: Windows Cleanup
-    run_if: '{{ inputs.os_type == ''windows'' }}'
+    run_if: '{{ inputs.approved and inputs.confirm_local and inputs.os_type == ''windows'' }}'
     steps:
     - name: event-logs
       module: local.builtin.shell
       with:
-        cmd: wevtutil cl Security 2>nul && wevtutil cl System 2>nul && wevtutil cl Application
-          2>nul && echo "Event logs cleared"
+        cmd: foreach ($log in 'Security','System','Application') { try { wevtutil cl
+          $log } catch { Write-Output "failed to clear $log" } }
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
     - name: temp
       module: local.builtin.shell
       with:
-        cmd: del /f /s /q %TEMP%\* 2>nul && echo "Temp files cleared"
+        cmd: try { Get-ChildItem -LiteralPath $env:TEMP -Force -ErrorAction SilentlyContinue
+          | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue } catch { Write-Output
+          "temp cleanup incomplete" }
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
     - name: powershell-history
       module: local.builtin.shell
       with:
-        cmd: del /f /q %APPDATA%\Microsoft\Windows\PowerShell\PSReadLine\ConsoleHost_history.txt
-          2>nul && echo "PS history cleared"
+        cmd: try { Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $env:APPDATA
+          'Microsoft\Windows\PowerShell\PSReadLine\ConsoleHost_history.txt') } catch
+          { Write-Output "PS history cleanup incomplete" }
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
+    - name: verify
+      module: local.verify_cleanup
+      with:
+        os_type: windows
+      continue-on-error: false
+      log-command: '{{ inputs.log_command }}'
+      timeout: 10
