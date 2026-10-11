@@ -108,10 +108,16 @@ class ProjectManager:
     @classmethod
     def create_project(cls, name: str) -> str:
         """Create a new engagement workspace with standard directory structure."""
+        safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in name)
+        return cls.create_project_at(safe_name, cls._get_default_path() / safe_name)
+
+    @classmethod
+    def create_project_at(cls, name: str, path: Path) -> str:
+        """Create the workspace structure at an explicit path (e.g. --cwd)."""
         import git
 
         safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in name)
-        project_path = cls._get_default_path() / safe_name
+        project_path = path
         project_path.mkdir(parents=True, exist_ok=True)
 
         # Create standard workspace directories
@@ -128,9 +134,10 @@ class ProjectManager:
                 )
             )
 
-        # Create .gitignore
+        # Create .gitignore (never clobber an existing one, e.g. --cwd reuse)
         gitignore = project_path / ".gitignore"
-        gitignore.write_text(PROJECT_GITIGNORE)
+        if not gitignore.exists():
+            gitignore.write_text(PROJECT_GITIGNORE)
 
         # Init git repo
         try:
