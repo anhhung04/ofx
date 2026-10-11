@@ -32,15 +32,19 @@ dispatch:
 jobs:
   nuclei-scan:
     name: Nuclei Vulnerability Scan
+    outputs:
+      total: '{{ steps.summarize.outputs.total }}'
+      severity_count: '{{ steps.summarize.outputs.severity_count }}'
     steps:
+    - name: targets
+      module: local.normalize_targets
     - name: nuclei
       module: local.builtin.shell
       with:
-        cmd: nuclei -l {{ inputs.target }} -severity {{ inputs.severity }}{% if inputs.tags
-          %} -tags {{ inputs.tags }}{% endif %} -rate-limit {{ inputs.rate_limit }}
-          -silent -jsonl -o {{ env.OFX_RUN_DIR }}/nuclei_results.jsonl -stats -stats-interval
+        cmd: nuclei -l "{{ steps.targets.outputs.target_file }}" -severity {{ inputs.severity
+          }}{% if inputs.tags %} -tags {{ inputs.tags }}{% endif %} -rate-limit {{ inputs.rate_limit
+          }} -silent -jsonl -o {{ env.OFX_RUN_DIR }}/nuclei_results.jsonl -stats -stats-interval
           30 2>&1
-      continue-on-error: true
       log-command: '{{ inputs.log_command }}'
       timeout: 120
     - name: summarize

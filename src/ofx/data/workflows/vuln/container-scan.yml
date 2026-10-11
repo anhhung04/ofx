@@ -31,7 +31,6 @@ jobs:
       with:
         cmd: trivy image --severity {{ inputs.severity }} -f json -o {{ env.OFX_RUN_DIR
           }}/trivy_results.json {{ inputs.target }} 2>&1
-      continue-on-error: true
       log-command: '{{ inputs.log_command }}'
       timeout: 120
     - name: grype
@@ -39,5 +38,7 @@ jobs:
       with:
         cmd: grype {{ inputs.target }} -o json --file {{ env.OFX_RUN_DIR }}/grype_results.json
           2>&1
-      continue-on-error: true
       log-command: '{{ inputs.log_command }}'
+      timeout: 120
+    - name: filter-grype
+      module: local.filter_grype

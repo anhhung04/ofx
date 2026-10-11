@@ -1,18 +1,43 @@
 """Generate a GitHub Actions or GitLab CI pipeline for secret scanning."""
+
+from __future__ import annotations
+
 import pathlib
 
+_GITLAB_CI = """stages:
+  - security-scan
 
-def run(ctx):
-    repo_root = pathlib.Path(str(ctx.inputs.get("repo_root", "")))
-    platform = str(ctx.inputs.get("ci_platform", "github"))
-    branch = str(ctx.inputs.get("default_branch", "main"))
+variables:
+  GIT_DEPTH: '0'
 
-    if platform == "github":
-        ci_dir = repo_root / ".github" / "workflows"
-        ci_dir.mkdir(parents=True, exist_ok=True)
-        ci_path = ci_dir / "secret-scan.yml"
+secret-scan:
+  stage: security-scan
+  image:
+    name: zricethezav/gitleaks:latest
+    entrypoint: [""]
+  script:
+    - gitleaks detect --source=. --verbose --redact
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  allow_failure: false
 
-        ci_content = f"""name: Secret Scan
+trufflehog-scan:
+  stage: security-scan
+  image:
+    name: trufflesecurity/trufflehog:latest
+    entrypoint: [""]
+  script:
+    - trufflehog git file://. --fail --no-update
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  allow_failure: false
+"""
+
+
+def _github_workflow(branch: str) -> str:
+    return f"""name: Secret Scan
 on:
   push:
     branches: [{branch}]
@@ -35,43 +60,40 @@ jobs:
           GITHUB_TOKEN: ${{{{ secrets.GITHUB_TOKEN }}}}
 
       - name: TruffleHog Scan
-        uses: trufflesecurity/trufflehog-action@v1
+        uses: trufflesecurity/trufflehog@v3.67.0
         with:
           path: ./
-          base: ${{{{ github.event.before }}}}
-          head: ${{{{ github.sha }}}}
 """
-    else:
+
+
+def run(ctx):
+    repo_root = pathlib.Path(str(ctx.inputs.get("repo_root", "")).strip() or ".")
+    if not repo_root.is_dir():
+        raise RuntimeError(f"repository root not found: {repo_root}")
+
+    platform = str(ctx.inputs.get("ci_platform", "github")).strip().lower()
+    branch = str(ctx.inputs.get("default_branch", "main")).strip() or "main"
+
+    if platform == "github":
+        ci_path = repo_root / ".github" / "workflows" / "secret-scan.yml"
+        content = _github_workflow(branch)
+    elif platform == "gitlab":
         ci_path = repo_root / ".gitlab-ci.yml"
-        ci_content = """stages:
-  - security-scan
+        content = _GITLAB_CI
+    else:
+        raise ValueError(f"Unsupported CI platform: {platform}")
 
-secret-scan:
-  stage: security-scan
-  image:
-    name: zricethezav/gitleaks:latest
-    entrypoint: [""]
-  script:
-    - gitleaks detect --source=. --verbose
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "push"
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-  allow_failure: true
+    if ci_path.is_file():
+        if ci_path.read_text() != content:
+            raise RuntimeError(
+                "refusing to overwrite existing CI file with different content: "
+                f"{ci_path}"
+            )
+        print(f"CI pipeline already up to date: {ci_path}")
+    else:
+        ci_path.parent.mkdir(parents=True, exist_ok=True)
+        ci_path.write_text(content)
+        print(f"CI pipeline generated: {ci_path}")
 
-trufflehog-scan:
-  stage: security-scan
-  image:
-    name: trufflesecurity/trufflehog:latest
-    entrypoint: [""]
-  script:
-    - trufflehog git file://. --since-commit HEAD --fail --no-update
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "push"
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-  allow_failure: true
-"""
-
-    ci_path.write_text(ci_content)
     ctx.add_outputs(ci_file=str(ci_path), ci_platform=platform)
-    print(f"CI pipeline generated: {ci_path}")
     print(f"Platform: {platform}")

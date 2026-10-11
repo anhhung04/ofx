@@ -3,25 +3,40 @@
 from __future__ import annotations
 
 import json
-import os
+import pathlib
 
 
 def run(ctx):
-    f = os.path.join(ctx.env.get("OFX_RUN_DIR", ""), "nuclei_results.jsonl")
-    severity_count = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
-    try:
-        with open(f) as fh:
-            for line in fh:
-                try:
-                    item = json.loads(line)
-                    sev = item.get("info", {}).get("severity", "info").lower()
-                    severity_count[sev] = severity_count.get(sev, 0) + 1
-                except Exception:
-                    pass
-        total = sum(severity_count.values())
-        print(f"Total findings: {total}")
-        for k, v in severity_count.items():
-            if v:
-                print(f"  {k}: {v}")
-    except FileNotFoundError:
-        print("No nuclei results found")
+    run_dir = str(ctx.env.get("OFX_RUN_DIR", "")).strip()
+    if not run_dir:
+        raise RuntimeError("OFX_RUN_DIR is not set; cannot locate the nuclei results")
+
+    results_file = pathlib.Path(run_dir) / "nuclei_results.jsonl"
+    if not results_file.is_file():
+        raise RuntimeError(
+            f"nuclei results file not found: {results_file} "
+            "(the nuclei scan did not produce any output)"
+        )
+
+    severity_count: dict[str, int] = {}
+    total = 0
+    for lineno, line in enumerate(results_file.read_text().splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                f"corrupt nuclei result on line {lineno} of {results_file}: {exc}"
+            ) from exc
+        severity = str(item.get("info", {}).get("severity", "unknown")).lower()
+        severity_count[severity] = severity_count.get(severity, 0) + 1
+        total += 1
+
+    ctx.add_outputs(
+        total=str(total),
+        severity_count=json.dumps(severity_count, sort_keys=True),
+    )
+    print(f"Total findings: {total}")
+    for severity, count in sorted(severity_count.items()):
+        print(f"  {severity}: {count}")

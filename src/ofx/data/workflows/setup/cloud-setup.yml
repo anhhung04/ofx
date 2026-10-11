@@ -70,57 +70,66 @@ jobs:
       provider: '{{ steps.normalize.outputs.provider | default('''', true) }}'
       instance_name: '{{ steps.normalize.outputs.instance_name | default('''', true)
         }}'
+      region: '{{ steps.normalize.outputs.region | default('''', true) }}'
     steps:
     - name: normalize
       module: local.normalize
       retry: 1
       retry-delay: 5
-      continue-on-error: true
   aws-provision:
     name: Provision AWS EC2
     needs:
     - validate
     run_if: '{{ jobs[''validate''].outputs.provider == ''aws'' }}'
     outputs:
-      instance_id: '{{ steps.aws-run.outputs.instance_id | default('''', true) }}'
-      public_ip: '{{ steps.aws-run.outputs.public_ip | default('''', true) }}'
-      ssh_command: '{{ steps.aws-run.outputs.ssh_command | default('''', true) }}'
+      instance_id: '{{ steps[''aws-run''].outputs.instance_id | default('''', true)
+        }}'
+      public_ip: '{{ steps[''aws-run''].outputs.public_ip | default('''', true) }}'
+      ssh_command: '{{ steps[''aws-run''].outputs.ssh_command | default('''', true)
+        }}'
     steps:
-    - name: generate cloud-init
+    - name: generate-cloud-init
       module: local.generate_cloud_init
       retry: 1
       retry-delay: 5
-      continue-on-error: true
     - name: aws-run
       log-command: '{{ inputs.log_command | default(true) }}'
       log-stdout: '{{ inputs.log_output | default(true) }}'
       retry: 2
       retry-delay: 15
-      continue-on-error: true
       module: local.aws_run
       with:
         instance_name: "{{ jobs['validate'].outputs.instance_name }}"
+        region: "{{ jobs['validate'].outputs.region }}"
+        user_data: "{{ steps['generate-cloud-init'].outputs.user_data }}"
   digitalocean-provision:
     name: Provision DigitalOcean Droplet
     needs:
     - validate
     run_if: '{{ jobs[''validate''].outputs.provider == ''digitalocean'' }}'
     outputs:
-      droplet_id: '{{ steps.do-run.outputs.droplet_id | default('''', true) }}'
-      public_ip: '{{ steps.do-run.outputs.public_ip | default('''', true) }}'
-      ssh_command: '{{ steps.do-run.outputs.ssh_command | default('''', true) }}'
+      droplet_id: '{{ steps[''do-run''].outputs.droplet_id | default('''', true) }}'
+      public_ip: '{{ steps[''do-run''].outputs.public_ip | default('''', true) }}'
+      ssh_command: '{{ steps[''do-run''].outputs.ssh_command | default('''', true)
+        }}'
     steps:
+    - name: generate-cloud-init
+      module: local.generate_cloud_init
+      retry: 1
+      retry-delay: 5
     - name: do-run
       log-command: '{{ inputs.log_command | default(true) }}'
       log-stdout: '{{ inputs.log_output | default(true) }}'
       retry: 2
       retry-delay: 15
-      continue-on-error: true
       module: local.do_run
       with:
         instance_name: "{{ jobs['validate'].outputs.instance_name }}"
+        region: "{{ jobs['validate'].outputs.region }}"
+        user_data: "{{ steps['generate-cloud-init'].outputs.user_data }}"
   summary:
     name: Cloud Setup Summary
+    run_if: always()
     needs:
     - validate
     - aws-provision
@@ -135,7 +144,7 @@ jobs:
 
           echo "Instance Name: {{ jobs[''validate''].outputs.instance_name }}"
 
-          echo "Region: {{ inputs.region }}"
+          echo "Region: {{ jobs[''validate''].outputs.region }}"
 
           echo "Size: {{ inputs.size }}"
 

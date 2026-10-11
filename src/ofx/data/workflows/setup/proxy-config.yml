@@ -82,22 +82,33 @@ jobs:
         true) }}'
       tor_socks: '{{ steps["check-tor"].outputs.tor_socks | default("", true) }}'
     steps:
+    - name: check-tor
+      module: local.check_tor
     - name: test-tor
       module: local.test_tor
       with:
         tor_socks: "{{ steps['check-tor'].outputs.tor_socks }}"
   ssh-tunnel:
     name: Configure SSH Tunnel
-    run_if: '{{ inputs.ssh_host }}'
+    run_if: "{{ inputs.mode in ['ssh-tunnel', 'all'] and inputs.ssh_host != '' }}"
     outputs:
       tunnel_pid: '{{ steps["start-tunnel"].outputs.tunnel_pid | default("", true)
         }}'
       local_port: '{{ steps["start-tunnel"].outputs.local_port | default("", true)
         }}'
+      config_path: '{{ steps["tunnel-config"].outputs.config_path | default("", true)
+        }}'
     steps:
     - name: start-tunnel
-      continue-on-error: true
       module: local.start_tunnel
+    - name: tunnel-config
+      module: local.write_config
+      with:
+        proxy_host: 127.0.0.1
+        proxy_port: "{{ steps['start-tunnel'].outputs.local_port }}"
+        proxy_type: socks5
+        config_name: proxychains-tunnel.conf
+        config_dir: "{{ env.OFX_RUN_DIR }}"
   vpn-check:
     name: Verify VPN Connectivity
     run_if: '{{ inputs.mode == ''vpn'' or inputs.mode == ''all'' }}'
@@ -108,10 +119,10 @@ jobs:
         }}'
     steps:
     - name: check-vpn
-      continue-on-error: true
       module: local.check_vpn
   summary:
     name: Proxy Configuration Summary
+    run_if: always()
     needs:
     - proxychains
     - tor-setup
@@ -177,8 +188,8 @@ jobs:
           true) }} (PID: {{ jobs[''ssh-tunnel''].outputs.tunnel_pid | default(''N/A'',
           true) }})"
 
-          echo "Usage:  proxychains4 -s localhost:{{ jobs[''ssh-tunnel''].outputs.local_port
-          }} <command>"
+          echo "Usage:  proxychains4 -f {{ jobs[''ssh-tunnel''].outputs.config_path
+          | default(''N/A'', true) }} <command>"
 
           {% endif %}
 

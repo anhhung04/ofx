@@ -64,7 +64,6 @@ jobs:
       lab_dir: '{{ steps["prepare-dir"].outputs.lab_dir | default("", true) }}'
     steps:
     - name: check-docker
-      continue-on-error: true
       module: local.check_docker
     - name: check-compose
       module: local.check_compose
@@ -79,11 +78,15 @@ jobs:
         true) }}'
       target_list: '{{ steps["write-compose"].outputs.target_list | default("", true)
         }}'
+      endpoints: '{{ steps["write-compose"].outputs.endpoints | default("", true)
+        }}'
     steps:
     - name: write-compose
       module: local.write_compose
       with:
         lab_dir: "{{ jobs.validate.outputs.lab_dir }}"
+        bind_host: 127.0.0.1
+        host_port_start: 18000
   launch-lab:
     name: Launch Lab Environment
     needs:
@@ -98,9 +101,11 @@ jobs:
       retry-delay: 10
       module: local.launch
       with:
-        compose_path: "{{ jobs.generate-compose.outputs.compose_path }}"
+        compose_path: "{{ jobs['generate-compose'].outputs.compose_path }}"
     - name: collect-endpoints
       module: local.collect_endpoints
+      with:
+        project_label: "{{ inputs.lab_name }}"
   verify:
     name: Verify Lab Health
     needs:
@@ -110,10 +115,12 @@ jobs:
       failed: '{{ steps["health-check"].outputs.failed | default("0", true) }}'
     steps:
     - name: health-check
-      continue-on-error: true
       module: local.health_check
+      with:
+        project_label: "{{ inputs.lab_name }}"
   summary:
     name: Lab Summary
+    run_if: always()
     needs:
     - verify
     steps:
@@ -137,6 +144,12 @@ jobs:
           echo ""
 
           echo "Endpoints:"
+
+          echo "{{ jobs[''generate-compose''].outputs.endpoints }}"
+
+          echo ""
+
+          echo "Observed:"
 
           echo "{{ jobs[''launch-lab''].outputs.endpoints }}"
 
@@ -162,7 +175,9 @@ jobs:
     name: Teardown Lab
     needs:
     - verify
-    run_if: '{{ inputs.auto_teardown }}'
+    # always() is evaluated by the engine, not Jinja, so it must be emitted as a
+    # raw expression instead of being called inside the template.
+    run_if: "{{ 'always()' if inputs.auto_teardown else 'False' }}"
     steps:
     - name: wait-and-destroy
       log-stdout: '{{ inputs.log_output | default(true) }}'

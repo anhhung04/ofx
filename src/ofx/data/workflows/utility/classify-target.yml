@@ -13,6 +13,10 @@ dispatch:
       type: string
       description: Single target or path to a file with mixed targets
       alias: t
+    source_type:
+      type: string
+      default: auto
+      description: 'Input kind: auto (detect), file (must exist), or target (literal)'
     log_command:
       type: string
       default: 'true'
@@ -23,6 +27,7 @@ jobs:
     outputs:
       target_type: '{{ steps.classify.outputs.target_type }}'
       counts: '{{ steps.classify.outputs.counts }}'
+      target_files: '{{ steps.classify.outputs.target_files }}'
     steps:
     - name: classify
       module: local.classify

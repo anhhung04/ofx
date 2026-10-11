@@ -1,13 +1,20 @@
 """Write a proxychains configuration file under ~/.ofx/proxy."""
+
+from __future__ import annotations
+
 import os
 import pathlib
 
 
 def run(ctx):
-    home = pathlib.Path(os.path.expanduser("~"))
-    config_dir = home / ".ofx" / "proxy"
+    configured_dir = str(ctx.inputs.get("config_dir", "")).strip()
+    if configured_dir:
+        config_dir = pathlib.Path(configured_dir)
+    else:
+        config_dir = pathlib.Path(os.path.expanduser("~")) / ".ofx" / "proxy"
     config_dir.mkdir(parents=True, exist_ok=True)
-    config_path = config_dir / "proxychains.conf"
+    config_name = str(ctx.inputs.get("config_name", "")).strip() or "proxychains.conf"
+    config_path = config_dir / config_name
 
     proxy_host = str(ctx.inputs.get("proxy_host", "127.0.0.1"))
     proxy_port = str(ctx.inputs.get("proxy_port", "9050"))
