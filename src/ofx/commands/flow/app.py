@@ -393,16 +393,10 @@ def validate(
         bool,
         typer.Option("--all", help="Validate all discoverable workflows."),
     ] = False,
-    check_tasks: Annotated[
-        bool,
-        typer.Option(
-            "--check-tasks", help="Verify that referenced tasks are registered."
-        ),
-    ] = False,
 ):
     """Validate workflow configuration with detailed diagnostics.
 
-    Reports schema validity, structure summary, and optionally checks task references.
+    Reports schema validity and structure summary.
     Use --all to bulk-validate every discoverable workflow.
     """
     from ofx.commands.flow.validate import validate_workflows
@@ -410,7 +404,6 @@ def validate(
     validate_workflows(
         workflow_name=workflow_name,
         all_workflows=all_workflows,
-        check_tasks=check_tasks,
     )
 
 @app.command()

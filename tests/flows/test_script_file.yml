@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=workflow.schema.json
 name: Script File Example
-description: Demonstrates using script_file and run_file features
+description: Demonstrates running Python scripts from files
 
 defaults:
   run:

@@ -40,13 +40,6 @@ class Job(OFXBaseModel):
         description="Default configuration for the job",
     )
     steps: list[Step] = Field(..., min_length=1, description="List of steps in the job")
-    modules: list[str] | None = Field(
-        default=None,
-        description=(
-            "User-defined Python modules (UDFs) available to steps in this job, "
-            "as '<file.py>::<func>' references loaded relative to the workflow."
-        ),
-    )
     jid: str = Field(
         default="",
         description="Job identifier in the workflow",

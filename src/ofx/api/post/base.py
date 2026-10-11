@@ -11,7 +11,7 @@ from .transfer import build_download_command
 
 __all__ = [
     "AuthenticationError",
-    "CommandRunner",
+    "RemoteCommandRunner",
     "ConnectionError",
     "PostRunnerBase",
     "PostRunnerError",
@@ -61,13 +61,14 @@ class AuthenticationError(PostRunnerError):
     ...
 
 @runtime_checkable
-class CommandRunner(Protocol):
-    """Protocol for command execution compatibility.
+class RemoteCommandRunner(Protocol):
+    """Protocol for remote command execution compatibility.
 
-    Use this for duck-typing checks when you only need command execution.
+    Use this for duck-typing checks when you only need command execution on a
+    remote target (SSH, WinRM, web shell, …).
 
     Example:
-        >>> def run_enumeration(runner: CommandRunner):
+        >>> def run_enumeration(runner: RemoteCommandRunner):
         ...     return runner.run("id")
     """
 

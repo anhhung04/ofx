@@ -1,6 +1,6 @@
 ---
 name: ofx-workflow-generator
-description: Guide for agents generating OFX (Offensive Flow Executor) workflow YAML files. Covers syntax, schema validation, step types, job dependencies, matrix/fleet strategies, cloud execution, remote targets (SSH/WinRM), API modules, templating, sessions, and collections. Use when asked to create, edit, or review OFX workflow files.
+description: Guide for agents generating OFX (Offensive Flow Executor) workflow YAML files. Covers syntax, schema validation, step types, job dependencies, matrix/fleet strategies, cloud execution, API modules, templating, sessions, and collections. Use when asked to create, edit, or review OFX workflow files.
 allowed-tools: read_file, grep_search, run_in_terminal, file_search, list_dir
 ---
 
@@ -14,7 +14,6 @@ allowed-tools: read_file, grep_search, run_in_terminal, file_search, list_dir
 | Modify existing workflow | Read the file, apply edits, validate |
 | Validate a workflow | Run `ofx flow validate <file>` |
 | Use a built-in API module | Check `src/ofx/api/<category>/` for available modules |
-| Run on remote machines | Use `remote` step type with SSH/WinRM connection |
 | Run on cloud VPS | Add `cloud:` to job + `provider:` to step, configure profile |
 | Distribute across fleet | Use `strategy.fleet` with count + distribution mode |
 | Schema-aware editing | Ensure `# yaml-language-server: $schema=...` comment at top |
@@ -79,8 +78,7 @@ jobs:
 | Local named | `module: local.<name>` | Workflow-local `modules/<name>.py` (defaults to `run`) |
 | Remote module | `module: <owner>.<repo>.<module>[@<ref>][::<func>]` | GitHub-published module (cloned to `~/.ofx/modules/`; arbitrary code — prefer pinned `@<tag>`) |
 | Subworkflow | `uses:` | Reference another workflow YAML |
-| Remote (SSH) | `remote:` | Run on remote host via SSH |
-| Remote (WinRM) | `remote:` | Run on remote host via WinRM |
+| Pipe (ETL) | `pipe:` | Declarative filter/map/sort/format transform of a previous step's outputs |
 
 ### Step Common Options
 
@@ -99,52 +97,6 @@ jobs:
   log-command: true         # log the command itself
   log-stdout: true          # save stdout to stdout_<job>_<step>.log
 ```
-
-## Remote Execution (SSH / WinRM)
-
-When a step targets a remote machine, use the `remote:` key with a connection object:
-
-```yaml
-jobs:
-  deploy:
-    steps:
-      - name: Run on remote Linux
-        remote:
-          host: '{{ inputs.target }}'
-          port: 22
-          username: '{{ inputs.user }}'
-          password: '{{ inputs.password }}'   # or use key
-          key-file: '{{ inputs.ssh_key }}'
-          command: |
-            whoami
-            hostname
-            uname -a && cat /etc/os-release
-
-      - name: Run on remote Windows
-        remote:
-          host: '{{ inputs.target }}'
-          port: 5986
-          username: '{{ inputs.user }}'
-          password: '{{ inputs.password }}'
-          protocol: winrm
-          use-ssl: true
-          command: |
-            whoami
-            systeminfo | findstr /B /C:"OS Name"
-```
-
-### Remote connection fields
-
-| Field | SSH | WinRM | Notes |
-|---|---|---|---|
-| `host` | ✅ | ✅ | Required |
-| `port` | ✅ | ✅ | SSH default 22, WinRM default 5986 |
-| `username` | ✅ | ✅ | Required |
-| `password` | ✅ | ✅ | Optional if using key |
-| `key-file` | ✅ | ❌ | Path to SSH private key |
-| `protocol` | ✅ | ✅ | `ssh` or `winrm` |
-| `use-ssl` | ❌ | ✅ | Default: true |
-| `command` | ✅ | ✅ | Multi-line shell commands |
 
 ## Cloud Execution
 
@@ -419,11 +371,9 @@ jobs:
     steps:
       - name: Clean artifacts
         if: success()
-        remote:
-          host: '{{ inputs.target }}'
-          username: '{{ inputs.user }}'
-          key-file: '{{ inputs.ssh_key }}'
-          command: rm -rf /tmp/ofx_* /dev/shm/ofx_*
+        module: shell
+        with:
+          cmd: rm -rf /tmp/ofx_* /dev/shm/ofx_*
 ```
 
 ## Pitfalls to Avoid

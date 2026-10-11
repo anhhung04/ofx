@@ -1,4 +1,4 @@
-"""Builtin ``python`` module: execute inline Python scripts (legacy ``script:``)."""
+"""Builtin ``python`` module: execute a Python script (inline or from a file)."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from typing import Any
 from ofx.modules.base import ModuleContext, ModuleResult
 
 name = "python"
-description = "Execute a Python script (equivalent to a legacy ``script:`` step)."
+description = "Execute a Python script (inline `script` or `script_file` in `with:`)."
 args_schema: dict[str, Any] = {
     "script": {"type": "string", "description": "Inline Python script code"},
     "script_file": {

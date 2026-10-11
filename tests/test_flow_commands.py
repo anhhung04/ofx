@@ -320,7 +320,7 @@ class TestFlowValidate:
         )
         monkeypatch.setattr(validate, "get_console", lambda: Console(record=True, width=120))
 
-        validate.validate_workflows(str(workflow_file), check_tasks=False)
+        validate.validate_workflows(str(workflow_file))
 
         assert success_calls == [
             (
@@ -358,7 +358,7 @@ class TestFlowValidate:
         monkeypatch.setattr(validate, "get_console", lambda: Console(record=True, width=120))
 
         with pytest.raises(typer.Exit):
-            validate.validate_workflows(str(bad_file), check_tasks=False)
+            validate.validate_workflows(str(bad_file))
 
         assert errors
         assert errors[0][0] == "Validation Failed"
@@ -388,7 +388,7 @@ class TestFlowValidate:
         monkeypatch.setattr("ofx.commands.ui_helpers.print_success", lambda *args, **kwargs: None)
         monkeypatch.setattr(validate, "get_console", lambda: console)
 
-        validate.validate_workflows(str(path), check_tasks=False)
+        validate.validate_workflows(str(path))
 
         assert "No dispatch or call trigger defined" in console.export_text()
 
@@ -423,7 +423,7 @@ class TestFlowValidate:
         monkeypatch.setattr("ofx.commands.ui_helpers.print_warning", lambda *args, **kwargs: None)
         monkeypatch.setattr(validate, "get_console", lambda: console)
 
-        validate.validate_workflows(all_workflows=True, check_tasks=False)
+        validate.validate_workflows(all_workflows=True)
 
         output = console.export_text()
         assert "Workflow Validation" in output
