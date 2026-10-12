@@ -34,7 +34,7 @@ class ModuleRegistry:
     - ``shell`` / ``builtin.shell`` / ``local.builtin.shell`` — builtin module
     - ``<path>.py[::<func>]`` — workflow-local UDF file
     - ``local.<name>[::<func>]`` — workflow-local ``modules/<name>.py``
-    - ``local.api.<path>.<func>`` — ``ofx.api`` function (kwargs-style; the
+    - ``local.builtin.<path>.<func>`` — ``ofx.api`` function (kwargs-style; the
       last path segment names the function)
     - ``<owner>.<repo>.<module>[@<ref>][::<func>]`` — remote GitHub module
       (UDF or, for manifest ``api:`` entries, an ``ofx.api`` function)
@@ -76,14 +76,24 @@ class ModuleRegistry:
             raise ValueError(message) from None
 
         if ref.kind == BUILTIN_KIND:
-            builtin = self._builtins.get(ref.name or "")
-            if builtin is None:
-                available = ", ".join(self.builtin_names)
-                raise ValueError(
-                    f"Unknown module: '{spec}'. Available builtin modules: "
-                    f"{available}. {REMOTE_SCHEME_HINT}"
+            name = ref.name or ""
+            builtin = self._builtins.get(name)
+            if builtin is not None:
+                return builtin
+            # Unified namespace: an unregistered dotted ``local.builtin.*``
+            # name is an ofx.api function path (e.g. local.builtin.recon.targets.split_targets).
+            if "." in name:
+                return ModuleSpec(
+                    kind=API_KIND,
+                    name=ref.raw,
+                    callable=resolve_api_callable(name),
+                    function=name.rsplit(".", 1)[-1],
                 )
-            return builtin
+            available = ", ".join(self.builtin_names)
+            raise ValueError(
+                f"Unknown module: '{spec}'. Available builtin modules: "
+                f"{available}. {REMOTE_SCHEME_HINT}"
+            )
 
         if ref.kind == API_KIND:
             return ModuleSpec(

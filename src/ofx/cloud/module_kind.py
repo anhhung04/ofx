@@ -39,7 +39,7 @@ def is_udf_module_step(step: Step) -> bool:
 
     UDF specs use ``<file>.py`` or ``<file>.py::<function>`` form; local
     named modules (``local.<name>``), ``ofx.api`` functions
-    (``local.api.<path>``) and remote GitHub modules
+    (``local.builtin.<path>``) and remote GitHub modules
     (``<owner>.<repo>.<module>[@<ref>][::<func>]``) are UDF-like too —
     their source is bundled for remote execution. Pure-Python builtins
     (anything in the builtin registry except shell/python) are also

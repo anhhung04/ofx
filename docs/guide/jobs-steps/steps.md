@@ -160,12 +160,12 @@ Every accepted `module:` form:
 | `python`, `builtin.python`, `local.builtin.python` | Builtin `python` module |
 | `<file>.py`, `<file>.py::<func>` | Workflow-local UDF file (relative to the workflow directory, then the cwd); `<func>` defaults to `run` |
 | `local.<name>` | Workflow-local module at `<workflow_dir>/modules/<name>.py` (function defaults to `run`) |
-| `local.api.<path>.<func>` | Call an `ofx.api` function: imports `ofx.api.<path>` and calls `<func>` with the step's `with:` args as keyword arguments (no UDF file needed) |
+| `local.builtin.<path>.<func>` | Call an `ofx.api` function: imports `ofx.api.<path>` and calls `<func>` with the step's `with:` args as keyword arguments (no UDF file needed) |
 | `<owner>.<repo>.<module>` | Remote GitHub module: repo `github.com/<owner>/<repo>`, manifest entry `modules/<module>.py` (or an `api:` entry), default branch |
 | `<owner>.<repo>.<module>@<ref>` | Same, pinned to git tag/branch/commit `<ref>` |
 | any namespaced form + `::<func>` | Non-default entry function |
 
-Parsing order: `::` splits the function first, then `@` splits the ref; `.py`-suffixed specs are UDF files; `local.builtin.*`/`builtin.*`/bare names are builtins; `local.api.*` is an `ofx.api` function; `local.*` is a workflow-local module; three-or-more dotted segments are remote.
+Parsing order: `::` splits the function first, then `@` splits the ref; `.py`-suffixed specs are UDF files; `local.builtin.*`/`builtin.*`/bare names are builtins — a dotted builtin name that isn't a registered builtin is resolved as an `ofx.api` function (`local.builtin.<path>.<func>`); `local.*` is a workflow-local module; three-or-more dotted segments are remote.
 
 ### Built-in modules
 
@@ -303,7 +303,7 @@ Reference a function shipped with OFX directly — no UDF file, no wrapper:
 ```yaml
 steps:
   - name: classify-targets
-    module: local.api.recon.targets.split_targets
+    module: local.builtin.recon.targets.split_targets
     with:
       values:
         - "10.0.0.0/24"
@@ -311,7 +311,7 @@ steps:
         - "https://app.example.com:8443"
 ```
 
-- The path after `local.api.` is resolved against `ofx.api` with **longest-prefix** matching: `ofx.api.<full.path>` is tried first as a module, then progressively shorter module paths with the remaining segments looked up as attributes. So both `recon.targets.split_targets` (module `ofx.api.recon.targets`) and package re-exports such as `recon.crtsh_subdomains` (module `ofx.api.recon`) work. The last segment names the function.
+- The path after `local.builtin.` is resolved against `ofx.api` with **longest-prefix** matching: `ofx.api.<full.path>` is tried first as a module, then progressively shorter module paths with the remaining segments looked up as attributes. So both `recon.targets.split_targets` (module `ofx.api.recon.targets`) and package re-exports such as `recon.crtsh_subdomains` (module `ofx.api.recon`) work. The last segment names the function.
 - Invalid paths fail at resolve time with the list of attempted imports.
 
 **Arguments** — the step's `with:` args are passed as **keyword arguments**, filtered to the function's signature:
@@ -340,7 +340,7 @@ def split_targets(values: list[str]) -> dict[str, list[str]]:
 ```
 
 !!! tip "Prefer UDFs for multi-step logic"
-    `local.api.*` steps are one function call each. If you need several
+    `local.builtin.*` steps are one function call each. If you need several
     `ofx.api` calls plus control flow, wrap them in a UDF
     (`modules/my_scan.py`) and import `ofx.api` there.
 

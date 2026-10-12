@@ -192,7 +192,7 @@ class TestParseModuleRef:
                 parse_module_ref(spec)
 
     def test_local_builtin_missing_name(self):
-        with pytest.raises(ValueError, match="missing builtin name"):
+        with pytest.raises(ValueError, match="malformed builtin name"):
             parse_module_ref("local.builtin.")
 
     def test_local_missing_name(self):

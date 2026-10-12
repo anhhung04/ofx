@@ -151,7 +151,7 @@ def build_udf_step_source(
     """Render the remote wrapper source for a ``module:`` UDF step.
 
     UDF targets embed the module file source. ``ofx.api`` targets (a
-    ``local.api.<path>`` step or a remote manifest entry declared with
+    ``local.builtin.<path>`` step or a remote manifest entry declared with
     ``api:``) instead import the function by path — real source text, so the
     bundle analyzer picks up its ``ofx.api`` imports automatically — and carry
     an inline kwargs shim mirroring

@@ -90,7 +90,7 @@ def test_shim_and_invoke_api_callable_agree_on_missing_argument(shim):
 
 
 def test_generated_api_wrapper_embeds_the_canonical_shim(tmp_path):
-    step = Step(name="api-step", module="local.api.strings.remove_duplicate_string")
+    step = Step(name="api-step", module="local.builtin.strings.remove_duplicate_string")
     wrapper = build_udf_step_source(
         step,
         workflow_dir=tmp_path,

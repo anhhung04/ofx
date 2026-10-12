@@ -17,7 +17,6 @@ LOCAL_NAMED_KIND = "local_named"
 REMOTE_KIND = "remote"
 API_KIND = "api"
 
-API_PREFIX = "local.api."
 BUILTIN_PREFIX = "builtin."
 LOCAL_PREFIX = "local."
 LOCAL_MODULES_SUBDIR = "modules"
@@ -143,39 +142,6 @@ def _reject_function(kind: str, function: str | None, raw: str) -> None:
         )
 
 
-def _reject_api_ref(ref: str | None, raw: str) -> None:
-    if ref is not None:
-        raise ValueError(
-            f"Invalid module reference '{raw}': '@<ref>' is not valid on "
-            "'local.api.*' specs — the function comes from the path. Use "
-            "'local.api.<path>.<func>'."
-        )
-
-
-def _reject_api_function(function: str | None, raw: str) -> None:
-    if function is not None:
-        raise ValueError(
-            f"Invalid module reference '{raw}': 'local.api.*' modules do not "
-            "take a '::<func>' suffix — the function is the last segment of "
-            "the path (use 'local.api.<path>.<func>')."
-        )
-
-
-def _parse_api_ref(base: str, raw: str, ref: str | None, function: str | None) -> ModuleRef:
-    """Parse a ``local.api.<path>`` spec into an ``api`` ref."""
-    _reject_api_ref(ref, raw)
-    _reject_api_function(function, raw)
-    api_path = base[len(API_PREFIX) :]
-    segments = api_path.split(".")
-    if not api_path or any(not segment for segment in segments):
-        raise ValueError(
-            f"Invalid module reference '{raw}': expected "
-            "'local.api.<path>.<func>', e.g. "
-            "'local.api.recon.targets.split_targets'"
-        )
-    return ModuleRef(kind=API_KIND, raw=raw, api_path=api_path, function=segments[-1])
-
-
 def parse_module_ref(spec: str) -> ModuleRef:
     """Parse a module spec into a :class:`ModuleRef`.
 
@@ -184,9 +150,10 @@ def parse_module_ref(spec: str) -> ModuleRef:
     1. ``::`` splits off the entry function first.
     2. ``@`` splits off a remote git ref.
     3. ``.py``-suffixed specs are workflow-local UDF files.
-    4. ``local.builtin.*`` / ``builtin.*`` / bare names are builtins.
-    5. ``local.api.<path>`` is an ``ofx.api`` function (checked before
-       ``local.<name>``).
+    4. ``local.builtin.*`` / ``builtin.*`` / bare names are builtins;
+       an unregistered dotted builtin name is an ``ofx.api`` function path
+       (resolved by the registry, not here).
+    5. ``local.api.*`` is rejected (removed — use ``local.builtin.<path>.<func>``).
     6. ``local.<name>`` is a workflow-local named module.
     7. Three-or-more dotted segments are remote GitHub modules.
 
@@ -209,26 +176,24 @@ def parse_module_ref(spec: str) -> ModuleRef:
         )
 
     for prefix in ("local.builtin.", "builtin."):
-        if base.startswith(prefix):
+        if base.startswith(prefix) or (prefix == "local.builtin." and base == "local.builtin"):
             _reject_ref(BUILTIN_KIND, ref, raw)
             _reject_function(BUILTIN_KIND, function, raw)
             name = base[len(prefix) :]
-            if not name:
+            if not name or any(not segment for segment in name.split(".")):
                 raise ValueError(
-                    f"Invalid module reference '{raw}': missing builtin name "
-                    f"after '{prefix}'"
+                    f"Invalid module reference '{raw}': malformed builtin name "
+                    f"after '{prefix}' (expected 'local.builtin.<name>' or "
+                    "'local.builtin.<path>.<func>')"
                 )
             return ModuleRef(kind=BUILTIN_KIND, raw=raw, name=name)
 
-    if base.startswith(API_PREFIX):
-        return _parse_api_ref(base, raw, ref, function)
-
-    if base == "local.api":
-        _reject_api_ref(ref, raw)
-        _reject_api_function(function, raw)
+    if base == "local.api" or base.startswith("local.api."):
         raise ValueError(
-            f"Invalid module reference '{raw}': missing path after 'local.api.' "
-            "(use 'local.api.<path>.<func>')"
+            f"Invalid module reference '{raw}': 'local.api.*' was removed — "
+            "ofx.api functions now resolve under the builtin namespace: "
+            "'local.builtin.<path>.<func>' (e.g. "
+            "'local.builtin.recon.targets.split_targets')"
         )
 
     if base.startswith("local."):
@@ -304,7 +269,6 @@ def parse_remote_repo(spec: str) -> ModuleRef:
 
 __all__ = [
     "API_KIND",
-    "API_PREFIX",
     "BUILTIN_KIND",
     "BUILTIN_PREFIX",
     "LOCAL_FILE_KIND",

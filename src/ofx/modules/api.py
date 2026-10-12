@@ -1,6 +1,6 @@
 """Calling ``ofx.api`` functions as workflow modules.
 
-``local.api.<path>.<func>`` module refs (and remote manifest entries with an
+``local.builtin.<path>.<func>`` module refs (and remote manifest entries with an
 ``api:`` key) resolve to a plain function under :mod:`ofx.api`. Those functions
 take ordinary keyword arguments rather than a :class:`~ofx.modules.base.ModuleContext`,
 so the runner bridges the two calling conventions:
@@ -48,7 +48,7 @@ def _segments(dotted_path: str) -> list[str]:
         raise ApiModuleError(
             "Invalid ofx.api reference: path after "
             f"'{API_ROOT}.' cannot be empty (use "
-            f"'local.api.<path>.<func>')"
+            f"'local.builtin.<path>.<func>')"
         )
     segments = path.split(".")
     if any(not segment for segment in segments):

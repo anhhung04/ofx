@@ -1,7 +1,7 @@
 """Comprehensive tests for OFX API modules.
 
 Covers the ``ofx.api`` function suites plus the module-system integration that
-exposes those functions as workflow steps (``local.api.<path>.<func>`` refs and
+exposes those functions as workflow steps (``local.builtin.<path>.<func>`` refs and
 remote manifest ``api:`` entries).
 """
 
@@ -438,7 +438,7 @@ class TestWebshellModule:
         assert "secret" in code or "{{PASSWORD}}" not in code
 
 # ---------------------------------------------------------------------------
-# ofx.api functions as workflow modules (local.api.* refs, manifest api: entries)
+# ofx.api functions as workflow modules (local.builtin.* refs, manifest api: entries)
 # ---------------------------------------------------------------------------
 
 
@@ -626,41 +626,39 @@ class TestIsCtxStyle:
 
 
 class TestApiModuleRefs:
-    """``local.api.*`` spec parsing (checked before local_named)."""
+    """``local.builtin.*`` spec parsing: dotted names parse as builtin, resolve as api."""
 
     def test_api_ref_parses_path_and_function(self):
-        from ofx.modules.refs import API_KIND, parse_module_ref
+        from ofx.modules.refs import BUILTIN_KIND, parse_module_ref
 
-        ref = parse_module_ref("local.api.recon.targets.split_targets")
-        assert ref.kind == API_KIND
-        assert ref.api_path == "recon.targets.split_targets"
-        assert ref.function == "split_targets"
-        assert ref.name is None
+        ref = parse_module_ref("local.builtin.recon.targets.split_targets")
+        assert ref.kind == BUILTIN_KIND
+        assert ref.name == "recon.targets.split_targets"
 
     def test_api_shorthand_single_segment(self):
-        from ofx.modules.refs import API_KIND, parse_module_ref
+        from ofx.modules.refs import BUILTIN_KIND, parse_module_ref
 
-        ref = parse_module_ref("local.api.opsec")
-        assert ref.kind == API_KIND
-        assert ref.api_path == "opsec"
+        ref = parse_module_ref("local.builtin.opsec")
+        assert ref.kind == BUILTIN_KIND
+        assert ref.name == "opsec"
 
     def test_api_refs_are_not_local_named(self):
         from ofx.modules.refs import API_KIND
 
-        assert parse_module_ref("local.api.recon.targets.split_targets").kind != "local_named"
+        assert parse_module_ref("local.builtin.recon.targets.split_targets").kind != "local_named"
         assert parse_module_ref("local.scan").kind != API_KIND
 
     def test_at_ref_rejected(self):
-        with pytest.raises(ValueError, match="'@<ref>' is not valid on 'local.api"):
-            parse_module_ref("local.api.recon.targets.split_targets@v1")
+        with pytest.raises(ValueError, match="'@<ref>' is only valid on remote"):
+            parse_module_ref("local.builtin.recon.targets.split_targets@v1")
 
     def test_function_suffix_rejected(self):
         with pytest.raises(ValueError, match="do not take a '::<func>' suffix"):
-            parse_module_ref("local.api.recon.targets.split_targets::run")
+            parse_module_ref("local.builtin.recon.targets.split_targets::run")
 
     def test_missing_path_rejected(self):
-        for spec in ("local.api", "local.api.", "local.api..x"):
-            with pytest.raises(ValueError, match="local.api"):
+        for spec in ("local.builtin", "local.builtin.", "local.builtin..x"):
+            with pytest.raises(ValueError, match="local.builtin"):
                 parse_module_ref(spec)
 
 
@@ -668,7 +666,7 @@ class TestRegistryApiResolution:
     """Registry resolves api refs to kind='api' specs."""
 
     def test_local_api_longest_prefix(self):
-        spec = ModuleRegistry().resolve("local.api.recon.targets.split_targets")
+        spec = ModuleRegistry().resolve("local.builtin.recon.targets.split_targets")
         assert spec.kind == "api"
         assert spec.function == "split_targets"
         assert spec.callable is not None
@@ -677,13 +675,13 @@ class TestRegistryApiResolution:
         assert spec.callable is split_targets
 
     def test_local_api_shorthand_reexport(self):
-        spec = ModuleRegistry().resolve("local.api.recon.crtsh_subdomains_sync")
+        spec = ModuleRegistry().resolve("local.builtin.recon.crtsh_subdomains_sync")
         assert spec.kind == "api"
         assert spec.callable is not None
 
     def test_unknown_api_path_raises_with_attempts(self):
         with pytest.raises(ValueError, match="Tried:"):
-            ModuleRegistry().resolve("local.api.recon.nope_not_here")
+            ModuleRegistry().resolve("local.builtin.recon.nope_not_here")
 
 
 class TestModuleRunnerApi:
@@ -692,7 +690,7 @@ class TestModuleRunnerApi:
     @pytest.mark.asyncio
     async def test_dict_return_merged_and_extra_args_filtered(self):
         invocation = ModuleInvocation(
-            name="local.api.recon.targets.split_targets",
+            name="local.builtin.recon.targets.split_targets",
             args={"values": ["1.2.3.4", "example.com"], "junk_extra": "ignored"},
         )
         runner = ModuleRunner(invocation, RunContext())
@@ -708,7 +706,7 @@ class TestModuleRunnerApi:
     @pytest.mark.asyncio
     async def test_str_return_lands_in_result_output(self):
         invocation = ModuleInvocation(
-            name="local.api.utils.str_to_dict",
+            name="local.builtin.utils.str_to_dict",
             args={"value": "{'a': 1}", "noise": "ignored"},
         )
         runner = ModuleRunner(invocation, RunContext())
@@ -721,7 +719,7 @@ class TestModuleRunnerApi:
     @pytest.mark.asyncio
     async def test_non_dict_return_lands_in_result_output(self):
         invocation = ModuleInvocation(
-            name="local.api.utils.minimum_version_required",
+            name="local.builtin.utils.minimum_version_required",
             args={"version": "1.2.0", "current_version": "1.3.0"},
         )
         runner = ModuleRunner(invocation, RunContext())
@@ -734,7 +732,7 @@ class TestModuleRunnerApi:
     @pytest.mark.asyncio
     async def test_missing_required_param_fails_and_names_param(self):
         invocation = ModuleInvocation(
-            name="local.api.recon.targets.split_targets",
+            name="local.builtin.recon.targets.split_targets",
             args={"junk_extra": "only-this"},
         )
         runner = ModuleRunner(invocation, RunContext())
@@ -750,7 +748,7 @@ class TestModuleRunnerApi:
     @pytest.mark.asyncio
     async def test_raising_api_function_fails_with_traceback(self):
         invocation = ModuleInvocation(
-            name="local.api.recon.targets.classify_target",
+            name="local.builtin.recon.targets.classify_target",
             args={"value": "not-a-target"},
         )
         runner = ModuleRunner(invocation, RunContext())
@@ -775,9 +773,9 @@ class TestModuleRunnerApi:
         with pytest.raises(ApiModuleError, match="ctx"):
             invoke_api_callable(probe, {"timeout": 5})
 
-        spec = ModuleSpec(kind="api", name="local.api.fake.probe", callable=probe)
+        spec = ModuleSpec(kind="api", name="local.builtin.fake.probe", callable=probe)
         module_result = ModuleRunner(
-            ModuleInvocation(name="local.api.fake.probe", args={"timeout": 5}),
+            ModuleInvocation(name="local.builtin.fake.probe", args={"timeout": 5}),
             RunContext(),
         )._invoke_udf(spec)
         assert module_result.exit_code == 0
@@ -800,7 +798,7 @@ class TestModuleRunnerApi:
             return ModuleSpec(kind="api", name=spec, callable=probe)
 
         monkeypatch.setattr(registry_module.ModuleRegistry, "resolve", fake_resolve)
-        invocation = ModuleInvocation(name="local.api.fake.probe", args={"junk": 1})
+        invocation = ModuleInvocation(name="local.builtin.fake.probe", args={"junk": 1})
         runner = ModuleRunner(invocation, RunContext())
         result = await runner.run()
         assert result.status == RunnerStatus.COMPLETED
@@ -941,7 +939,7 @@ class TestRemoteApiManifestEntries:
 class TestApiRemoteWrapper:
     """The streaming wrapper for api steps imports the function by path."""
 
-    def _api_step(self, module: str = "local.api.recon.targets.split_targets") -> Step:
+    def _api_step(self, module: str = "local.builtin.recon.targets.split_targets") -> Step:
         return Step(module=module, run_with={})
 
     def test_is_udf_module_step_covers_api_refs(self):
@@ -966,7 +964,7 @@ class TestApiRemoteWrapper:
 
     def test_wrapper_shorthand_path_imports_package_level_name(self, tmp_path):
         wrapper = build_udf_step_source(
-            Step(module="local.api.recon.crtsh_subdomains_sync", run_with={}),
+            Step(module="local.builtin.recon.crtsh_subdomains_sync", run_with={}),
             workflow_dir=tmp_path,
             inputs={},
             secrets={},
@@ -1013,7 +1011,7 @@ class TestApiRemoteWrapper:
     def test_wrapper_serializes_non_dict_return_as_result(self, tmp_path):
         wrapper = build_udf_step_source(
             Step(
-                module="local.api.utils.minimum_version_required",
+                module="local.builtin.utils.minimum_version_required",
                 run_with={},
             ),
             workflow_dir=tmp_path,
@@ -1059,7 +1057,7 @@ class TestApiPayloadBundling:
             return zf.namelist()
 
     def test_payload_bundles_ofx_api_module_detected_from_wrapper(self, tmp_path):
-        step = Step(module="local.api.recon.targets.split_targets", run_with={})
+        step = Step(module="local.builtin.recon.targets.split_targets", run_with={})
         payload = build_module_step_payload(
             step,
             workflow_dir=tmp_path,
@@ -1094,7 +1092,7 @@ class TestApiPayloadBundling:
         assert any(name.startswith("ofx/api/opsec") for name in members)
 
     def test_obfuscated_payload_hides_api_import(self, tmp_path):
-        step = Step(module="local.api.recon.targets.split_targets", run_with={})
+        step = Step(module="local.builtin.recon.targets.split_targets", run_with={})
         payload = build_module_step_payload(
             step,
             workflow_dir=tmp_path,
@@ -1111,12 +1109,12 @@ class TestSessionApiStepBundling:
     """Api steps are staged to remote sessions like UDFs."""
 
     def test_iter_python_step_bundles_stages_api_step(self, tmp_path):
-        step = Step(module="local.api.recon.targets.split_targets", run_with={})
+        step = Step(module="local.builtin.recon.targets.split_targets", run_with={})
         bundles = list(iter_python_step_bundles([step], workflow_dir=tmp_path))
         assert [(idx, name) for idx, name, _ in bundles] == [(0, ".ofx_step_0.py")]
 
     def test_session_script_routes_api_step_to_python(self, tmp_path):
-        step = Step(module="local.api.recon.targets.split_targets", run_with={})
+        step = Step(module="local.builtin.recon.targets.split_targets", run_with={})
         script = build_session_script([step], session_id="s1", work_dir="/tmp/s")
         assert '"$__OFX_PY_BIN" ".ofx_step_0.py"' in script
 
