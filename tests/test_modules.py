@@ -68,6 +68,8 @@ class TestModuleRegistry:
             "merge_lists",
             "normalize_targets",
             "python",
+            "require_artifacts",
+            "scan_tool",
             "shell",
         )
 

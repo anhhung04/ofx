@@ -23,8 +23,8 @@ jobs:
   tls-scan:
     name: TLS Analysis
     outputs:
-      tls_files: '{{ steps.report.outputs.tls_files }}'
-      scanner_count: '{{ steps.report.outputs.scanner_count }}'
+      tls_files: '{{ steps.report.outputs.produced_files }}'
+      scanner_count: '{{ steps.report.outputs.produced_count }}'
     steps:
     - name: tlsx
       module: local.builtin.shell
@@ -54,4 +54,10 @@ jobs:
       timeout: 60
       retry: 2
     - name: report
-      module: local.tls_report
+      module: local.builtin.require_artifacts
+      with:
+        files:
+        - tls_certs.jsonl
+        - sslscan_results.xml
+        - testssl_results.json
+        label: TLS scanner

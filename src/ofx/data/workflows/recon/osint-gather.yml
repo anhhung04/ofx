@@ -24,7 +24,7 @@ jobs:
     outputs:
       harvester_report: '{{ env.OFX_RUN_DIR }}/harvester_results.html'
       h8mail_report: '{{ env.OFX_RUN_DIR }}/h8mail_results.txt'
-      osint_files: "{{ steps['email-report'].outputs.osint_files }}"
+      osint_files: "{{ steps['email-report'].outputs.produced_files }}"
     steps:
     - name: theharvester
       module: local.builtin.shell
@@ -43,7 +43,12 @@ jobs:
       log-command: '{{ inputs.log_command }}'
       timeout: 30
     - name: email-report
-      module: local.osint_report
+      module: local.builtin.require_artifacts
+      with:
+        files:
+        - harvester_results.html
+        - h8mail_results.txt
+        label: OSINT provider
   whois-lookup:
     name: WHOIS & Domain Info
     steps:

@@ -176,6 +176,8 @@ Parsing order: `::` splits the function first, then `@` splits the ref; `.py`-su
 | `merge_lists` | `module: local.builtin.merge_lists` | `files` — artifact files to merge (list or comma-separated string; relative paths resolve against `output_dir`/`OFX_RUN_DIR`), `output` — merged file, `output_dir`, `fail_if` — `all_missing` (default), `any_missing` or `never`, `sort` — default `true`, `required` — subset of `files` that must exist |
 | `normalize_targets` | `module: local.builtin.normalize_targets` | `target` — file path, literal, or comma list, `output` — file name for literal targets (default `targets_normalized.txt`), `output_dir` |
 | `classify_targets` | `module: local.builtin.classify_targets` | `target` — single target or file of mixed targets, `source_type` — `auto` (default), `file` or `target` |
+| `scan_tool` | `module: local.builtin.scan_tool` | `tool` — binary on PATH, `target` — substitutes `{target}` in `args`, `args` — argv elements (`[flag, value]` pairs or bare flags), `output` — report file, `output_arg` — flag taking the output path (or `capture_stdout: true`), `extra_env`, `results_output_key` (default `results_file`) |
+| `require_artifacts` | `module: local.builtin.require_artifacts` | `files` — artifact file names under `output_dir`/`OFX_RUN_DIR`, `min_count` (default 1), `label` — producer name in messages; publishes `produced_files`, `produced_count` |
 
 `module: shell` and `module: builtin.shell` are equivalent; likewise `module: python` and `module: builtin.python`, and the bare name of any builtin resolves too.
 
@@ -197,6 +199,35 @@ Missing inputs are an error by default (`fail_if: all_missing`) so an empty merg
 **`normalize_targets` module** — turn any target input into a per-line target file and publish `target_file` plus `count`. A target that already is a file is published in place (its absolute path) without copying; literals are written to `output` under `output_dir`/`OFX_RUN_DIR`. An empty target raises.
 
 **`classify_targets` module** — classify targets into `domain`/`subdomain`/`cidr`/`ip`/`url`/`unknown`, writing `targets_<type>.txt` per group under `OFX_RUN_DIR`, and publish `target_type`, `counts` (JSON) and `target_files` (JSON). With `source_type: auto` a value that is not an existing file but ends in a known file suffix (`targets.txt`) or is not a valid target itself is rejected as a mistyped path; pass `source_type: target` to force literal handling (CIDRs and URLs are always accepted as literals).
+
+**`scan_tool` module** — run one scanner binary and publish its report file, replacing a per-tool wrapper module. `args` is the argv after the binary name; an element written as a `[flag, value]` pair is split into two argv entries, and `{target}`/`{output}` substitute the target and report path. Use `capture_stdout: true` for tools that write only to stdout (tplmap-style); otherwise `output_arg` names the flag that takes the report path (`-o`, `--output-dir`, …).
+
+```yaml
+steps:
+  - name: dalfox
+    module: local.builtin.scan_tool
+    with:
+      tool: dalfox
+      target: '{{ inputs.target }}'
+      args:
+        - url
+        - '{target}'
+        - --silence
+        - ['--format', 'jsonl']
+      output: dalfox_results.jsonl
+      output_arg: '-o'
+```
+
+**`require_artifacts` module** — fail when fewer than `min_count` of the expected artifact files exist and are non-empty, so an empty scan can never be mistaken for "no findings". Publishes `produced_files` and `produced_count`:
+
+```yaml
+steps:
+  - name: report
+    module: local.builtin.require_artifacts
+    with:
+      files: [tls_certs.jsonl, sslscan_results.xml, testssl_results.json]
+      label: TLS scanner
+```
 
 **Shell module** — run a command with `cmd`. The step-level `shell` and `working-directory` fields control the interpreter and cwd:
 

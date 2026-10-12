@@ -554,3 +554,140 @@ class TestBuiltinDispatch:
         assert result.status == RunnerStatus.FAILED
         assert result.error is not None
         assert "OFX_RUN_DIR is not set" in result.error
+
+
+class TestScanTool:
+    def test_requires_tool_and_target(self, tmp_path):
+        from ofx.modules.builtins import scan
+
+        with pytest.raises(ValueError, match="tool is required"):
+            scan.run(_ctx(tmp_path, args={"target": "https://x", "args": [], "output": "o.txt", "output_arg": "-o"}))
+        with pytest.raises(ValueError, match="target is required"):
+            scan.run(_ctx(tmp_path, args={"tool": "echo", "args": [], "output": "o.txt", "output_arg": "-o"}))
+
+    def test_missing_binary_fails_explicitly(self, tmp_path):
+        from ofx.modules.builtins import scan
+
+        with pytest.raises(RuntimeError, match="not installed"):
+            scan.run(_ctx(tmp_path, args={
+                "tool": "definitely-not-a-real-tool-xyz",
+                "target": "https://x",
+                "args": [],
+                "output": "o.txt",
+                "output_arg": "-o",
+            }))
+
+    def test_placeholder_expansion_and_output_arg(self, tmp_path):
+        from ofx.modules.builtins import scan
+
+        outputs = _Outputs()
+        scan.run(_ctx(tmp_path, args={
+            "tool": "printf",
+            "target": "https://example.com",
+            "args": [["%s", "{target}"]],
+            "output": "report.txt",
+            "output_arg": "--out",
+        }, outputs=outputs))
+
+        assert outputs.values == {"results_file": str(tmp_path / "report.txt")}
+
+    def test_capture_stdout_writes_output_file(self, tmp_path):
+        from ofx.modules.builtins import scan
+
+        outputs = _Outputs()
+        scan.run(_ctx(tmp_path, args={
+            "tool": "echo",
+            "target": "https://example.com",
+            "args": ["{target}"],
+            "output": "stdout.txt",
+            "capture_stdout": True,
+        }, outputs=outputs))
+
+        out = tmp_path / "stdout.txt"
+        assert out.read_text().strip() == "https://example.com"
+        assert outputs.values == {"results_file": str(out)}
+
+    def test_capture_stdout_without_output_arg_accepted(self, tmp_path):
+        from ofx.modules.builtins import scan
+
+        # No output_arg: capture_stdout path must not demand one
+        scan.run(_ctx(tmp_path, args={
+            "tool": "true",
+            "target": "https://example.com",
+            "args": [],
+            "output": "empty.txt",
+            "capture_stdout": True,
+        }))
+        assert (tmp_path / "empty.txt").read_text() == ""
+
+    def test_nonzero_exit_surfaces_tool_output(self, tmp_path):
+        from ofx.modules.builtins import scan
+
+        with pytest.raises(RuntimeError, match="exited 1"):
+            scan.run(_ctx(tmp_path, args={
+                "tool": "false",
+                "target": "https://example.com",
+                "args": [],
+                "output": "o.txt",
+                "output_arg": "-o",
+            }))
+
+    def test_custom_results_output_key(self, tmp_path):
+        from ofx.modules.builtins import scan
+
+        outputs = _Outputs()
+        scan.run(_ctx(tmp_path, args={
+            "tool": "printf",
+            "target": "https://example.com",
+            "args": [["%s", "{target}"]],
+            "output": "sqli",
+            "output_arg": "--output-dir",
+            "results_output_key": "results_dir",
+        }, outputs=outputs))
+
+        assert outputs.values == {"results_dir": str(tmp_path / "sqli")}
+
+
+class TestRequireArtifacts:
+    def test_fails_when_nothing_produced(self, tmp_path):
+        from ofx.modules.builtins import artifacts
+
+        with pytest.raises(RuntimeError, match="every scanner failed"):
+            artifacts.run(_ctx(tmp_path, args={"files": ["a.txt", "b.txt"], "label": "scanner"}))
+
+    def test_empty_files_count_as_missing(self, tmp_path):
+        from ofx.modules.builtins import artifacts
+
+        (tmp_path / "empty.txt").write_text("")
+        with pytest.raises(RuntimeError, match="every scanner failed"):
+            artifacts.run(_ctx(tmp_path, args={"files": ["empty.txt"], "label": "scanner"}))
+
+    def test_passes_with_one_produced(self, tmp_path):
+        from ofx.modules.builtins import artifacts
+
+        (tmp_path / "a.txt").write_text("data\n")
+        outputs = _Outputs()
+        artifacts.run(_ctx(tmp_path, args={
+            "files": ["a.txt", "b.txt"],
+            "label": "provider",
+        }, outputs=outputs))
+
+        assert outputs.values["produced_count"] == 1
+        assert outputs.values["produced_files"] == str(tmp_path / "a.txt")
+
+    def test_min_count_enforced(self, tmp_path):
+        from ofx.modules.builtins import artifacts
+
+        (tmp_path / "a.txt").write_text("data\n")
+        with pytest.raises(RuntimeError, match="fewer than 2"):
+            artifacts.run(_ctx(tmp_path, args={"files": ["a.txt", "b.txt"], "min_count": 2}))
+
+    def test_output_dir_override(self, tmp_path):
+        from ofx.modules.builtins import artifacts
+
+        other = tmp_path / "elsewhere"
+        other.mkdir()
+        (other / "x.txt").write_text("data\n")
+        outputs = _Outputs()
+        artifacts.run(_ctx(tmp_path, args={"files": ["x.txt"], "output_dir": str(other)}, outputs=outputs))
+        assert outputs.values["produced_files"] == str(other / "x.txt")
