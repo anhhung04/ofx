@@ -7,8 +7,8 @@ import io
 import zipfile
 from dataclasses import dataclass
 
-from .analyzer import detect_ofx_imports
-from .collector import collect_modules
+from .analyzer import detect_ofx_import_paths
+from .collector import collect_modules, collect_modules_granular
 from .obfuscator import obfuscate_sources as obfuscate_sources_fn
 
 __all__ = ["BundleResult", "build_bundle"]
@@ -61,8 +61,10 @@ def build_bundle(
 
     Args:
         script: Python source code that may import ``ofx.api.*`` modules.
-        extra_modules: Additional ``ofx.api`` module names to force-include
-            beyond what the AST detects.
+        extra_modules: Additional ``ofx.api`` module names or dotted paths to
+            force-include beyond what the AST detects.  Top-level names
+            (e.g. ``"recon"``) pack the whole package; dotted paths
+            (e.g. ``"recon.targets"``) are collected file-granular.
         source_name: Label used in error messages (e.g. a filename).
         obfuscate_sources: When ``True``, compile every collected ``.py`` file
             to marshalled bytecode before zipping.  The ``.py`` files inside
@@ -70,6 +72,13 @@ def build_bundle(
             source cannot be read after extraction.  Useful when you want to
             protect your tooling from other parties (e.g. opposing teams in a
             cyber-range contest) without changing import semantics.
+
+    When the script (or ``extra_modules``) references a deep dotted path
+    such as ``ofx.api.recon.targets``, the bundle is collected
+    file-granular: only the leaf module and lazy ``__init__`` stubs for the
+    packages on the path are packed, plus the transitive closure of
+    ``ofx.api`` imports.  Scripts using only bare package names
+    (``import ofx.api.recon``) keep the whole-package packing.
 
     Returns:
         A :class:`BundleResult` with the ready-to-deliver bootstrap string.
@@ -80,17 +89,21 @@ def build_bundle(
         ObfuscationError: If source obfuscation is enabled and any file fails
             to compile.
     """
-    modules = detect_ofx_imports(
+    paths = detect_ofx_import_paths(
         script, extra_modules=extra_modules, source_name=source_name
     )
-    files = collect_modules(modules)
+    modules = frozenset(path.split(".")[0] for path in paths)
+    if any(len(path.split(".")) > 1 for path in paths):
+        files = collect_modules_granular(paths)
+    else:
+        files = collect_modules(modules)
     if obfuscate_sources:
         files = obfuscate_sources_fn(files)
     zip_bytes = _build_zip(files)
     b64_data = base64.b64encode(zip_bytes).decode()
     bootstrap = _BOOTSTRAP_TEMPLATE.format(b64_data=b64_data, script=script)
     return BundleResult(
-        modules=frozenset(modules),
+        modules=modules,
         script=script,
         bootstrap=bootstrap,
         size_bytes=len(bootstrap.encode()),

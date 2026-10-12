@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+import base64
 import io
+import os
+import re
+import subprocess
 import sys
 import textwrap
+import zipfile
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+
 
 class TestDetectOfxImports:
     """detect_ofx_imports() covers all four import patterns."""
@@ -74,6 +80,86 @@ class TestDetectOfxImports:
         result = self._detect("")
         assert result == set()
 
+class TestDetectOfxImportPaths:
+    """detect_ofx_import_paths() returns dotted paths relative to ofx.api."""
+
+    def _detect(self, source: str, **kw):
+        from ofx.api.bundle.analyzer import detect_ofx_import_paths
+
+        return detect_ofx_import_paths(textwrap.dedent(source), **kw)
+
+    def test_plain_import(self):
+        result = self._detect("import ofx.api.opsec")
+        assert result == {"opsec"}
+
+    def test_plain_import_deep(self):
+        result = self._detect("import ofx.api.opsec.proxy")
+        assert result == {"opsec.proxy"}
+
+    def test_from_api_import(self):
+        result = self._detect("from ofx.api import opsec, c2")
+        assert result == {"opsec", "c2"}
+
+    def test_from_submodule_import(self):
+        result = self._detect("from ofx.api.evasion import xor_bytes")
+        assert result == {"evasion"}
+
+    def test_from_deep_submodule_import(self):
+        result = self._detect("from ofx.api.evasion.encoding import xor_bytes")
+        assert result == {"evasion.encoding"}
+
+    def test_acceptance_split_targets(self):
+        """The granular acceptance case resolves to a single leaf path."""
+        result = self._detect("from ofx.api.recon.targets import split_targets")
+        assert result == {"recon.targets"}
+
+    def test_nested_package_path(self):
+        result = self._detect(
+            "from ofx.api.exploitation.shellcode.connectors import get_registry"
+        )
+        assert result == {"exploitation.shellcode.connectors"}
+
+    def test_bare_package_from_import(self):
+        """from ofx.api.recon import X keeps recon bare (attribute use unknown)."""
+        result = self._detect("from ofx.api.recon import split_targets")
+        assert result == {"recon"}
+
+    def test_unknown_module_silently_dropped(self):
+        result = self._detect("from ofx.api import totally_unknown_module")
+        assert result == set()
+
+    def test_unknown_deep_path_dropped(self):
+        result = self._detect("from ofx.api.recon.totally_unknown import x")
+        assert result == set()
+
+    def test_extra_dotted_path_honoured(self):
+        result = self._detect("x = 1", extra_modules=["recon.targets"])
+        assert result == {"recon.targets"}
+
+    def test_extra_with_ofx_api_prefix(self):
+        result = self._detect("x = 1", extra_modules=["ofx.api.recon.targets"])
+        assert result == {"recon.targets"}
+
+    def test_extra_top_level_name(self):
+        result = self._detect("x = 1", extra_modules=["c2"])
+        assert result == {"c2"}
+
+    def test_extra_invalid_warns(self, recwarn):
+        self._detect("x = 1", extra_modules=["nonexistent_module"])
+        assert any("nonexistent_module" in str(w.message) for w in recwarn.list)
+
+    def test_backward_detect_ofx_imports_wrapper(self):
+        from ofx.api.bundle.analyzer import detect_ofx_imports
+
+        assert detect_ofx_imports("import ofx.api.opsec.proxy") == {"opsec"}
+        assert detect_ofx_imports("from ofx.api import opsec, c2") == {"opsec", "c2"}
+
+    def test_syntax_error_raises_analysis_error(self):
+        from ofx.api.bundle.analyzer import AnalysisError
+
+        with pytest.raises(AnalysisError):
+            self._detect("def broken(")
+
 class TestCollectModules:
     def test_collect_opsec(self):
         from ofx.api.bundle.collector import collect_modules
@@ -112,6 +198,142 @@ class TestCollectModules:
 
         files = collect_modules(set())
         assert files["ofx/__init__.py"] == _STUB_INIT
+
+class TestCollectModulesGranular:
+    """collect_modules_granular() packs leaf modules with lazy stubs."""
+
+    def test_split_targets_only(self):
+        from ofx.api.bundle.collector import collect_modules_granular
+
+        files = collect_modules_granular({"recon.targets"})
+        assert "ofx/__init__.py" in files
+        assert "ofx/api/__init__.py" in files
+        assert "ofx/api/_compat.py" in files
+        assert "ofx/api/recon/targets.py" in files
+        # Lazy stub, not the eager real __init__.
+        assert "ofx/api/recon/__init__.py" in files
+        # Sibling modules must NOT be packed.
+        for sibling in ("osint", "portscan", "web"):
+            assert not any(f"/{sibling}.py" in k for k in files), sibling
+
+    def test_split_targets_stub_mapping(self):
+        from ofx.api.bundle.collector import collect_modules_granular
+
+        files = collect_modules_granular({"recon.targets"})
+        stub = files["ofx/api/recon/__init__.py"].decode()
+        assert "__getattr__" in stub  # PEP 562
+        assert "__dir__" in stub
+        assert "_importlib" in stub
+        # Exported name maps to its submodule; direct submodules map to self.
+        assert "'split_targets': 'targets'" in stub
+        assert "'targets': 'targets'" in stub
+        assert "'osint': 'osint'" in stub
+        assert "__all__" in stub
+        assert "'split_targets'" in stub  # __all__ preserved
+        # Unknown names raise AttributeError.
+        assert "has no attribute" in stub
+
+    def test_api_root_stub_is_lazy(self):
+        from ofx.api.bundle.collector import collect_modules_granular
+
+        files = collect_modules_granular({"recon.targets"})
+        root = files["ofx/api/__init__.py"].decode()
+        assert "__getattr__" in root
+        # The eager real __init__ imports every subpackage; the stub maps them.
+        assert "'recon': 'recon'" in root
+        assert "'opsec': 'opsec'" in root
+
+    def test_bare_package_kept_whole(self):
+        from ofx.api.bundle.collector import collect_modules_granular
+
+        files = collect_modules_granular({"recon"})
+        names = {k for k in files if k.startswith("ofx/api/recon")}
+        assert any(k.endswith("/osint.py") for k in names)
+        assert any(k.endswith("/portscan.py") for k in names)
+        assert any(k.endswith("/web.py") for k in names)
+        assert any(k.endswith("/targets.py") for k in names)
+        # Real eager __init__ preserved for the whole package.
+        init = files["ofx/api/recon/__init__.py"].decode()
+        assert "from .osint import" in init
+
+    def test_nested_packages_get_stubs(self):
+        from ofx.api.bundle.collector import collect_modules_granular
+
+        files = collect_modules_granular({"exploitation.exploit.connectors"})
+        # Every package on the path is a pure re-exporter -> lazy stubs.
+        for pkg in (
+            "ofx/api/exploitation/__init__.py",
+            "ofx/api/exploitation/exploit/__init__.py",
+            "ofx/api/exploitation/exploit/connectors/__init__.py",
+        ):
+            stub = files[pkg].decode()
+            assert "__getattr__" in stub, pkg
+        # exploitation maps its subpackages; exploit maps base/runner modules.
+        exploitation_stub = files["ofx/api/exploitation/__init__.py"].decode()
+        assert "'exploit': 'exploit'" in exploitation_stub
+        assert "'shellcode': 'shellcode'" in exploitation_stub
+        assert "'webshell': 'webshell'" in exploitation_stub
+        exploit_stub = files["ofx/api/exploitation/exploit/__init__.py"].decode()
+        assert "'base': 'base'" in exploit_stub
+        assert "'runner': 'runner'" in exploit_stub
+        # Namespaces dirs' own modules are not dragged in.
+        assert not any("/shellcode/" in k for k in files)
+        assert not any("/webshell/" in k for k in files)
+
+    def test_side_effect_package_kept_whole(self):
+        from ofx.api.bundle.collector import collect_modules_granular
+
+        files = collect_modules_granular({"exploitation.shellcode.connectors"})
+        # connectors/__init__ builds a global registry at import time.
+        init = files[
+            "ofx/api/exploitation/shellcode/connectors/__init__.py"
+        ].decode()
+        assert "ConnectorRegistry" in init
+        assert "__getattr__" not in init
+        # shellcode defines local API too -> whole.
+        shellcode_init = files["ofx/api/exploitation/shellcode/__init__.py"].decode()
+        assert "__getattr__" not in shellcode_init
+        assert "OSShellcodes" in shellcode_init
+        # Unrelated exploitation modules are not dragged in.
+        assert not any("/exploit/" in k for k in files)
+
+    def test_transitive_closure_across_packages(self):
+        from ofx.api.bundle.collector import collect_modules_granular
+
+        files = collect_modules_granular({"search.fofa"})
+        assert "ofx/api/search/fofa.py" in files
+        # fofa.py imports ofx.api.credential_config and ofx.api.http.
+        assert "ofx/api/credential_config.py" in files
+        assert "ofx/api/http/__init__.py" in files
+        # http is packed whole (locally-defined API).
+        assert any(k.startswith("ofx/api/http/") for k in files)
+        # Sibling search modules remain excluded.
+        assert "ofx/api/search/shodan.py" not in files
+        assert "ofx/api/search/zoomeye.py" not in files
+
+    def test_transitive_closure_flat_module(self):
+        from ofx.api.bundle.collector import collect_modules_granular
+
+        files = collect_modules_granular({"lateral"})
+        assert "ofx/api/lateral.py" in files
+        # lateral.py imports ofx.api.post.registry (+ its TYPE_CHECKING dep).
+        assert "ofx/api/post/registry.py" in files
+        assert "ofx/api/post/base.py" in files
+        # post gets a lazy stub; unrelated runners are not dragged in.
+        stub = files["ofx/api/post/__init__.py"].decode()
+        assert "__getattr__" in stub
+        assert not any("/runners/" in k for k in files)
+
+    def test_empty_set_returns_root_stubs_only(self):
+        from ofx.api.bundle.collector import collect_modules_granular
+
+        files = collect_modules_granular(set())
+        assert set(files.keys()) == {
+            "ofx/__init__.py",
+            "ofx/api/__init__.py",
+            "ofx/api/_compat.py",
+        }
+        assert "__getattr__" in files["ofx/api/__init__.py"].decode()
 
 class TestBuildBundle:
     def test_build_bundle_no_imports(self):
@@ -163,6 +385,173 @@ class TestBuildBundle:
         result = build_bundle("x = 1")
         with pytest.raises(AttributeError):
             result.script = "changed"
+
+class TestBuildBundleGranular:
+    """End-to-end file-granular bundling (acceptance cases)."""
+
+    _B64_RE = re.compile(r"_b64\.b64decode\('([^']+)'\)")
+
+    @staticmethod
+    def _zip_bytes(bootstrap: str) -> bytes:
+        match = TestBuildBundleGranular._B64_RE.search(bootstrap)
+        assert match, "bootstrap should embed the base64 zip archive"
+        return base64.b64decode(match.group(1))
+
+    def _members(self, result) -> list[str]:
+        with zipfile.ZipFile(io.BytesIO(self._zip_bytes(result.bootstrap))) as zf:
+            return zf.namelist()
+
+    def _extract(self, result, tmp_path: Path) -> Path:
+        extract_dir = tmp_path / "extract"
+        extract_dir.mkdir()
+        with zipfile.ZipFile(io.BytesIO(self._zip_bytes(result.bootstrap))) as zf:
+            zf.extractall(extract_dir)
+        return extract_dir
+
+    @staticmethod
+    def _run_code(extract_dir: Path, code: str) -> subprocess.CompletedProcess[str]:
+        """Run *code* in a fresh subprocess with PYTHONPATH=extract_dir."""
+        env = dict(os.environ)
+        env["PYTHONPATH"] = str(extract_dir)
+        return subprocess.run(
+            [sys.executable, "-S", "-c", code],
+            capture_output=True,
+            text=True,
+            cwd=str(extract_dir),
+            env=env,
+        )
+
+    def test_split_targets_bundle_packs_only_leaf(self):
+        from ofx.api.bundle.builder import build_bundle
+
+        result = build_bundle("from ofx.api.recon.targets import split_targets")
+        members = self._members(result)
+        assert "ofx/api/recon/targets.py" in members
+        assert "ofx/api/recon/__init__.py" in members
+        assert "ofx/api/__init__.py" in members
+        assert "ofx/__init__.py" in members
+        assert "ofx/api/_compat.py" in members
+        # Siblings must NOT be packed.
+        for sibling in ("osint", "portscan", "web"):
+            assert not any(f"/{sibling}.py" in m for m in members), sibling
+        # Lazy stubs, not the eager real __init__ files.
+        with zipfile.ZipFile(io.BytesIO(self._zip_bytes(result.bootstrap))) as zf:
+            recon_init = zf.read("ofx/api/recon/__init__.py").decode()
+            api_init = zf.read("ofx/api/__init__.py").decode()
+        assert "__getattr__" in recon_init
+        assert "__getattr__" in api_init
+
+    def test_bare_package_bundle_packs_whole(self):
+        from ofx.api.bundle.builder import build_bundle
+
+        result = build_bundle("import ofx.api.recon")
+        members = self._members(result)
+        for sibling in ("osint", "portscan", "web", "targets"):
+            assert any(f"/{sibling}.py" in m for m in members), sibling
+
+    def test_all_import_forms_execute_from_extracted_bundle(self, tmp_path):
+        """All four import forms + package-attribute form work remotely."""
+        from ofx.api.bundle.builder import build_bundle
+
+        result = build_bundle("from ofx.api.recon.targets import split_targets")
+        extract_dir = self._extract(result, tmp_path)
+        expected = (
+            "{'domain': ['a.com'], 'subdomain': [], 'cidr': [], 'ip': [], "
+            "'url': [], 'unknown': []}"
+        )
+
+        forms = [
+            # 1: plain import of the deep module.
+            (
+                "import ofx.api.recon.targets\n"
+                "print(ofx.api.recon.targets.split_targets(['a.com']))"
+            ),
+            # 2: from ofx.api import <package>.
+            (
+                "from ofx.api import recon\n"
+                "print(recon.targets.split_targets(['a.com']))"
+            ),
+            # 3: from <package> import <exported name> (package-attribute form).
+            (
+                "from ofx.api.recon import split_targets\n"
+                "print(split_targets(['a.com']))"
+            ),
+            # 4: from deep module import <name>.
+            (
+                "from ofx.api.recon.targets import split_targets\n"
+                "print(split_targets(['a.com']))"
+            ),
+            # + package-attribute access after a plain package import.
+            (
+                "import ofx.api.recon\n"
+                "print(ofx.api.recon.split_targets(['a.com']))"
+            ),
+        ]
+        for code in forms:
+            proc = self._run_code(extract_dir, code)
+            assert proc.returncode == 0, f"form failed:\n{code}\n{proc.stderr}"
+            assert proc.stdout.strip() == expected, f"form:\n{code}\n{proc.stdout}"
+
+    def test_subprocess_uses_extracted_ofx(self, tmp_path):
+        """PYTHONPATH=extract_dir must win over any installed ofx."""
+        from ofx.api.bundle.builder import build_bundle
+
+        result = build_bundle("from ofx.api.recon.targets import split_targets")
+        extract_dir = self._extract(result, tmp_path)
+        proc = self._run_code(
+            extract_dir,
+            "import ofx\n"
+            f"assert ofx.__file__.startswith({str(extract_dir)!r}), ofx.__file__\n"
+            "from ofx.api.recon.targets import split_targets\n"
+            "print('ok')",
+        )
+        assert proc.returncode == 0, proc.stderr
+        assert proc.stdout.strip() == "ok"
+
+    def test_transitive_dependency_bundled(self):
+        """A packed module importing another ofx.api module pulls it in."""
+        from ofx.api.bundle.builder import build_bundle
+
+        result = build_bundle("from ofx.api.search.fofa import Fofa")
+        members = self._members(result)
+        assert "ofx/api/search/fofa.py" in members
+        # fofa.py's transitive ofx.api imports are bundled.
+        assert "ofx/api/credential_config.py" in members
+        assert "ofx/api/http/__init__.py" in members
+        # Siblings not referenced stay out.
+        assert "ofx/api/search/shodan.py" not in members
+
+    def test_obfuscated_granular_bundle_executes(self, tmp_path):
+        """obfuscate_sources=True still works on a granular bundle."""
+        from ofx.api.bundle.builder import build_bundle
+
+        script = "from ofx.api.recon.targets import split_targets\n"
+        result = build_bundle(script, obfuscate_sources=True)
+        members = self._members(result)
+        assert "ofx/api/recon/targets.py" in members
+        extract_dir = self._extract(result, tmp_path)
+        proc = self._run_code(
+            extract_dir,
+            "from ofx.api.recon.targets import split_targets\n"
+            "print(split_targets(['a.com']))",
+        )
+        assert proc.returncode == 0, proc.stderr
+        assert proc.stdout.strip() == (
+            "{'domain': ['a.com'], 'subdomain': [], 'cidr': [], 'ip': [], "
+            "'url': [], 'unknown': []}"
+        )
+
+    def test_obfuscated_bundle_hides_split_targets_source(self):
+        from ofx.api.bundle.builder import build_bundle
+
+        result = build_bundle(
+            "from ofx.api.recon.targets import split_targets",
+            obfuscate_sources=True,
+        )
+        with zipfile.ZipFile(io.BytesIO(self._zip_bytes(result.bootstrap))) as zf:
+            raw = zf.read("ofx/api/recon/targets.py")
+        assert b"def split_targets" not in raw
+        assert b"marshal" in raw
 
 class TestObfuscateBootstrap:
     def test_obfuscated_is_valid_python(self):
