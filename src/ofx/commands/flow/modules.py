@@ -166,6 +166,9 @@ def list_modules(
     for name in ModuleRegistry().builtin_names:
         table.add_row("builtin", name, "built-in")
 
+    for name in ModuleRegistry().tool_names:
+        table.add_row("tool", name, "built-in")
+
     for label, target in _iter_cached_clones():
         name = label.replace("/", ".")
         table.add_row("remote", name, str(target))

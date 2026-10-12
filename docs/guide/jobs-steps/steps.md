@@ -160,12 +160,13 @@ Every accepted `module:` form:
 | `python`, `builtin.python`, `local.builtin.python` | Builtin `python` module |
 | `<file>.py`, `<file>.py::<func>` | Workflow-local UDF file (relative to the workflow directory, then the cwd); `<func>` defaults to `run` |
 | `local.<name>` | Workflow-local module at `<workflow_dir>/modules/<name>.py` (function defaults to `run`) |
+| `local.tool.<name>` | Declared tool module (external binary wrapper: `dalfox`, `dirsearch`, `ffuf`, `sqlmap`, `tplmap`) |
 | `local.builtin.<path>.<func>` | Call an `ofx.api` function: imports `ofx.api.<path>` and calls `<func>` with the step's `with:` args as keyword arguments (no UDF file needed) |
 | `<owner>.<repo>.<module>` | Remote GitHub module: repo `github.com/<owner>/<repo>`, manifest entry `modules/<module>.py` (or an `api:` entry), default branch |
 | `<owner>.<repo>.<module>@<ref>` | Same, pinned to git tag/branch/commit `<ref>` |
 | any namespaced form + `::<func>` | Non-default entry function |
 
-Parsing order: `::` splits the function first, then `@` splits the ref; `.py`-suffixed specs are UDF files; `local.builtin.*`/`builtin.*`/bare names are builtins — a dotted builtin name that isn't a registered builtin is resolved as an `ofx.api` function (`local.builtin.<path>.<func>`); `local.*` is a workflow-local module; three-or-more dotted segments are remote.
+Parsing order: `::` splits the function first, then `@` splits the ref; `.py`-suffixed specs are UDF files; `local.builtin.*`/`builtin.*`/bare names are builtins — a dotted builtin name that isn't a registered builtin is resolved as an `ofx.api` function (`local.builtin.<path>.<func>`); `local.tool.*` is a declared tool module; `local.*` is a workflow-local module; three-or-more dotted segments are remote.
 
 ### Built-in modules
 
@@ -176,7 +177,6 @@ Parsing order: `::` splits the function first, then `@` splits the ref; `.py`-su
 | `merge_lists` | `module: local.builtin.merge_lists` | `files` — artifact files to merge (list or comma-separated string; relative paths resolve against `output_dir`/`OFX_RUN_DIR`), `output` — merged file, `output_dir`, `fail_if` — `all_missing` (default), `any_missing` or `never`, `sort` — default `true`, `required` — subset of `files` that must exist |
 | `normalize_targets` | `module: local.builtin.normalize_targets` | `target` — file path, literal, or comma list, `output` — file name for literal targets (default `targets_normalized.txt`), `output_dir` |
 | `classify_targets` | `module: local.builtin.classify_targets` | `target` — single target or file of mixed targets, `source_type` — `auto` (default), `file` or `target` |
-| `scan_tool` | `module: local.builtin.scan_tool` | `tool` — binary on PATH, `target` — substitutes `{target}` in `args`, `args` — argv elements (`[flag, value]` pairs or bare flags), `output` — report file, `output_arg` — flag taking the output path (or `capture_stdout: true`), `extra_env`, `results_output_key` (default `results_file`) |
 | `require_artifacts` | `module: local.builtin.require_artifacts` | `files` — artifact file names under `output_dir`/`OFX_RUN_DIR`, `min_count` (default 1), `label` — producer name in messages; publishes `produced_files`, `produced_count` |
 
 `module: shell` and `module: builtin.shell` are equivalent; likewise `module: python` and `module: builtin.python`, and the bare name of any builtin resolves too.
@@ -200,23 +200,27 @@ Missing inputs are an error by default (`fail_if: all_missing`) so an empty merg
 
 **`classify_targets` module** — classify targets into `domain`/`subdomain`/`cidr`/`ip`/`url`/`unknown`, writing `targets_<type>.txt` per group under `OFX_RUN_DIR`, and publish `target_type`, `counts` (JSON) and `target_files` (JSON). With `source_type: auto` a value that is not an existing file but ends in a known file suffix (`targets.txt`) or is not a valid target itself is rejected as a mistyped path; pass `source_type: target` to force literal handling (CIDRs and URLs are always accepted as literals).
 
-**`scan_tool` module** — run one scanner binary and publish its report file, replacing a per-tool wrapper module. `args` is the argv after the binary name; an element written as a `[flag, value]` pair is split into two argv entries, and `{target}`/`{output}` substitute the target and report path. Use `capture_stdout: true` for tools that write only to stdout (tplmap-style); otherwise `output_arg` names the flag that takes the report path (`-o`, `--output-dir`, …).
+### Declared tool modules (`local.tool.*`)
+
+Each external scanner is declared as its own module — no generic scan runner with raw argv. Tool steps fail explicitly when the binary is missing from PATH, so a missing tool can never masquerade as a clean scan.
+
+| Tool | Reference | `with:` arguments |
+|------|-----------|-------------------|
+| `dalfox` | `module: local.tool.dalfox` | `target` (required), `format` (default `jsonl`), `output` (default `dalfox_results.jsonl`) |
+| `dirsearch` | `module: local.tool.dirsearch` | `target` (required), `extensions` (default `php,html,js,json,txt,bak,zip`), `threads` (default `30`), `output` |
+| `ffuf` | `module: local.tool.ffuf` | `target` (required; `FUZZ` appended to path), `wordlist`, `match_codes`, `threads` (default `50`), `output` |
+| `sqlmap` | `module: local.tool.sqlmap` | `target` (required), `level` (default `2`), `risk` (default `2`), `output` (report dir; publishes `results_dir`) |
+| `tplmap` | `module: local.tool.tplmap` | `target` (required), `output` (default `tplmap_results.txt`; captures stdout) |
 
 ```yaml
 steps:
   - name: dalfox
-    module: local.builtin.scan_tool
+    module: local.tool.dalfox
     with:
-      tool: dalfox
       target: '{{ inputs.target }}'
-      args:
-        - url
-        - '{target}'
-        - --silence
-        - ['--format', 'jsonl']
-      output: dalfox_results.jsonl
-      output_arg: '-o'
 ```
+
+Tool modules publish `results_file` (path to the report) — `sqlmap` publishes `results_dir` instead. They are self-contained so remote execution can stream their source like pure-Python builtins.
 
 **`require_artifacts` module** — fail when fewer than `min_count` of the expected artifact files exist and are non-empty, so an empty scan can never be mistaken for "no findings". Publishes `produced_files` and `produced_count`:
 

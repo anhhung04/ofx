@@ -555,99 +555,6 @@ class TestBuiltinDispatch:
         assert result.error is not None
         assert "OFX_RUN_DIR is not set" in result.error
 
-
-class TestScanTool:
-    def test_requires_tool_and_target(self, tmp_path):
-        from ofx.modules.builtins import scan
-
-        with pytest.raises(ValueError, match="tool is required"):
-            scan.run(_ctx(tmp_path, args={"target": "https://x", "args": [], "output": "o.txt", "output_arg": "-o"}))
-        with pytest.raises(ValueError, match="target is required"):
-            scan.run(_ctx(tmp_path, args={"tool": "echo", "args": [], "output": "o.txt", "output_arg": "-o"}))
-
-    def test_missing_binary_fails_explicitly(self, tmp_path):
-        from ofx.modules.builtins import scan
-
-        with pytest.raises(RuntimeError, match="not installed"):
-            scan.run(_ctx(tmp_path, args={
-                "tool": "definitely-not-a-real-tool-xyz",
-                "target": "https://x",
-                "args": [],
-                "output": "o.txt",
-                "output_arg": "-o",
-            }))
-
-    def test_placeholder_expansion_and_output_arg(self, tmp_path):
-        from ofx.modules.builtins import scan
-
-        outputs = _Outputs()
-        scan.run(_ctx(tmp_path, args={
-            "tool": "printf",
-            "target": "https://example.com",
-            "args": [["%s", "{target}"]],
-            "output": "report.txt",
-            "output_arg": "--out",
-        }, outputs=outputs))
-
-        assert outputs.values == {"results_file": str(tmp_path / "report.txt")}
-
-    def test_capture_stdout_writes_output_file(self, tmp_path):
-        from ofx.modules.builtins import scan
-
-        outputs = _Outputs()
-        scan.run(_ctx(tmp_path, args={
-            "tool": "echo",
-            "target": "https://example.com",
-            "args": ["{target}"],
-            "output": "stdout.txt",
-            "capture_stdout": True,
-        }, outputs=outputs))
-
-        out = tmp_path / "stdout.txt"
-        assert out.read_text().strip() == "https://example.com"
-        assert outputs.values == {"results_file": str(out)}
-
-    def test_capture_stdout_without_output_arg_accepted(self, tmp_path):
-        from ofx.modules.builtins import scan
-
-        # No output_arg: capture_stdout path must not demand one
-        scan.run(_ctx(tmp_path, args={
-            "tool": "true",
-            "target": "https://example.com",
-            "args": [],
-            "output": "empty.txt",
-            "capture_stdout": True,
-        }))
-        assert (tmp_path / "empty.txt").read_text() == ""
-
-    def test_nonzero_exit_surfaces_tool_output(self, tmp_path):
-        from ofx.modules.builtins import scan
-
-        with pytest.raises(RuntimeError, match="exited 1"):
-            scan.run(_ctx(tmp_path, args={
-                "tool": "false",
-                "target": "https://example.com",
-                "args": [],
-                "output": "o.txt",
-                "output_arg": "-o",
-            }))
-
-    def test_custom_results_output_key(self, tmp_path):
-        from ofx.modules.builtins import scan
-
-        outputs = _Outputs()
-        scan.run(_ctx(tmp_path, args={
-            "tool": "printf",
-            "target": "https://example.com",
-            "args": [["%s", "{target}"]],
-            "output": "sqli",
-            "output_arg": "--output-dir",
-            "results_output_key": "results_dir",
-        }, outputs=outputs))
-
-        assert outputs.values == {"results_dir": str(tmp_path / "sqli")}
-
-
 class TestRequireArtifacts:
     def test_fails_when_nothing_produced(self, tmp_path):
         from ofx.modules.builtins import artifacts
@@ -691,3 +598,107 @@ class TestRequireArtifacts:
         outputs = _Outputs()
         artifacts.run(_ctx(tmp_path, args={"files": ["x.txt"], "output_dir": str(other)}, outputs=outputs))
         assert outputs.values["produced_files"] == str(other / "x.txt")
+
+
+class TestToolModules:
+    """Declared ``local.tool.*`` modules: registry resolution and argv build."""
+
+    def test_tool_names_sorted(self):
+        registry = ModuleRegistry()
+        assert registry.tool_names == (
+            "dalfox",
+            "dirsearch",
+            "ffuf",
+            "sqlmap",
+            "tplmap",
+        )
+
+    def test_tool_resolves_via_prefix(self):
+        registry = ModuleRegistry()
+        for name in registry.tool_names:
+            resolved = registry.resolve(f"local.tool.{name}")
+            assert resolved.kind == "tool"
+            assert resolved.name == name
+            assert resolved.callable is not None
+
+    def test_unknown_tool_rejected(self):
+        registry = ModuleRegistry()
+        with pytest.raises(ValueError, match="Unknown tool"):
+            registry.resolve("local.tool.nosuchtool")
+
+    def test_tool_ref_rejects_func_suffix(self):
+        from ofx.modules.refs import parse_module_ref
+
+        with pytest.raises(ValueError, match="do not take a '::<func>' suffix"):
+            parse_module_ref("local.tool.dalfox::run")
+
+    def test_tool_ref_rejects_at_ref(self):
+        from ofx.modules.refs import parse_module_ref
+
+        with pytest.raises(ValueError, match="'@<ref>' is only valid on remote"):
+            parse_module_ref("local.tool.dalfox@v1")
+
+    def test_tool_ref_missing_name_rejected(self):
+        from ofx.modules.refs import parse_module_ref
+
+        with pytest.raises(ValueError, match="missing tool name"):
+            parse_module_ref("local.tool")
+
+    def test_missing_binary_fails_explicitly(self, tmp_path):
+        import shutil
+        from unittest.mock import patch
+
+        from ofx.modules.tools import dalfox
+
+        with patch.object(shutil, "which", return_value=None):
+            with pytest.raises(RuntimeError, match="dalfox is not installed"):
+                dalfox.run(_ctx(tmp_path, args={"target": "https://x"}))
+
+    def test_dalfox_builds_expected_argv(self, tmp_path):
+        import shutil
+        import subprocess
+        from unittest.mock import MagicMock, patch
+
+        from ofx.modules.tools import dalfox
+
+        captured = {}
+        def fake_run(cmd, **kwargs):
+            captured["cmd"] = cmd
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch.object(shutil, "which", return_value="/usr/bin/dalfox"), \
+             patch.object(subprocess, "run", side_effect=fake_run):
+            outputs = _Outputs()
+            dalfox.run(_ctx(tmp_path, args={"target": "https://x"}, outputs=outputs))
+
+        assert captured["cmd"][:4] == ["dalfox", "url", "https://x", "--silence"]
+        assert "-o" in captured["cmd"]
+        assert outputs.values["results_file"].endswith("dalfox_results.jsonl")
+
+    def test_sqlmap_uses_results_dir_key(self, tmp_path):
+        import shutil
+        import subprocess
+        from unittest.mock import MagicMock, patch
+
+        from ofx.modules.tools import sqlmap
+
+        def fake_run(cmd, **kwargs):
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch.object(shutil, "which", return_value="/usr/bin/sqlmap"), \
+             patch.object(subprocess, "run", side_effect=fake_run):
+            outputs = _Outputs()
+            sqlmap.run(_ctx(tmp_path, args={"target": "https://x"}, outputs=outputs))
+
+        assert outputs.values["results_dir"].endswith("sqlmap")
+
+    def test_tool_streams_own_source_for_remote(self):
+        """Remote payload: tool module source is bundled, not the api wrapper."""
+        from ofx.cloud.module_source import resolve_api_step_target, resolve_udf_source
+        from ofx.models.step import Step
+
+        step = Step(name="t", module="local.tool.dalfox", run_with={"target": "https://x"})
+        assert resolve_api_step_target(step) is None
+        src = resolve_udf_source(step)
+        assert 'name = "dalfox"' in src
+        assert "from ofx" not in src  # self-contained for remote streaming

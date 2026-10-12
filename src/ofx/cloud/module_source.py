@@ -105,6 +105,7 @@ def resolve_udf_target(
         BUILTIN_KIND,
         LOCAL_NAMED_KIND,
         REMOTE_KIND,
+        TOOL_KIND,
         parse_module_ref,
     )
     from ofx.modules.udf import (
@@ -150,6 +151,21 @@ def resolve_udf_target(
                 f"Builtin module '{ref.raw}' has no bundleable source file"
             )
         return builtin_file, DEFAULT_MODULE_FUNCTION
+    if ref.kind == TOOL_KIND:
+        # Declared tool modules stream their own source like pure-Python
+        # builtins (self-contained files under ofx/modules/tools/).
+        import ofx.modules.tools as _tools
+
+        file_by_name = {
+            module.name: Path(module.__file__ or "")
+            for module in _tools.TOOL_MODULES
+        }
+        tool_file = file_by_name.get(ref.name or "")
+        if tool_file is None or not tool_file.is_file():
+            raise ValueError(
+                f"Tool module '{ref.raw}' has no bundleable source file"
+            )
+        return tool_file, DEFAULT_MODULE_FUNCTION
     _path, function = split_udf_spec(module)
     from ofx.modules.udf import resolve_udf_path
 

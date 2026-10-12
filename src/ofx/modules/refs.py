@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 BUILTIN_KIND = "builtin"
+TOOL_KIND = "tool"
 LOCAL_FILE_KIND = "local_file"
 LOCAL_NAMED_KIND = "local_named"
 REMOTE_KIND = "remote"
@@ -196,6 +197,18 @@ def parse_module_ref(spec: str) -> ModuleRef:
             "'local.builtin.recon.targets.split_targets')"
         )
 
+    if base.startswith("local.tool.") or base == "local.tool":
+        _reject_ref(TOOL_KIND, ref, raw)
+        _reject_function(TOOL_KIND, function, raw)
+        name = base[len("local.tool") :].lstrip(".")
+        if not name or any(not segment for segment in name.split(".")):
+            raise ValueError(
+                f"Invalid module reference '{raw}': missing tool name after "
+                "'local.tool.' (expected 'local.tool.<name>', e.g. "
+                "'local.tool.dalfox')"
+            )
+        return ModuleRef(kind=TOOL_KIND, raw=raw, name=name)
+
     if base.startswith("local."):
         _reject_ref(LOCAL_NAMED_KIND, ref, raw)
         name = base[len("local.") :]
@@ -277,6 +290,7 @@ __all__ = [
     "LOCAL_PREFIX",
     "REMOTE_KIND",
     "REMOTE_SCHEME_HINT",
+    "TOOL_KIND",
     "ModuleRef",
     "parse_module_ref",
     "parse_remote_repo",

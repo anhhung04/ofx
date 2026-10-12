@@ -16,9 +16,11 @@ from ofx.modules.refs import (
     LOCAL_NAMED_KIND,
     REMOTE_KIND,
     REMOTE_SCHEME_HINT,
+    TOOL_KIND,
     parse_module_ref,
 )
 from ofx.modules.remote import ensure_remote_module
+from ofx.modules.tools import TOOL_MODULES
 from ofx.modules.udf import (
     load_module_file,
     load_udf_spec,
@@ -55,11 +57,26 @@ class ModuleRegistry:
             )
             for module in BUILTIN_MODULES
         }
+        self._tools: dict[str, ModuleSpec] = {
+            module.name: ModuleSpec(
+                kind="tool",
+                name=module.name,
+                description=module.description,
+                args_schema=module.args_schema,
+                callable=module.run,
+            )
+            for module in TOOL_MODULES
+        }
 
     @property
     def builtin_names(self) -> tuple[str, ...]:
         """Names of the available builtin modules, sorted."""
         return tuple(sorted(self._builtins))
+
+    @property
+    def tool_names(self) -> tuple[str, ...]:
+        """Names of the available declared tool modules, sorted."""
+        return tuple(sorted(self._tools))
 
     def _base_dir(self, workflow_dir: Path | None) -> Path | None:
         return workflow_dir if workflow_dir is not None else self._workflow_dir
@@ -102,6 +119,16 @@ class ModuleRegistry:
                 callable=resolve_api_callable(ref.api_path or ""),
                 function=ref.function,
             )
+
+        if ref.kind == TOOL_KIND:
+            tool = self._tools.get(ref.name or "")
+            if tool is None:
+                available = ", ".join(self.tool_names)
+                raise ValueError(
+                    f"Unknown tool: '{spec}'. Available tool modules: "
+                    f"{available}. {REMOTE_SCHEME_HINT}"
+                )
+            return tool
 
         if ref.kind == LOCAL_FILE_KIND:
             return load_udf_spec(ref.raw, self._base_dir(workflow_dir))

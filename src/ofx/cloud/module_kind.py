@@ -60,6 +60,7 @@ def is_udf_module_step(step: Step) -> bool:
         BUILTIN_KIND,
         LOCAL_NAMED_KIND,
         REMOTE_KIND,
+        TOOL_KIND,
         parse_module_ref,
     )
 
@@ -67,7 +68,7 @@ def is_udf_module_step(step: Step) -> bool:
         kind = parse_module_ref(base).kind
     except ValueError:
         kind = None
-    if kind in (LOCAL_NAMED_KIND, REMOTE_KIND, API_KIND, BUILTIN_KIND):
+    if kind in (LOCAL_NAMED_KIND, REMOTE_KIND, API_KIND, BUILTIN_KIND, TOOL_KIND):
         return True
     return "::" in module or module.endswith(".py")
 
