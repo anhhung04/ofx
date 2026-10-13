@@ -7,7 +7,9 @@ from typing import Any
 
 from ofx.runner.context import RunnerStatus, normalized_runner_status_value
 from ofx.runner.metadata import ModelContext
+from ofx.runner.registry_keys import RunnerRegistryKeys
 from ofx.runner.runner_refs import runner_leaf_descendants
+
 
 @dataclass
 class ExecutionSummary:
@@ -40,7 +42,7 @@ class ExecutionSummaryReporter:
             model_context = ModelContext.from_model(getattr(runner, "model", None))
             if model_context.jid is None or model_context.step_index is not None:
                 continue
-            job_exec = await runner.reg_get("execution")
+            job_exec = await runner.reg_get(RunnerRegistryKeys.EXECUTION)
             if job_exec:
                 summaries.append(job_exec)
                 continue

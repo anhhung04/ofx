@@ -14,6 +14,7 @@ from ofx.runner.context import (
     normalized_runner_status_value,
 )
 from ofx.runner.registry import cleanup_registry
+from ofx.runner.registry_keys import RunnerRegistryKeys
 from ofx.runner.services.checkpoint import CheckpointManager
 from ofx.runner.services.event_emitter import EventEmitter
 
@@ -72,7 +73,12 @@ class RunnerStateMachine:
 class LifecycleManager:
     """Coordinate runner execution, state transitions, and timing."""
 
-    __slots__ = ("_runner", "_event_emitter", "_checkpoint_manager")
+    __slots__ = (
+        "_runner",
+        "_event_emitter",
+        "_checkpoint_manager",
+        "_restored_duration_ms",
+    )
 
     def __init__(
         self,
@@ -83,6 +89,7 @@ class LifecycleManager:
         self._runner = runner
         self._event_emitter = event_emitter or EventEmitter(runner)
         self._checkpoint_manager = CheckpointManager(runner)
+        self._restored_duration_ms: int | None = None
 
     def checkpoint_id(self) -> str:
         return self._checkpoint_manager.checkpoint_id()
@@ -90,20 +97,36 @@ class LifecycleManager:
     async def execute(self) -> RunResult:
         self.mark_start()
         self._event_emitter.emit("runner_start")
-        if await self._checkpoint_manager.restore_from_checkpoint():
-            self._event_emitter.emit("runner_resume")
-            return await self._runner.get_result()
-        await self._checkpoint_manager.write_checkpoint("running")
+        resumed = False
+        try:
+            if await self._checkpoint_manager.restore_from_checkpoint():
+                resumed = True
+                self._event_emitter.emit("runner_resume")
+                self._capture_restored_duration()
+            else:
+                # Only mark the run as in-progress after confirming there is
+                # no completed checkpoint to resume; writing "running" first
+                # would overwrite the completed checkpoint and break resume.
+                await self._checkpoint_manager.write_checkpoint("running")
+                await self._run_execution_body()
+        finally:
+            await self._finalize_execution(resumed)
+        return await self._runner.get_result()
+
+    async def _run_execution_body(self) -> None:
+        """Run the metadata registration, pre-run setup, and execution."""
         pre_run_ok = False
         try:
             await self._runner.reg_set_many(
                 {
-                    "metadata": {
+                    RunnerRegistryKeys.METADATA: {
                         "run_id": self._runner.run_id,
                         "name": self._runner.name,
                         "type": str(type(self._runner.model)),
                     },
-                    "context": self._runner.ctx.model_dump(exclude={"secrets", "envs"}),
+                    RunnerRegistryKeys.CONTEXT: self._runner.ctx.model_dump(
+                        exclude={"secrets", "envs"}
+                    ),
                 }
             )
             await self._runner._pre_run()
@@ -139,12 +162,9 @@ class LifecycleManager:
                     else "Cleanup after pre_run failure failed"
                 ),
             )
-        finally:
-            await self._finalize_execution()
-        return await self._runner.get_result()
 
-    async def _finalize_execution(self) -> None:
-        self.mark_finish()
+    async def _finalize_execution(self, resumed: bool = False) -> None:
+        self.mark_finish(resumed=resumed)
         self._event_emitter.emit(
             "runner_finish",
             {
@@ -154,7 +174,11 @@ class LifecycleManager:
         )
         await self._write_final_checkpoints()
         try:
-            if self._runner._registry is not None:
+            # Only the root runner owns the registry lifecycle; children
+            # share the parent's registry (job.py:89-91, step.py:32-35,
+            # cloud_step.py:120-123), so closing it here would break later
+            # registry access by sibling runners.
+            if self._runner.parent is None and self._runner._registry is not None:
                 await cleanup_registry(self._runner._registry)
         except Exception as cleanup_err:
             self._runner._log_warning(f"registry cleanup failed: {cleanup_err}")
@@ -184,8 +208,15 @@ class LifecycleManager:
     def mark_start(self) -> None:
         self._set_timestamp_fields("started")
 
-    def mark_finish(self) -> None:
+    def mark_finish(self, *, resumed: bool = False) -> None:
         if self._runner._finished_at is not None:
+            return
+        if resumed:
+            # A resumed runner was restored with the original finish
+            # timestamp (UTC); anchor only the perf counter so
+            # ``mark_finish`` stays once-only while keeping the restored
+            # ``_finished_at_utc`` intact.
+            self._runner._finished_at = self._perf_counter_now()
             return
         self._set_timestamp_fields("finished")
 
@@ -197,7 +228,31 @@ class LifecycleManager:
     def _utc_now() -> str:
         return datetime.now(UTC).isoformat()
 
+    def _capture_restored_duration(self) -> None:
+        """Remember the restored run's duration for the resume path.
+
+        ``restore_from_checkpoint`` only restores UTC timestamps, and the
+        perf-clock anchors are set around the resume moment, so
+        ``duration_ms()`` would otherwise report ~0 for a resumed run.
+        Parse the restored window so the resumed run reports the original
+        duration.
+        """
+        started_utc = getattr(self._runner, "_started_at_utc", None)
+        finished_utc = getattr(self._runner, "_finished_at_utc", None)
+        if not started_utc or not finished_utc:
+            return
+        try:
+            started = datetime.fromisoformat(started_utc)
+            finished = datetime.fromisoformat(finished_utc)
+            total_seconds = (finished - started).total_seconds()
+        except (TypeError, ValueError):
+            return
+        if total_seconds >= 0:
+            self._restored_duration_ms = int(total_seconds * 1000)
+
     def duration_ms(self) -> int | None:
+        if self._restored_duration_ms is not None:
+            return self._restored_duration_ms
         started_at = self._runner._started_at
         if started_at is None:
             return None

@@ -27,8 +27,17 @@ async def test_script_file_relative_and_absolute(caplog):
             result = await runner.run()
 
             assert result.status == RunnerStatus.COMPLETED
-            assert "EXAMPLE_SCRIPT_OK" in caplog.text, "Relative script_file should run"
-            assert "Random string:" in caplog.text, "Absolute script_file should run"
+            # M3 (log_level honoring) suppresses step INFO stdout display when
+            # step_runner.log_level == CRITICAL; assert via captured outputs.
+            steps = runner.runners["test-script-file"].runners
+            stdout = []
+            for step_runner in steps.values():
+                step_outputs = (await step_runner.get_result()).outputs
+                if "stdout" in step_outputs:
+                    stdout.append(step_outputs["stdout"])
+            combined = "\n".join(stdout)
+            assert "EXAMPLE_SCRIPT_OK" in combined, "Relative script_file should run"
+            assert "Random string:" in combined, "Absolute script_file should run"
 
             log_dir = tmpdir / "logs"
             log_files = list(

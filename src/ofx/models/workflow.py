@@ -11,6 +11,7 @@ from ofx.models.inputs import WorkflowInput, WorkflowSecret
 from ofx.models.job import Job
 from ofx.models.tools import ToolConfig
 
+
 class WorkflowCall(OFXBaseModel):
     """Configuration for reusable workflow calls."""
 
@@ -99,6 +100,10 @@ class Workflow(BaseModel):
                     )
 
             self.jobs[job_id].jid = job_id
+            # Backfill a stable, unique name from the job id when none was
+            # provided so that registry namespace prefixes are unique per job.
+            if not self.jobs[job_id].name:
+                self.jobs[job_id].name = job_id
             step_names: set[str] = set()
             for idx, step in enumerate(job.steps):
                 step.step_index = idx

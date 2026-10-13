@@ -9,6 +9,7 @@ from ofx.runner.step_mixin import (
     StepRunnerMixin,
 )
 
+
 class TestRetryDelayFormula:
     """Verify the exponential backoff with jitter formula."""
 
@@ -359,5 +360,5 @@ class TestTimeoutResolutionHelpers:
 
         await runner._resolve_timeout_field()
 
-        assert runner.model.timeout == 60
-        assert warnings == ["Invalid timeout expression result: 'not-a-number', using 60 min"]
+        assert runner.model.timeout == 1440
+        assert warnings == ["Invalid timeout expression result: 'not-a-number', using 1440 min"]

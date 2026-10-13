@@ -6,10 +6,16 @@ import logging
 from typing import Any
 
 from ofx.models.config import DefaultConfig
-from ofx.runner.context import ConditionNotMetError, RunnerStatus, context_copy, context_with_update
+from ofx.runner.context import (
+    ConditionNotMetError,
+    RunnerStatus,
+    context_copy,
+    context_with_update,
+)
 from ofx.runner.executors.base import Executor
-from ofx.utils.file_cleanup import remove_file
 from ofx.runner.registry_keys import RunnerRegistryKeys
+from ofx.utils.file_cleanup import remove_file
+
 
 class JobExecutor(Executor):
     async def pre_run(self, runner) -> None:

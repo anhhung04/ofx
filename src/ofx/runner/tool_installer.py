@@ -43,7 +43,12 @@ class ToolInstallerRunner(Runner[ToolInstallation]):
             tools=dict(tools),
             show_console=show_console,
         )
-        super().__init__(tool_model, ctx, parent)
+        super().__init__(
+            tool_model,
+            ctx,
+            parent,
+            parent.registry if parent is not None else None,
+        )
         self.installed_count = 0
         self.skipped_count = 0
         self.failed_count = 0

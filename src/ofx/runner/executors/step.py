@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+import logging
 
 from ofx.models.step import RunType
-from ofx.runner.context import RunnerStatus, RunResult, normalized_runner_status_value
+from ofx.runner.context import (
+    ConditionNotMetError,
+    RunnerStatus,
+    RunResult,
+    normalized_runner_status_value,
+)
 from ofx.runner.error_helpers import (
     coerce_timeout_minutes,
     step_execution_error,
@@ -15,12 +20,10 @@ from ofx.runner.error_helpers import (
 )
 from ofx.runner.execution_results import build_step_execution_result_for_runner
 from ofx.runner.executors.base import Executor
-from ofx.utils.file_cleanup import remove_file
 from ofx.runner.handlers import registry as default_handler_registry
 from ofx.runner.registry_keys import RunnerRegistryKeys
+from ofx.utils.file_cleanup import remove_file
 
-if TYPE_CHECKING:
-    from ofx.runner.runner import Runner
 
 class StepExecutor(Executor):
     @staticmethod
@@ -40,6 +43,8 @@ class StepExecutor(Executor):
         attempt_errors: list[str] = []
 
         for attempt in range(max_attempts):
+            timed_out = False
+            last_exc: BaseException | None = None
             try:
                 runner_factory = getattr(runner, "_create_runner", None)
                 if runner_factory is not None:
@@ -56,46 +61,76 @@ class StepExecutor(Executor):
                             "Ignoring interactive flag."
                         )
                     child_runner = registry.get(runner._run_type)(runner)
-                res = await asyncio.wait_for(child_runner.run(), timeout=timeout_seconds)
+                # Cloud remote handlers expose a network grace budget on the
+                # child (H5): extend the outer wrapper's wait so the grace is
+                # actually reachable (local children expose no grace -> 0).
+                network_grace = getattr(child_runner, "_network_grace_seconds", 0)
+                res = await asyncio.wait_for(
+                    child_runner.run(),
+                    timeout=timeout_seconds + network_grace,
+                )
                 last_res = res
+
+                # A child that finished as CANCELED must not be retried (L11):
+                # propagate the cancellation/skip immediately.
+                if res.status == RunnerStatus.CANCELED:
+                    raise ConditionNotMetError(
+                        res.error
+                        or "Step was canceled before completion; skipping without retry"
+                    )
 
                 if child_runner.is_success:
                     await self._store_child_result(runner, res)
-                    runner._log_debug(f"result: {await runner.get_result()}")
+                    # gate the deep-copying get_result() behind debug logging (L6)
+                    if getattr(runner, "_log_level", logging.DEBUG) <= logging.DEBUG:
+                        runner._log_debug(f"result: {await runner.get_result()}")
                     return
 
                 raise RuntimeError(step_execution_error(res.status, res.error))
             except TimeoutError as exc:
+                # Timeouts count as a retryable attempt (H4): record the error
+                # and fall through to the shared retry logic below; only the
+                # final attempt raises the timeout-specific error.
+                timed_out = True
+                last_exc = exc
+                err_msg = step_timeout_error(coerce_timeout_minutes(runner.model.timeout))
+            except ConditionNotMetError:
+                # Cancellation/skip propagates immediately (L11) — no retry.
+                raise
+            except Exception as exc:
+                last_exc = exc
+                err_msg = str(exc)
+
+            attempt_errors.append(f"attempt {attempt + 1}: {err_msg}")
+            if attempt < max_attempts - 1:
+                next_delay = runner._retry_delay_seconds(
+                    attempt=attempt,
+                    base_delay=runner.model.retry_delay,
+                )
+                runner._log_info(
+                    f"Retry {attempt + 2}/{max_attempts} in {next_delay:.1f}s - {err_msg}"
+                )
+                await asyncio.sleep(next_delay)
+                continue
+
+            attempts_suffix = f"\n  Attempts: {'; '.join(attempt_errors)}"
+            if timed_out:
                 raise RuntimeError(
                     step_timeout_error(coerce_timeout_minutes(runner.model.timeout))
-                ) from exc
-            except Exception as exc:
-                err_msg = str(exc)
-                attempt_errors.append(f"attempt {attempt + 1}: {err_msg}")
-                if attempt < max_attempts - 1:
-                    next_delay = runner._retry_delay_seconds(
-                        attempt=attempt,
-                        base_delay=runner.model.retry_delay,
-                    )
-                    runner._log_info(
-                        f"Retry {attempt + 2}/{max_attempts} in {next_delay:.1f}s - {err_msg}"
-                    )
-                    await asyncio.sleep(next_delay)
-                    continue
-
-                attempts_suffix = f"\n  Attempts: {'; '.join(attempt_errors)}"
-                if last_res:
-                    await self._store_child_result(runner, last_res)
-                    if last_res.status != RunnerStatus.COMPLETED:
-                        raise RuntimeError(
-                            step_retry_error(max_attempts, last_res.error)
-                            + attempts_suffix
-                        ) from exc
-
-                raise RuntimeError(
-                    step_retry_error(max_attempts, exc)
                     + attempts_suffix
-                ) from exc
+                ) from last_exc
+            if last_res:
+                await self._store_child_result(runner, last_res)
+                if last_res.status != RunnerStatus.COMPLETED:
+                    raise RuntimeError(
+                        step_retry_error(max_attempts, last_res.error)
+                        + attempts_suffix
+                    ) from last_exc
+
+            raise RuntimeError(
+                step_retry_error(max_attempts, last_exc)
+                + attempts_suffix
+            ) from last_exc
 
     async def post_run(self, runner) -> None:
         result = await runner.get_result()
@@ -112,10 +147,10 @@ class StepExecutor(Executor):
             remove_file(runner._outputs_file)
 
         if runner.model.log_command:
-            from ofx.runner.timeline import log_step
+            from ofx.runner.timeline import log_step_async
 
             params = runner._build_timeline_params(result)
-            log_step(
+            await log_step_async(
                 ctx_vars=runner.ctx.vars,
                 step_name=runner.model.name or f"step{runner.model.step_index}",
                 status=normalized_runner_status_value(result.status),

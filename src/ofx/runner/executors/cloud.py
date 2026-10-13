@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
 import shlex
-from pathlib import Path
+from dataclasses import dataclass
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
-
-from pathlib import PurePosixPath, PureWindowsPath
 
 from ofx.cloud.runtime import is_windows_config, remote_join
 from ofx.models.cloud import CloudConfig
@@ -17,8 +15,10 @@ from ofx.runner.executors.job import JobExecutor
 from ofx.runner.executors.step import StepExecutor
 from ofx.runner.handlers import HandlerRegistry
 from ofx.runner.handlers import registry as default_handler_registry
+from ofx.runner.registry_keys import RunnerRegistryKeys
 from ofx.runner.services.cloud_provisioner import CloudProvisioner
 from ofx.utils.log import register_secrets
+
 
 @dataclass(frozen=True)
 class _CloudInstanceState:
@@ -98,7 +98,7 @@ class CloudExecutor(JobExecutor):
         await self._store_job_model(runner)
         if runner._instance:
             await runner.reg_set(
-                "cloud_instance",
+                RunnerRegistryKeys.CLOUD_INSTANCE,
                 {
                     "instance_id": runner._instance.instance_id,
                     "ip": runner._instance.ip,

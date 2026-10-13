@@ -27,6 +27,8 @@ from ofx.cloud.temp_upload import upload_temp_content
 from ofx.models.step import RunType
 from ofx.runner.context import (
     RunContext,
+    RunnerStatus,
+    RunResult,
 )
 from ofx.runner.logging import bubble_context_log
 from ofx.runner.metadata import ModelContext
@@ -61,21 +63,36 @@ class _RemoteHandlerRunner:
     while executing commands remotely instead of locally.
     """
 
-    __slots__ = ("_outer", "is_success")
+    # Network grace budget exposed to StepExecutor.do_run (H5). The outer
+    # wait_for wrapper adds this on top of the step timeout so remote
+    # connection/handshake time is reachable; the inner run() below does NOT
+    # also add it (kept in one place to avoid double-application).
+    _network_grace_seconds = _NETWORK_GRACE_SECONDS
+
+    __slots__ = ("_outer", "_result")
 
     def __init__(self, outer):
         self._outer = outer
-        self.is_success = True
+        self._result: RunResult | None = None
+
+    @property
+    def is_success(self) -> bool:
+        # Reflect the actual result status instead of a constant (L8): a
+        # failed or canceled remote result must surface to the StepExecutor
+        # retry/cancel logic rather than being silently treated as success.
+        if self._result is None:
+            return False
+        return self._result.status == RunnerStatus.COMPLETED
 
     async def run(self):
         run_type = self._outer._run_type or self._outer.model.get_run_type()
         timeout_seconds = self._outer.model.timeout * 60
-        output = await asyncio.wait_for(
-            self._outer._execute_remote_run_type(
-                run_type,
-                timeout_seconds=timeout_seconds,
-            ),
-            timeout=timeout_seconds + _NETWORK_GRACE_SECONDS,
+        # No inner wait_for here: StepExecutor.do_run already applies the
+        # timeout (+ network grace) at the outer wrapper (H5), so an inner
+        # deadline would only fire before the grace and keep it unreachable.
+        output = await self._outer._execute_remote_run_type(
+            run_type,
+            timeout_seconds=timeout_seconds,
         )
         # UDF module steps return a (cleaned_stdout, parsed_outputs) tuple so
         # the sentinel-parsed outputs can be merged into the step OUTPUTS
@@ -91,7 +108,20 @@ class _RemoteHandlerRunner:
             RunnerRegistryKeys.OUTPUTS,
             outputs_dict,
         )
-        return await self._outer.get_result()
+        result = await self._outer.get_result()
+        # The outer runner's FSM is still RUNNING while StepExecutor drives it,
+        # so an in-flight status would be a meaningless transient state; record
+        # the actual outcome of the remote execution (L8) instead. Genuine
+        # terminal statuses (FAILED/CANCELED) are preserved so is_success
+        # reflects the real result rather than a constant.
+        if isinstance(result, RunResult) and result.status in (
+            RunnerStatus.IDLE,
+            RunnerStatus.RUNNING,
+            RunnerStatus.FINISHED,
+        ):
+            result.status = RunnerStatus.COMPLETED
+        self._result = result
+        return result
 
 class CloudStepRunner(StepRunnerMixin, Runner):
     """Runs a step remotely via PostSSH or PostWinRM.

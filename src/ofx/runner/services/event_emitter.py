@@ -16,17 +16,33 @@ if TYPE_CHECKING:
 class EventEmitter:
     """Best-effort NDJSON event emitter for runner lifecycle events."""
 
-    __slots__ = ("_runner", "_listeners")
+    __slots__ = ("_runner", "_listeners", "_sink_handle", "_sink_path")
 
     def __init__(self, runner: Runner[Any]) -> None:
         self._runner = runner
         self._listeners: dict[str, list[Callable[[dict[str, Any]], None]]] = {}
+        self._sink_handle: Any = None
+        self._sink_path: Path | None = None
 
     def add_event_listener(
         self, event_type: str, callback: Callable[[dict[str, Any]], None]
     ) -> None:
         """Register an in-process event listener."""
         self._listeners.setdefault(event_type, []).append(callback)
+
+    def _close_sink(self) -> None:
+        """Close the lazily-opened NDJSON sink handle, if any."""
+        if self._sink_handle is not None:
+            try:
+                self._sink_handle.close()
+            except Exception:
+                pass
+            self._sink_handle = None
+            self._sink_path = None
+
+    def close(self) -> None:
+        """Close the NDJSON sink handle, if one was opened."""
+        self._close_sink()
 
     def emit(self, event_type: str, payload: dict[str, Any] | None = None) -> None:
         """Emit a structured runner lifecycle event as NDJSON and callbacks."""
@@ -48,10 +64,15 @@ class EventEmitter:
         sink = self._runner.ctx.event_sink_path or None
         if sink is not None:
             try:
-                sink.parent.mkdir(parents=True, exist_ok=True)
-                with open(sink, "a", encoding="utf-8") as file_obj:
-                    file_obj.write(json.dumps(entry, default=str) + "\n")
+                if self._sink_handle is None or self._sink_path != sink:
+                    self._close_sink()
+                    sink.parent.mkdir(parents=True, exist_ok=True)
+                    self._sink_handle = open(sink, "a", encoding="utf-8")
+                    self._sink_path = sink
+                self._sink_handle.write(json.dumps(entry, default=str) + "\n")
+                self._sink_handle.flush()
             except Exception as exc:
+                self._close_sink()
                 self._runner._log_warning(f"event emit failed: {exc}")
 
         for callback in tuple(self._listeners.get(event_type, ())):

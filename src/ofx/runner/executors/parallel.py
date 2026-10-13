@@ -19,15 +19,23 @@ async def run_limited_fail_fast(
     run_item: Callable[[int, T], Awaitable[R]],
     is_failure: Callable[[R], bool],
 ) -> list[R | Exception | None]:
-    """Run indexed items with bounded concurrency and cooperative fail-fast."""
-    semaphore = asyncio.Semaphore(max_parallel)
+    """Run indexed items with bounded concurrency and cooperative fail-fast.
+
+    ``max_parallel`` of ``None`` (or < 1) means unbounded — no semaphore is
+    used rather than passing ``None`` to ``asyncio.Semaphore`` (which would
+    raise ``TypeError``).
+    """
+    if max_parallel is not None and max_parallel > 0:
+        semaphore: asyncio.Semaphore | None = asyncio.Semaphore(max_parallel)
+    else:
+        semaphore = None
     failed_event = asyncio.Event()
 
     async def run_instance(index: int, item: T) -> R | None:
         if fail_fast and failed_event.is_set():
             return None
 
-        async with semaphore:
+        async def _run() -> R | None:
             if fail_fast and failed_event.is_set():
                 return None
             try:
@@ -40,6 +48,11 @@ async def run_limited_fail_fast(
             if fail_fast and is_failure(result):
                 failed_event.set()
             return result
+
+        if semaphore is None:
+            return await _run()
+        async with semaphore:
+            return await _run()
 
     tasks = [
         asyncio.create_task(run_instance(index, item))
@@ -73,7 +86,12 @@ def parallel_run_settings(strategy, *, item_count: int) -> tuple[int, bool]:
     """Derive bounded-parallel settings from an optional strategy object."""
     if strategy is None:
         return item_count, True
-    return strategy.max_parallel, strategy.fail_fast
+    max_parallel = strategy.max_parallel
+    if max_parallel is None:
+        # None means unbounded: fall back to the item count so we never pass
+        # None to asyncio.Semaphore (which raises TypeError).
+        max_parallel = item_count
+    return max_parallel, strategy.fail_fast
 
 def collect_parallel_run_errors[TItem](
     items: Sequence[TItem],

@@ -686,9 +686,13 @@ class TestFlowRun:
                 runner = WorkflowRunner(workflow=workflow, ctx=ctx)
                 result = await runner.run()
 
-                assert "command test output" in caplog.text, "Expected output in logs"
-
                 assert result.status == RunnerStatus.COMPLETED
+                # M3 (log_level honoring) suppresses step INFO stdout display when
+                # step_runner.log_level == CRITICAL; assert via captured outputs.
+                test_job = runner.runners["test"]
+                command_step = test_job.runners["1"]
+                step_outputs = (await command_step.get_result()).outputs
+                assert "command test output" in step_outputs["stdout"]
             finally:
                 import shutil
 
@@ -825,9 +829,7 @@ jobs:
         assert result.status == RunnerStatus.COMPLETED
 
     @pytest.mark.asyncio
-    async def test_step_outputs(self, tmp_path, caplog):
-        import logging
-
+    async def test_step_outputs(self, tmp_path):
         import yaml
 
         from ofx.models.workflow import Workflow
@@ -852,10 +854,13 @@ jobs:
         )
         ctx = RunContext(output_path=tmp_path)
         runner = WorkflowRunner(workflow=workflow, ctx=ctx)
-        with caplog.at_level(logging.DEBUG):
-            result = await runner.run()
+        result = await runner.run()
         assert result.status == RunnerStatus.COMPLETED
-        assert "Got hello" in caplog.text
+        # M3 (log_level honoring) suppresses step INFO stdout display when
+        # step_runner.log_level == CRITICAL; assert via captured outputs instead.
+        consume_runner = runner.runners["outputs_job"].runners["1"]
+        consume_outputs = (await consume_runner.get_result()).outputs
+        assert "Got hello" in consume_outputs["stdout"]
 
     @pytest.mark.asyncio
     async def test_matrix_expansion(self, tmp_path):
@@ -885,9 +890,7 @@ jobs:
         assert result.status == RunnerStatus.COMPLETED
 
     @pytest.mark.asyncio
-    async def test_env_vars(self, tmp_path, caplog):
-        import logging
-
+    async def test_env_vars(self, tmp_path):
         import yaml
 
         from ofx.models.workflow import Workflow
@@ -909,10 +912,13 @@ jobs:
         )
         ctx = RunContext(output_path=tmp_path)
         runner = WorkflowRunner(workflow=workflow, ctx=ctx)
-        with caplog.at_level(logging.DEBUG):
-            result = await runner.run()
+        result = await runner.run()
         assert result.status == RunnerStatus.COMPLETED
-        assert "hello_world" in caplog.text
+        # M3 (log_level honoring) suppresses step INFO stdout display when
+        # step_runner.log_level == CRITICAL; assert via captured outputs instead.
+        step_runner = runner.runners["check_env"].runners["0"]
+        step_outputs = (await step_runner.get_result()).outputs
+        assert "hello_world" in step_outputs["stdout"]
 
     @pytest.mark.asyncio
     async def test_run_if_false_skips(self, tmp_path):

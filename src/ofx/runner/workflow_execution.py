@@ -67,6 +67,7 @@ class WorkflowExecutionManager:
         if self._mem_limit <= 0:
             return
         warned = False
+        unavailable_logged = False
         while True:
             try:
                 with open("/proc/meminfo") as f:
@@ -81,7 +82,14 @@ class WorkflowExecutionManager:
                     available = info.get("MemAvailable", 0)
                     usage = (1 - available / total) * 100 if total > 0 else 0.0
             except (OSError, KeyError, ValueError, ZeroDivisionError):
-                logger.debug("Memory usage check unavailable, defaulting to 0%%", exc_info=True)
+                # Log the unavailable-memory notice once per wait, not on
+                # every poll (the non-Linux path would otherwise spam debug
+                # records every _MEMORY_POLL_INTERVAL seconds).  Also fixes
+                # the literal ``%%`` that previously rendered the message
+                # as "0%%" because it was passed as a %-format string.
+                if not unavailable_logged:
+                    logger.debug("Memory usage check unavailable, defaulting to 0%")
+                    unavailable_logged = True
                 usage = 0.0
             if usage <= 0 or usage < self._mem_limit:
                 return
@@ -104,8 +112,8 @@ class WorkflowExecutionManager:
             f"(concurrency limit: {self._max_parallel_jobs})"
         )
         async def _run_job(job_runner: Runner) -> None:
+            await self._wait_for_memory()
             async with self._job_semaphore:
-                await self._wait_for_memory()
                 await job_runner.run()
 
         task_map = {

@@ -10,7 +10,10 @@ def coerce_timeout_minutes(value: int | str) -> int:
     try:
         return int(value)
     except (ValueError, TypeError):
-        return 60 * 24
+        # Unparseable timeouts fall back to one shared default (one day). This
+        # value must stay in sync with StepRunnerMixin._DEFAULT_TIMEOUT_MINUTES
+        # so every code path agrees on the unparseable-timeout budget (L2).
+        return 1440
 
 def step_execution_error(status: Any, error: Any) -> str:
     """Format a failed step result (what failed, why, how to proceed).

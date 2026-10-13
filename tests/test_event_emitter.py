@@ -110,3 +110,66 @@ def test_emit_warns_when_listener_raises():
     emitter.emit("runner_start")
 
     assert runner.warnings == ["event listener failed: boom"]
+
+
+def test_emit_reuses_sink_handle_across_events(tmp_path, monkeypatch):
+    """L9: the NDJSON sink is opened lazily once and reused, not per event."""
+    sink = tmp_path / "events.ndjson"
+
+    real_open = open
+    open_calls: list[tuple] = []
+
+    def counting_open(*args, **kwargs):
+        open_calls.append(args)
+        return real_open(*args, **kwargs)
+
+    monkeypatch.setattr("builtins.open", counting_open)
+
+    runner = _Runner(event_sink_path=sink)
+    emitter = EventEmitter(runner)
+    emitter.emit("runner_start", {"phase": 1})
+    emitter.emit("runner_finish", {"phase": 2})
+
+    assert len(open_calls) == 1, "sink must be opened once and reused"
+    lines = sink.read_text().splitlines()
+    assert len(lines) == 2
+    assert json.loads(lines[0])["phase"] == 1
+    assert json.loads(lines[1])["phase"] == 2
+
+    emitter.close()
+    emitter.emit("runner_start", {"phase": 3})
+    assert len(open_calls) == 2, "emit after close() should reopen the sink"
+
+
+def test_close_closes_sink_handle(tmp_path):
+    sink = tmp_path / "events.ndjson"
+    runner = _Runner(event_sink_path=sink)
+    emitter = EventEmitter(runner)
+
+    emitter.emit("runner_start")
+    assert emitter._sink_handle is not None
+    assert emitter._sink_path == sink
+
+    emitter.close()
+    assert emitter._sink_handle is None
+    assert emitter._sink_path is None
+
+
+def test_close_without_sink_is_noop():
+    runner = _Runner()
+    emitter = EventEmitter(runner)
+    emitter.close()
+    assert emitter._sink_handle is None
+
+
+def test_emit_flushes_each_entry_immediately(tmp_path):
+    """Entries must be visible on disk right after emit (same as open-per-event)."""
+    sink = tmp_path / "events.ndjson"
+    runner = _Runner(event_sink_path=sink)
+    emitter = EventEmitter(runner)
+
+    emitter.emit("runner_start")
+    assert len(sink.read_text().splitlines()) == 1
+
+    emitter.emit("runner_finish")
+    assert len(sink.read_text().splitlines()) == 2

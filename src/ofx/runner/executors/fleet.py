@@ -6,13 +6,14 @@ import asyncio
 import sys
 from typing import Any
 
-from ofx.runner.context import RunnerStatus, RunResult
+from ofx.runner.context import RunResult
 from ofx.runner.executors import Executor
-from ofx.utils.file_cleanup import remove_files_and_parent_dir
 from ofx.runner.executors.parallel import (
     parallel_run_settings,
     run_parallel_runner_items,
 )
+from ofx.utils.file_cleanup import remove_files_and_parent_dir
+
 
 class FleetExecutor(Executor):
     """Fleet-specific execution logic extracted from cloud fleet runners."""
@@ -51,7 +52,7 @@ class FleetExecutor(Executor):
     async def post_run(self, runner) -> None:
         remove_files_and_parent_dir(
             runner._chunk_files,
-            on_error=lambda message: runner._logger.debug(message),
+            on_error=lambda message: runner._log_debug(message),
             file_label="chunk file",
             dir_label="chunk dir",
             clear=runner._chunk_files,

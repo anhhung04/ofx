@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -92,6 +93,17 @@ def _source_host() -> str:
 
     return _source_host_cache
 
+async def _source_host_async() -> str:
+    """Async-safe variant of ``_source_host`` for event-loop callers.
+
+    Reuses the same module-global cache as the synchronous lookup, and runs
+    the blocking network lookup in a worker thread so the event loop is never
+    blocked by the urllib/socket probes (2s timeout per public-IP service).
+    """
+    if _source_host_cache:
+        return _source_host_cache
+    return await asyncio.to_thread(_source_host)
+
 def _resolve_command_log_path(ctx_vars: dict[str, Any]) -> Path:
     """Resolve the command log path, preferring the active project's logs dir."""
     log_file = os.environ.get("OFX_COMMAND_LOG_FILE")
@@ -181,4 +193,45 @@ def log_step(
     except Exception as exc:
         logger.debug("Failed to write command log entry: %s", exc)
 
-__all__ = ["_format_duration", "_resolve_command_log_path", "detect_target", "log_step"]
+async def log_step_async(
+    *,
+    ctx_vars: dict[str, Any],
+    step_name: str,
+    command: str,
+    tool: str,
+    target: str,
+    status: str,
+    duration_ms: int | None,
+    exit_code: int | str | None = None,
+    tags: str = "",
+    source_host: str = "",
+) -> None:
+    """Async variant of :func:`log_step` safe for event-loop callers.
+
+    Identical output format; the blocking public-IP lookup is offloaded to a
+    worker thread (see :func:`_source_host_async`) when ``source_host`` is not
+    already supplied by the caller.
+    """
+    resolved = source_host or await _source_host_async()
+    log_step(
+        ctx_vars=ctx_vars,
+        step_name=step_name,
+        command=command,
+        tool=tool,
+        target=target,
+        status=status,
+        duration_ms=duration_ms,
+        exit_code=exit_code,
+        tags=tags,
+        source_host=resolved,
+    )
+
+__all__ = [
+    "_format_duration",
+    "_resolve_command_log_path",
+    "detect_target",
+    "log_step",
+    "log_step_async",
+    "_source_host",
+    "_source_host_async",
+]

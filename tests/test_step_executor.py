@@ -102,9 +102,12 @@ async def test_post_run_logs_timeline_when_log_command_enabled(tmp_path, monkeyp
         _build_timeline_params=lambda _result: {"source_host": "host-a", "tags": "cloud"},
     )
 
+    async def _log_step_async(**kwargs):
+        timeline_calls.append(kwargs)
+
     monkeypatch.setattr(
-        "ofx.runner.timeline.log_step",
-        lambda **kwargs: timeline_calls.append(kwargs),
+        "ofx.runner.timeline.log_step_async",
+        _log_step_async,
     )
 
     await StepExecutor().post_run(runner)
