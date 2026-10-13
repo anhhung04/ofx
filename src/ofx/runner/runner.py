@@ -430,6 +430,20 @@ class Runner[TModel: BaseModel]:
     def runners(self) -> dict[str, Runner[Any]]:
         return self._runners
 
+    def register_runner(self, key: str, runner: Runner[Any]) -> None:
+        """Register a child runner under *key*.
+
+        A duplicate key means two children would silently overwrite each
+        other's outputs in the shared registry (the H2 class of bug), so it
+        is rejected explicitly instead of clobbering the earlier runner.
+        """
+        if key in self._runners:
+            raise ValueError(
+                f"Duplicate runner key {key!r} on {self!r}: a child runner is "
+                "already registered under this name"
+            )
+        self._runners[key] = runner
+
     async def get_result(self) -> RunResult:
         outputs = await self.reg_get("outputs") or {}
         return RunResult(

@@ -21,6 +21,12 @@ def _manager() -> WorkflowExecutionManager:
         _runners={},
         _time_guard=None,
     )
+    # register_runner mirrors Runner.register_runner: guard + store.
+    def _register_runner(key, runner):
+        if key in parent._runners:
+            raise ValueError(f"Duplicate runner key {key!r}")
+        parent._runners[key] = runner
+    parent.register_runner = _register_runner
     return WorkflowExecutionManager(parent)
 
 

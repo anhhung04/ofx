@@ -4,6 +4,16 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+
+def _attach_register(ns):
+    """Attach a Runner.register_runner-equivalent to a SimpleNamespace fixture."""
+    def _register_runner(key, runner):
+        if key in ns._runners:
+            raise ValueError(f"Duplicate runner key {key!r}")
+        ns._runners[key] = runner
+    ns.register_runner = _register_runner
+    return ns
+
 from ofx.models.job import Job
 from ofx.runner import RunContext
 from ofx.runner.job import (
@@ -51,6 +61,7 @@ def test_attach_indexed_job_runner_registers_child_on_parent_runner():
         parent=workflow_parent,
         _runners={},
     )
+    _attach_register(runner)
 
     job_copy, child_runner = attach_indexed_job_runner(
         runner,
@@ -83,6 +94,7 @@ def test_attach_indexed_job_runner_honors_override_parent_and_display_name():
         parent=object(),
         _runners={},
     )
+    _attach_register(runner)
     ctx = RunContext()
     override_parent = object()
 

@@ -3,6 +3,16 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+
+
+def _attach_register(ns):
+    """Attach a Runner.register_runner-equivalent to a SimpleNamespace fixture."""
+    def _register_runner(key, runner):
+        if key in ns._runners:
+            raise ValueError(f"Duplicate runner key {key!r}")
+        ns._runners[key] = runner
+    ns.register_runner = _register_runner
+    return ns
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -460,6 +470,7 @@ async def test_dispatch_remote_steps_merges_matrix_into_copied_context(monkeypat
         _work_dir="/tmp/ofx-run",
         _runners={},
     )
+    _attach_register(runner)
     await CloudExecutor().dispatch_remote_steps(runner, {"tool": "nmap"})
 
     assert captured_contexts[0][1].vars["matrix"] == {
@@ -509,6 +520,7 @@ async def test_dispatch_remote_steps_resets_non_inherited_step_secrets(monkeypat
         _work_dir="/tmp/ofx-run",
         _runners={},
     )
+    _attach_register(runner)
     await CloudExecutor().dispatch_remote_steps(runner, None)
 
     assert captured_secrets[0] == {"token": "secret"}

@@ -75,7 +75,7 @@ class JobExecutor(Executor):
                 step_ctx,
             )
             step_runner.log_level = logging.CRITICAL
-            runner._runners[f"{step.step_index}{suffix}"] = step_runner
+            runner.register_runner(f"{step.step_index}{suffix}", step_runner)
             result = await step_runner.run()
             if step_runner.is_failed and not step.continue_on_error:
                 from ofx.runner.error_helpers import job_step_failed

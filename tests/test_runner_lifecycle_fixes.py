@@ -521,3 +521,28 @@ async def test_template_field_failure_propagates_but_output_failure_is_soft() ->
     # runner cannot silently run with a broken config.
     with pytest.raises(RuntimeError, match="template boom"):
         await runner._resolve_template_fields(["name"])
+
+
+class TestRegisterRunner:
+    """Duplicate child keys must fail loudly instead of clobbering outputs."""
+
+    def test_duplicate_key_rejected(self):
+        from ofx.models.workflow import Workflow
+        from ofx.runner import RunContext, WorkflowRunner
+
+        workflow = Workflow.model_validate({"name": "W", "jobs": {"a": {"steps": [{"module": "shell", "with": {"cmd": "true"}}]}}})
+        runner = WorkflowRunner(workflow=workflow, ctx=RunContext())
+        child = WorkflowRunner(workflow=workflow, ctx=RunContext(), parent=runner)
+        runner.register_runner("a", child)
+        with pytest.raises(ValueError, match="Duplicate runner key"):
+            runner.register_runner("a", child)
+
+    def test_distinct_keys_register(self):
+        from ofx.models.workflow import Workflow
+        from ofx.runner import RunContext, WorkflowRunner
+
+        workflow = Workflow.model_validate({"name": "W", "jobs": {"a": {"steps": [{"module": "shell", "with": {"cmd": "true"}}]}}})
+        runner = WorkflowRunner(workflow=workflow, ctx=RunContext())
+        runner.register_runner("a", WorkflowRunner(workflow=workflow, ctx=RunContext(), parent=runner))
+        runner.register_runner("b", WorkflowRunner(workflow=workflow, ctx=RunContext(), parent=runner))
+        assert set(runner.runners) == {"a", "b"}

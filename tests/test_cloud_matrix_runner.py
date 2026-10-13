@@ -254,6 +254,11 @@ class TestCloudFleetRunner:
                 )
                 self.parent = SimpleNamespace()
                 self._runners = {}
+
+            def register_runner(self, key, runner):
+                if key in self._runners:
+                    raise ValueError(f"Duplicate runner key {key!r}")
+                self._runners[key] = runner
         monkeypatch.setattr(cloud_job_module, "CloudJobRunner", _ChildRunner)
 
         runner = _Runner()

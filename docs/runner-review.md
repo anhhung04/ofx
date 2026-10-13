@@ -198,3 +198,16 @@ Legend: ✅ fixed (evidence cited)
   `_registry`/`_cached_key_prefix`/`_state_machine`/`_error`; duck-typed
   hooks `_create_runner`/`_handler_registry`/`_outputs_file`/`_temp_file`;
   public `run_workflow(registry_backend=...)` signature.
+
+## Follow-up hardening (post-review)
+
+- ✅ **Registry backends exercised end-to-end.** File-backend workflow tests
+  added (`TestFileBackendEndToEnd`): a two-step workflow with template
+  resolution and two parallel jobs with no cross-contamination. The memory
+  backend remains the default; the file backend now has full-workflow
+  coverage (previously only unit-level).
+- ✅ **Duplicate child-runner keys rejected.** `Runner.register_runner` is
+  now the single registration path (`job.py`, `workflow_execution.py`,
+  `executors/job.py` migrated); a duplicate key raises instead of silently
+  clobbering an earlier child's outputs (the H2 class of bug). Regression
+  tests: `TestRegisterRunner`.

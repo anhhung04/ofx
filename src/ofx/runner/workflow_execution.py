@@ -55,7 +55,7 @@ class WorkflowExecutionManager:
                     parent=self._parent,
                 )
                 stage_runners[job_id] = runner
-                self._parent._runners[job_id] = runner
+                self._parent.register_runner(job_id, runner)
 
             failed_jobs = await self._run_stage(stage_index, stage_runners)
             if failed_jobs:

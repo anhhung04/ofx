@@ -1224,3 +1224,84 @@ class TestWorkflowExecutionCancellation:
 
         failed = await mgr._run_stage(0, stage_runners)
         assert "fast" not in failed
+
+
+class TestFileBackendEndToEnd:
+    """Full workflow over the file registry backend — the H1 regression guard."""
+
+    @pytest.mark.asyncio
+    async def test_two_step_workflow_completes_with_file_backend(self, tmp_path):
+        """Two steps must not break on the shared registry (H1)."""
+        import yaml
+
+        from ofx.models.workflow import Workflow
+        from ofx.runner import RunContext, RunnerStatus, WorkflowRunner
+        from ofx.runner.registry import RegistryFactory
+
+        workflow_yaml = """
+name: File Backend E2E
+jobs:
+  main:
+    name: Main
+    steps:
+      - name: produce
+        module: shell
+        with:
+          cmd: echo "marker=hello-e2e" >> $RUNNER_OUTPUTS
+      - name: consume
+        module: shell
+        with:
+          cmd: |
+            echo "got={{ steps.produce.outputs.marker }}" >> $RUNNER_OUTPUTS
+"""
+        workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
+        registry = RegistryFactory.create("file", filepath=str(tmp_path / "registry.json"))
+        ctx = RunContext(output_path=tmp_path)
+        runner = WorkflowRunner(workflow=workflow, ctx=ctx, registry=registry)
+        result = await runner.run()
+
+        assert result.status == RunnerStatus.COMPLETED
+        main = runner.runners["main"]
+        consume = main.runners["1"]
+        consume_outputs = (await consume.get_result()).outputs
+        assert consume_outputs["got"] == "hello-e2e"
+
+    @pytest.mark.asyncio
+    async def test_parallel_jobs_file_backend_no_contamination(self, tmp_path):
+        """Parallel jobs on the file backend keep separate outputs (H2)."""
+        import yaml
+
+        from ofx.models.workflow import Workflow
+        from ofx.runner import RunContext, RunnerStatus, WorkflowRunner
+        from ofx.runner.registry import RegistryFactory
+
+        workflow_yaml = """
+name: File Backend Parallel
+jobs:
+  job_a:
+    steps:
+      - name: write
+        module: shell
+        with:
+          cmd: echo "value=aaa" >> $RUNNER_OUTPUTS
+  job_b:
+    steps:
+      - name: write
+        module: shell
+        with:
+          cmd: echo "value=bbb" >> $RUNNER_OUTPUTS
+"""
+        workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
+        registry = RegistryFactory.create("file", filepath=str(tmp_path / "registry.json"))
+        runner = WorkflowRunner(
+            workflow=workflow,
+            ctx=RunContext(output_path=tmp_path),
+            registry=registry,
+        )
+        result = await runner.run()
+
+        assert result.status == RunnerStatus.COMPLETED
+        out_a = (await runner.runners["job_a"].runners["0"].get_result()).outputs
+        out_b = (await runner.runners["job_b"].runners["0"].get_result()).outputs
+        assert out_a["value"] == "aaa"
+        assert out_b["value"] == "bbb"
