@@ -12,7 +12,6 @@ from ofx.runner.executors.matrix import MatrixExecutor
 from ofx.runner.executors.pipe import PipeExecutor
 from ofx.runner.executors.step import StepExecutor
 from ofx.runner.executors.workflow import WorkflowExecutor
-from ofx.runner.handlers import HandlerRegistry
 from ofx.runner.job import JobRunner, MatrixJobRunner
 from ofx.runner.lifecycle import LifecycleManager
 from ofx.runner.logging import LogContext, StructuredLogger
@@ -60,7 +59,6 @@ __all__ = [
     "Executor",
     "ExecutionResult",
     "FleetExecutor",
-    "HandlerRegistry",
     "JobExecutor",
     "JobRunner",
     "LifecycleManager",

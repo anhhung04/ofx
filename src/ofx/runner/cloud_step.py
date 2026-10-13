@@ -138,10 +138,8 @@ class CloudStepRunner(StepRunnerMixin, Runner):
         remote_runner,
         work_dir: str | None = None,
         executor=None,
-        handler_registry=None,
     ):
         from ofx.runner.executors.step import StepExecutor
-        from ofx.runner.handlers import registry as default_handler_registry
 
         step_executor = executor or StepExecutor()
         super().__init__(
@@ -151,7 +149,6 @@ class CloudStepRunner(StepRunnerMixin, Runner):
             parent.registry,
             executor=step_executor,
         )
-        self._handler_registry = handler_registry or default_handler_registry
         self._remote = remote_runner
         self._work_dir = work_dir or "/tmp"
         self._run_type = None

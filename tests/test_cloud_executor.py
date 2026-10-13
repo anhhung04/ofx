@@ -573,7 +573,6 @@ async def test_dispatch_remote_steps_merges_matrix_and_create_step_runner_kwargs
         "remote_runner": "remote",
         "work_dir": "/tmp/ofx-run",
         "executor": executor._step_executor,
-        "handler_registry": executor._handler_registry,
     }
 
 @pytest.mark.asyncio

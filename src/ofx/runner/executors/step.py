@@ -10,6 +10,7 @@ from ofx.runner.context import (
     ConditionNotMetError,
     RunnerStatus,
     RunResult,
+    context_copy,
     normalized_runner_status_value,
 )
 from ofx.runner.error_helpers import (
@@ -20,9 +21,77 @@ from ofx.runner.error_helpers import (
 )
 from ofx.runner.execution_results import build_step_execution_result_for_runner
 from ofx.runner.executors.base import Executor
-from ofx.runner.handlers import registry as default_handler_registry
 from ofx.runner.registry_keys import RunnerRegistryKeys
 from ofx.utils.file_cleanup import remove_file
+
+
+def _create_step_child_runner(step_runner):
+    """Build the child runner for a step's run type (module/workflow/pipe).
+
+    Direct dispatch replaces the legacy ``HandlerRegistry``: the run-type set
+    is closed (``RunType``), and cloud steps use the ``_create_runner``
+    duck-type hook instead.
+    """
+    run_type = step_runner._run_type
+    if run_type == RunType.MODULE:
+        from ofx.modules import ModuleInvocation, ModuleRunner
+        from ofx.runner.run_defaults import resolve_model_shell
+
+        invocation = ModuleInvocation(
+            name=step_runner.model.module,
+            # `with:` args were already template-resolved and merged into
+            # ctx.inputs by StepRunner._pre_run — that merged view is the
+            # single source of truth for module arguments.
+            args=dict(step_runner.ctx.inputs),
+            timeout_minutes=step_runner.model.timeout,
+            shell=resolve_model_shell(step_runner, step_runner.model),
+            working_directory=step_runner._resolve_working_dir(),
+            interactive=step_runner.model.interactive and step_runner.ctx.allow_interactive,
+        )
+        return ModuleRunner(
+            invocation,
+            context_copy(step_runner.ctx),
+            parent=step_runner,
+        )
+    if run_type == RunType.WORKFLOW:
+        from ofx.runner.workflow import WorkflowRunner
+        from ofx.utils.workflow_utils import find_workflow, workflow_dirs_with_path
+
+        parent_workflow_dir = (
+            step_runner.ctx.workflow_dir
+            or step_runner.parent.model.workflow_path.parent
+        )
+        search_dirs = workflow_dirs_with_path(
+            step_runner.ctx.workflow_dirs,
+            parent_workflow_dir,
+        )
+        workflow = find_workflow(
+            step_runner.model.uses or "",
+            tuple(search_dirs),
+            step_runner.parent.model.defaults.flow_registry_url,
+        )
+        return WorkflowRunner(
+            workflow,
+            context_copy(
+                step_runner.ctx,
+                update={
+                    "workflow_dirs": workflow_dirs_with_path(
+                        search_dirs, workflow.workflow_path.parent
+                    ),
+                },
+            ),
+            parent=step_runner,
+        )
+    if run_type == RunType.PIPE:
+        from ofx.runner.pipe import PipeExecution, PipeRunner
+
+        model = PipeExecution(pipe=step_runner.model.pipe)
+        return PipeRunner(
+            model,
+            context_copy(step_runner.ctx),
+            parent=step_runner,
+        )
+    raise ValueError(f"Invalid run type '{run_type}'. No step child runner for it.")
 
 
 class StepExecutor(Executor):
@@ -46,21 +115,20 @@ class StepExecutor(Executor):
             timed_out = False
             last_exc: BaseException | None = None
             try:
+                if (
+                    getattr(runner.model, "interactive", False)
+                    and getattr(runner.ctx, "allow_interactive", False)
+                    and runner._run_type == RunType.WORKFLOW
+                ):
+                    runner._log_warning(
+                        "Interactive mode is not supported for workflow steps ('uses'). "
+                        "Ignoring interactive flag."
+                    )
                 runner_factory = getattr(runner, "_create_runner", None)
                 if runner_factory is not None:
                     child_runner = runner_factory()
                 else:
-                    registry = getattr(runner, "_handler_registry", default_handler_registry)
-                    if (
-                        runner.model.interactive
-                        and runner.ctx.allow_interactive
-                        and runner._run_type == RunType.WORKFLOW
-                    ):
-                        runner._log_warning(
-                            "Interactive mode is not supported for workflow steps ('uses'). "
-                            "Ignoring interactive flag."
-                        )
-                    child_runner = registry.get(runner._run_type)(runner)
+                    child_runner = _create_step_child_runner(runner)
                 # Cloud remote handlers expose a network grace budget on the
                 # child (H5): extend the outer wrapper's wait so the grace is
                 # actually reachable (local children expose no grace -> 0).

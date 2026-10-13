@@ -264,6 +264,11 @@ async def test_do_run_warns_and_uses_registry_for_workflow_interactive_step() ->
             )
         ),
     )
+
+    def _fake_create():
+        created.append(runner)
+        return child_runner
+
     runner = SimpleNamespace(
         model=SimpleNamespace(
             retry=0,
@@ -275,13 +280,7 @@ async def test_do_run_warns_and_uses_registry_for_workflow_interactive_step() ->
         ),
         ctx=SimpleNamespace(vars={}, allow_interactive=True),
         _run_type=RunType.WORKFLOW,
-        _handler_registry=SimpleNamespace(
-            get=lambda run_type: (
-                (lambda current_runner: created.append(current_runner) or child_runner)
-                if run_type == RunType.WORKFLOW
-                else None
-            )
-        ),
+        _create_runner=_fake_create,
         _log_warning=warnings.append,
         _log_debug=lambda _message: None,
         reg_set=AsyncMock(side_effect=lambda key, value: results.append((key, value))),

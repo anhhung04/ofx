@@ -13,8 +13,6 @@ from ofx.models.cloud import CloudConfig
 from ofx.runner.context import context_copy, context_with_vars
 from ofx.runner.executors.job import JobExecutor
 from ofx.runner.executors.step import StepExecutor
-from ofx.runner.handlers import HandlerRegistry
-from ofx.runner.handlers import registry as default_handler_registry
 from ofx.runner.registry_keys import RunnerRegistryKeys
 from ofx.runner.services.cloud_provisioner import CloudProvisioner
 from ofx.utils.log import register_secrets
@@ -44,11 +42,9 @@ class CloudExecutor(JobExecutor):
         self,
         *,
         step_executor: StepExecutor | None = None,
-        handler_registry: HandlerRegistry | None = None,
         provisioner: CloudProvisioner | None = None,
     ) -> None:
         self._step_executor = step_executor or StepExecutor()
-        self._handler_registry = handler_registry or default_handler_registry
         self._provisioner = provisioner
 
     async def pre_run(self, runner) -> None:
@@ -281,7 +277,6 @@ class CloudExecutor(JobExecutor):
             remote_runner=runner._remote_runner,
             work_dir=runner._work_dir,
             executor=self._step_executor,
-            handler_registry=self._handler_registry,
         )
 
     async def download_outputs(self, runner) -> None:

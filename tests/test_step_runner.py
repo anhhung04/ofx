@@ -11,7 +11,7 @@ import pytest
 from ofx.models.step import Step
 from ofx.runner import RunContext, RunnerStatus
 from ofx.runner.cloud_step import CloudStepRunner
-from ofx.runner.handlers.registry import registry
+from ofx.runner.executors.step import _create_step_child_runner as _create
 from ofx.runner.step import StepRunner
 from ofx.models.step import RunType
 
@@ -130,7 +130,8 @@ def test_script_handler_uses_resolved_working_directory(tmp_path):
         _resolve_shell=lambda: "/bin/sh",
     )
 
-    runner = registry.get(RunType.MODULE)(step_runner)
+    step_runner._run_type = RunType.MODULE
+    runner = _create(step_runner)
 
     assert runner.model.working_directory == (tmp_path / "workspace").resolve()
 
@@ -151,7 +152,8 @@ def test_script_file_handler_uses_resolved_working_directory(tmp_path):
         _resolve_shell=lambda: "/bin/sh",
     )
 
-    runner = registry.get(RunType.MODULE)(step_runner)
+    step_runner._run_type = RunType.MODULE
+    runner = _create(step_runner)
 
     assert runner.model.working_directory == (tmp_path / "workspace" / "nested").resolve()
 
@@ -169,7 +171,8 @@ def test_command_handler_uses_resolved_shell():
         _resolve_working_dir=lambda: Path.cwd(),
     )
 
-    runner = registry.get(RunType.MODULE)(step_runner)
+    step_runner._run_type = RunType.MODULE
+    runner = _create(step_runner)
 
     assert runner.model.shell == "/bin/sh"
 
@@ -187,7 +190,8 @@ def test_command_handler_honors_explicit_step_shell():
         _resolve_working_dir=lambda: Path.cwd(),
     )
 
-    runner = registry.get(RunType.MODULE)(step_runner)
+    step_runner._run_type = RunType.MODULE
+    runner = _create(step_runner)
 
     assert runner.model.shell == "/bin/zsh"
 
@@ -204,7 +208,8 @@ def test_script_handler_uses_resolved_shell():
         _resolve_working_dir=lambda: Path.cwd(),
     )
 
-    runner = registry.get(RunType.MODULE)(step_runner)
+    step_runner._run_type = RunType.MODULE
+    runner = _create(step_runner)
 
     assert runner.model.shell == "/bin/sh"
 def test_run_if_context_defaults_when_no_previous_step_runner():
