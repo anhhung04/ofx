@@ -11,6 +11,7 @@ import re
 from collections.abc import Callable
 
 from ofx.cloud.module_kind import is_python_module_step, is_udf_module_step
+from ofx.cloud.payload import TASK_ERR_MARKER, TASK_OK_MARKER
 from ofx.cloud.sessions.python_steps import step_bundle_filename
 from ofx.models.step import RunType, Step
 from ofx.utils.shell import bash_dquote_escape
@@ -156,7 +157,7 @@ def _build_bash(
     lines.extend(
         [
             '_log "All steps completed successfully"',
-            '_log "__TASK_OK__"',
+            f'_log "{TASK_OK_MARKER}"',
         ]
     )
 
@@ -199,7 +200,7 @@ def _build_bash_step_block(
                 "STEP_RC=$?",
                 "if [ $STEP_RC -ne 0 ]; then",
                 f'  _log "Step {step_index} ({step_desc}) FAILED (exit $STEP_RC)"',
-                '  _log "__TASK_ERR__"',
+                f'  _log "{TASK_ERR_MARKER}"',
                 "  exit $STEP_RC",
                 "fi",
             ]
@@ -278,12 +279,12 @@ def _bash_encrypt_epilogue() -> list[str]:
         "    else",
         '      _log "FATAL: openssl encryption failed (rc=$ENC_RC); aborting to prevent unencrypted output on disk"',
         '      rm -f "$WORK_DIR/output.tar.gz"',
-        '      _log "__TASK_ERR__"',
+        f'      _log "{TASK_ERR_MARKER}"',
         "      exit 1",
         "    fi",
         "  else",
         '    _log "FATAL: tar failed (rc=$TAR_RC); aborting to prevent unencrypted output on disk"',
-        '    _log "__TASK_ERR__"',
+        f'    _log "{TASK_ERR_MARKER}"',
         "    exit 1",
         "  fi",
         "else",
@@ -345,7 +346,12 @@ def _build_powershell(
     if encrypt_at_rest:
         lines.extend(_ps_encrypt_epilogue())
 
-    lines.extend(['Write-Log "All steps completed successfully"', 'Write-Log "__TASK_OK__"'])
+    lines.extend(
+        [
+            'Write-Log "All steps completed successfully"',
+            f'Write-Log "{TASK_OK_MARKER}"',
+        ]
+    )
 
     if encrypt_at_rest:
         lines.extend(
@@ -394,7 +400,7 @@ def _build_powershell_step_block(
             [
                 "} catch {",
                 f'  Write-Log "Step {step_index} ({step_desc}) FAILED: $_"',
-                '  Write-Log "__TASK_ERR__"',
+                f'  Write-Log "{TASK_ERR_MARKER}"',
                 "  exit 1",
                 "}",
             ]
@@ -438,7 +444,7 @@ def _ps_encrypt_epilogue() -> list[str]:
         "  } catch {",
         '    Write-Log "FATAL: Encryption failed: $_"',
         '    Remove-Item -Force "$WORK_DIR\\output.zip" -ErrorAction SilentlyContinue',
-        '    Write-Log "__TASK_ERR__"',
+        f'    Write-Log "{TASK_ERR_MARKER}"',
         "    exit 1",
         "  }",
         "} else {",

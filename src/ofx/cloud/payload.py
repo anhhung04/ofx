@@ -22,6 +22,12 @@ from ofx.models.step import Step
 
 MODULE_OUTPUTS_SENTINEL = "__OFX_MODULE_OUTPUTS__"
 
+# Task completion markers: emitted by generated session scripts
+# (sessions/script_builder.py) and scanned from session logs by the status
+# poller (sessions/status.py). Defined once here so both sides stay in sync.
+TASK_OK_MARKER = "__TASK_OK__"
+TASK_ERR_MARKER = "__TASK_ERR__"
+
 
 def parse_module_outputs_sentinel(stdout: str) -> tuple[str, dict[str, Any]]:
     """Parse a UDF wrapper's ``__OFX_MODULE_OUTPUTS__`` sentinel line.
@@ -149,6 +155,8 @@ def build_module_step_payload(
 
 __all__ = [
     "MODULE_OUTPUTS_SENTINEL",
+    "TASK_ERR_MARKER",
+    "TASK_OK_MARKER",
     "build_module_step_payload",
     "build_python_payload",
     "build_python_step_payload",

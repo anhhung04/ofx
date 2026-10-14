@@ -9,13 +9,12 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from ofx.cloud.payload import TASK_ERR_MARKER as _FAIL_MARKER
+from ofx.cloud.payload import TASK_OK_MARKER as _DONE_MARKER
 from ofx.cloud.sessions.models import Session, SessionStatus, SessionTarget
 from ofx.cloud.sessions.submit import _cloud_connection_settings
 
 logger = logging.getLogger("ofx")
-
-_DONE_MARKER = "__TASK_OK__"
-_FAIL_MARKER = "__TASK_ERR__"
 
 _INITIAL_POLL_INTERVAL = 10.0
 _MAX_POLL_INTERVAL = 120.0
