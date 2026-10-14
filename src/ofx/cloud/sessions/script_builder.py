@@ -51,6 +51,101 @@ def _append_step_blocks(
         lines.extend(build_step_block(step, step_index))
         lines.append("")
 
+def build_session_cli_script(
+    *,
+    session_id: str,
+    work_dir: str,
+    workflow_name: str,
+    job_name: str,
+    env: dict[str, str],
+    python_executable: str,
+    flow_args: list[str],
+    encrypt_at_rest: bool = False,
+) -> str:
+    """Generate a bash wrapper that runs a workflow through ``ofx flow run``.
+
+    Used for local detached sessions: the session layer stages the workflow
+    file and bundled step artifacts, and this wrapper runs the standard CLI
+    (same WorkflowRunner code path as interactive runs) with output redirected
+    into the session log. The CLI exit code is mapped onto the task markers so
+    the session status poller can detect completion, and results are encrypted
+    at rest exactly like the step-by-step session script.
+
+    Args:
+        session_id: Session identifier (embedded in markers and env).
+        work_dir: Local working directory.
+        workflow_name: Workflow display name for log context.
+        job_name: Job display name/id for log context.
+        env: Extra environment variables to export.
+        python_executable: Interpreter used to launch ``python -m ofx``.
+        flow_args: CLI argument list (without the interpreter), each element
+            shell-quoted verbatim.
+        encrypt_at_rest: If True, appends the shared encryption epilogue.
+
+    Returns:
+        Script content as a string.
+    """
+    scope = bash_dquote_escape(job_name or "full-workflow")
+    workflow = bash_dquote_escape(workflow_name or "")
+    command = " ".join(bash_dquote_escape(arg) for arg in flow_args)
+    lines: list[str] = [
+        "#!/bin/bash",
+        f'export SESSION_ID="{bash_dquote_escape(session_id)}"',
+        f'WORK_DIR="{bash_dquote_escape(work_dir)}"',
+        'LOG_FILE="$WORK_DIR/output.log"',
+        'mkdir -p "$WORK_DIR/output"',
+        'cd "$WORK_DIR"',
+        "",
+    ]
+
+    lines.extend(
+        _iter_session_env_assignments(
+            env,
+            render_assignment=lambda key, value: f'export {key}="{bash_dquote_escape(value)}"',
+        )
+    )
+    if env:
+        lines.append("")
+
+    lines.extend(
+        [
+            '_log() { echo "[$(date +%Y-%m-%dT%H:%M:%S)] $*" >> "$LOG_FILE"; }',
+            f'_log "Session $SESSION_ID started (workflow={workflow} job={scope})"',
+            "",
+            '_log ">>> Running workflow via ofx flow run"',
+            f'( cd "$WORK_DIR" 2>/dev/null; exec "{bash_dquote_escape(python_executable)}" {command} ) >> "$LOG_FILE" 2>&1',
+            "STEP_RC=$?",
+            "if [ $STEP_RC -ne 0 ]; then",
+            '  _log "Session workflow FAILED (exit $STEP_RC)"',
+            f'  _log "{TASK_ERR_MARKER}"',
+            "  exit $STEP_RC",
+            "fi",
+            '_log "<<< Session workflow done"',
+            "",
+        ]
+    )
+
+    if encrypt_at_rest:
+        lines.extend(_bash_encrypt_epilogue())
+
+    lines.extend(
+        [
+            '_log "All steps completed successfully"',
+            f'_log "{TASK_OK_MARKER}"',
+        ]
+    )
+
+    if encrypt_at_rest:
+        lines.extend(
+            [
+                "",
+                "# Self-destruct (after markers written)",
+                'shred -u "$WORK_DIR/run.sh" 2>/dev/null || rm -f "$WORK_DIR/run.sh"',
+            ]
+        )
+
+    return "\n".join(lines) + "\n"
+
 def build_session_script(
     steps: list[Step],
     *,
