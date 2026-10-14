@@ -9,7 +9,9 @@ import yaml
 from ofx.models.workflow import Workflow
 from ofx.runner import RunContext, RunnerRegistryKeys, RunnerStatus
 from ofx.runner.execution_summary import ExecutionSummaryReporter
-from ofx.runner.runner_refs import runner_leaf_descendants
+from ofx.runner.execution_summary import (
+    _runner_leaf_descendants as runner_leaf_descendants,
+)
 from ofx.runner.workflow import WorkflowRunner
 
 
@@ -133,7 +135,7 @@ async def test_job_summaries_fall_back_to_runner_state_when_result_fails():
     )
 
     with patch(
-        "ofx.runner.execution_summary.runner_leaf_descendants",
+        "ofx.runner.execution_summary._runner_leaf_descendants",
         return_value=[step_runner],
     ):
         summaries = await reporter._job_summaries()

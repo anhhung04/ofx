@@ -9,8 +9,9 @@ from unittest.mock import AsyncMock, MagicMock
 from ofx.runner.findings_export import (
     collect_typed_outputs,
     export_typed_outputs,
+    sanitize_target_slug,
 )
-from ofx.runner.target_paths import sanitize_target_slug
+
 
 class TestExportTypedOutputs:
     def test_empty_list_returns_empty(self, tmp_path):

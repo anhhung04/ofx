@@ -8,8 +8,29 @@ from dataclasses import dataclass, field
 
 from ofx.runner.context import context_with_update
 from ofx.runner.runner import Runner
-from ofx.runner.runner_factory import job_runner_class
 from ofx.settings import settings
+
+
+def _job_runner_class(job):
+    """Return the runner class appropriate for the given job configuration."""
+    has_cloud = job.cloud is not None
+    has_matrix = bool(job.strategy and job.strategy.matrix)
+    has_fleet = bool(job.strategy and job.strategy.fleet)
+
+    if has_cloud and has_fleet:
+        from ofx.runner.cloud_fleet import CloudFleetRunner
+        return CloudFleetRunner
+    if has_cloud and has_matrix:
+        from ofx.runner.cloud_matrix import CloudMatrixJobRunner
+        return CloudMatrixJobRunner
+    if has_cloud:
+        from ofx.runner.cloud_job import CloudJobRunner
+        return CloudJobRunner
+    if has_matrix:
+        from ofx.runner.job import MatrixJobRunner
+        return MatrixJobRunner
+    from ofx.runner.job import JobRunner
+    return JobRunner
 
 logger = logging.getLogger(settings.app_branding)
 _MEMORY_POLL_INTERVAL = 5
@@ -46,7 +67,7 @@ class WorkflowExecutionManager:
             stage_size = len(stage)
             for job_id in stage:
                 job = staged_jobs[job_id]
-                runner = job_runner_class(job)(
+                runner = _job_runner_class(job)(
                     job,
                     context_with_update(
                         self._parent.ctx,

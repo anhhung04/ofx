@@ -8,7 +8,22 @@ from typing import Any
 from ofx.runner.context import RunnerStatus, normalized_runner_status_value
 from ofx.runner.metadata import ModelContext
 from ofx.runner.registry_keys import RunnerRegistryKeys
-from ofx.runner.runner_refs import runner_leaf_descendants
+
+
+def _runner_leaf_descendants(runner):
+    """Yield leaf runners (no children) from a runner tree."""
+    if runner is None:
+        return []
+    leaves = []
+    stack = [runner]
+    while stack:
+        current = stack.pop()
+        children = list(getattr(current, "_runners", {}).values())
+        if not children:
+            leaves.append(current)
+            continue
+        stack.extend(reversed(children))
+    return leaves
 
 
 @dataclass
@@ -48,7 +63,7 @@ class ExecutionSummaryReporter:
                 continue
 
             step_summaries: list[dict[str, Any]] = []
-            for child in runner_leaf_descendants(runner):
+            for child in _runner_leaf_descendants(runner):
                 step_context = ModelContext.from_model(getattr(child, "model", None))
                 if step_context.step_index is None:
                     continue

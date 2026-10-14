@@ -10,7 +10,7 @@ from ofx.runner.cloud_fleet import CloudFleetRunner
 from ofx.runner.cloud_job import CloudJobRunner
 from ofx.runner.cloud_matrix import CloudMatrixJobRunner
 from ofx.runner.job import JobRunner, MatrixJobRunner
-from ofx.runner.runner_factory import job_runner_class
+from ofx.runner.workflow_execution import _job_runner_class as job_runner_class
 
 
 def _job(spec: str):

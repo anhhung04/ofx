@@ -12,7 +12,22 @@ from typing import Any
 
 from ofx.models.step import RunType
 from ofx.runner.context import ConditionNotMetError, RunnerStatus
-from ofx.runner.step_fields import BASE_STEP_TEMPLATE_FIELDS, RUN_TYPE_TEMPLATE_FIELDS
+
+BASE_STEP_TEMPLATE_FIELDS: tuple[str, ...] = (
+    "name",
+    "shell",
+    "working_directory",
+    "log_stdout",
+    "log_command",
+    "env",
+    "run_if",
+)
+
+RUN_TYPE_TEMPLATE_FIELDS: dict[RunType, list[str]] = {
+    RunType.WORKFLOW: ["uses"],
+    RunType.MODULE: ["module", "run_with"],
+    RunType.PIPE: [],
+}
 
 _MAX_BACKOFF_SECONDS = 300
 _JITTER_MIN = 0.5

@@ -27,13 +27,42 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from ofx.runner.registry_keys import RunnerRegistryKeys
-from ofx.runner.runner_refs import runner_leaf_descendants
-from ofx.runner.target_paths import sanitize_target_slug
 from ofx.settings import settings
+
+
+def _runner_leaf_descendants(runner):
+    """Yield leaf runners (no children) from a runner tree."""
+    if runner is None:
+        return []
+    leaves = []
+    stack = [runner]
+    while stack:
+        current = stack.pop()
+        children = list(getattr(current, "_runners", {}).values())
+        if not children:
+            leaves.append(current)
+            continue
+        stack.extend(reversed(children))
+    return leaves
+_UNSAFE_TARGET_CHARS_RE = re.compile(r"[^A-Za-z0-9._-]")
+_MULTIPLE_UNDERSCORES_RE = re.compile(r"_+")
+
+
+def sanitize_target_slug(target: str) -> str:
+    """Return a filesystem-safe slug for a target string."""
+    if not target:
+        return ""
+    slug = target
+    if target.startswith(("http://", "https://")):
+        slug = target.split("://", 1)[1].split("/", 1)[0]
+    slug = _UNSAFE_TARGET_CHARS_RE.sub("_", slug)
+    slug = _MULTIPLE_UNDERSCORES_RE.sub("_", slug).strip("_")
+    return slug[:120]
 
 _OUTPUT_TYPE_DIR_MAP: dict[str, str] = {
     "ip": "hosts",
@@ -192,7 +221,7 @@ async def collect_typed_outputs(runners: dict[str, Runner]) -> list[dict]:
     leaf_runners = [
         typed_runner
         for runner in runners.values()
-        for typed_runner in runner_leaf_descendants(runner)
+        for typed_runner in _runner_leaf_descendants(runner)
     ]
     if not leaf_runners:
         return []
