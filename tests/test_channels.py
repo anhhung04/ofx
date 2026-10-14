@@ -415,85 +415,73 @@ ofx_wait_for "wait_chan" '"done"' 5 0.1
         assert result.returncode == 0, f"bash failed: {result.stderr}"
         assert '"done"' in result.stdout
 
-class TestScriptRunnerChannelPrimitives:
-    """Test that Python script runner supports primitive channel values."""
+class TestBuiltinPythonChannelPrimitives:
+    """Test that the builtin python module supports primitive channel values."""
 
-    @pytest.mark.asyncio
-    async def test_script_publish_primitive_string(self):
-        from ofx.models.command import Script
-        from ofx.modules.execution.command import ScriptRunner
-        from ofx.runner import RunContext, RunnerStatus
+    def _run_script(self, script: str, channels_dir: Path) -> str:
+        from ofx.modules.base import ModuleContext
+        from ofx.modules.builtins import python as python_module
 
-        script_model = Script(
-            script="""
+        store = ChannelStore(channels_dir)
+        ctx = ModuleContext(
+            args={"script": script},
+            channels_dir=channels_dir,
+            publish=store.publish,
+            subscribe=store.subscribe,
+            wait_for=store.wait_for,
+        )
+        result = python_module.run(ctx)
+        assert result.exit_code == 0, result.stderr
+        return result.stdout
+
+    def test_script_publish_primitive_string(self, channels_dir):
+        stdout = self._run_script(
+            """
 publish('str_chan', 'hello world')
 val = next(subscribe('str_chan'))
 print(f"Got: {val}")
 print(f"Type: {type(val).__name__}")
-"""
+""",
+            channels_dir,
         )
-        result = await ScriptRunner(script_model, ctx=RunContext()).run()
-        assert result.status == RunnerStatus.COMPLETED
-        stdout = result.outputs.get("stdout", "")
         assert "Got: hello world" in stdout
         assert "Type: str" in stdout
 
-    @pytest.mark.asyncio
-    async def test_script_publish_primitive_int(self):
-        from ofx.models.command import Script
-        from ofx.modules.execution.command import ScriptRunner
-        from ofx.runner import RunContext, RunnerStatus
-
-        script_model = Script(
-            script="""
+    def test_script_publish_primitive_int(self, channels_dir):
+        stdout = self._run_script(
+            """
 publish('int_chan', 42)
 val = next(subscribe('int_chan'))
 print(f"Got: {val}")
 print(f"Type: {type(val).__name__}")
-"""
+""",
+            channels_dir,
         )
-        result = await ScriptRunner(script_model, ctx=RunContext()).run()
-        assert result.status == RunnerStatus.COMPLETED
-        stdout = result.outputs.get("stdout", "")
         assert "Got: 42" in stdout
         assert "Type: int" in stdout
 
-    @pytest.mark.asyncio
-    async def test_script_publish_dict(self):
-        from ofx.models.command import Script
-        from ofx.modules.execution.command import ScriptRunner
-        from ofx.runner import RunContext, RunnerStatus
-
-        script_model = Script(
-            script="""
+    def test_script_publish_dict(self, channels_dir):
+        stdout = self._run_script(
+            """
 publish('dict_chan', {'key': 'value'})
 val = next(subscribe('dict_chan'))
 print(f"Got: {val}")
 print(f"Type: {type(val).__name__}")
-"""
+""",
+            channels_dir,
         )
-        result = await ScriptRunner(script_model, ctx=RunContext()).run()
-        assert result.status == RunnerStatus.COMPLETED
-        stdout = result.outputs.get("stdout", "")
         assert "Got: {'key': 'value'}" in stdout
         assert "Type: dict" in stdout
 
-    @pytest.mark.asyncio
-    async def test_script_publish_list(self):
-        from ofx.models.command import Script
-        from ofx.modules.execution.command import ScriptRunner
-        from ofx.runner import RunContext, RunnerStatus
-
-        script_model = Script(
-            script="""
+    def test_script_publish_list(self, channels_dir):
+        stdout = self._run_script(
+            """
 publish('list_chan', [1, 2, 3])
 val = next(subscribe('list_chan'))
 print(f"Got: {val}")
 print(f"Type: {type(val).__name__}")
-"""
+""",
+            channels_dir,
         )
-        result = await ScriptRunner(script_model, ctx=RunContext()).run()
-        assert result.status == RunnerStatus.COMPLETED
-        stdout = result.outputs.get("stdout", "")
         assert "Got: [1, 2, 3]" in stdout
         assert "Type: list" in stdout

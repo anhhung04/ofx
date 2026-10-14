@@ -13,24 +13,22 @@ from typing import Any
 from pydantic import Field
 
 from ofx.models.base import OFXBaseModel
-from ofx.models.command import Command, Script
 from ofx.modules.api import invoke_api_callable, is_ctx_style
 from ofx.modules.base import (
-    PYTHON_MODULE_REQUIRES_SCRIPT,
     ModuleContext,
     ModuleResult,
     ModuleSpec,
 )
 from ofx.modules.registry import ModuleRegistry
 from ofx.runner.channels import ChannelStore
-from ofx.runner.context import RunContext, RunnerStatus, context_copy
+from ofx.runner.context import RunContext
 from ofx.runner.registry_keys import RunnerRegistryKeys
 from ofx.runner.run_defaults import resolve_model_run_default, resolve_model_shell
 from ofx.runner.runner import Runner
 from ofx.settings import DEFAULT_SHELL, settings
 
 COMMAND_BUILTINS = ("shell", "python")
-"""Builtin modules that delegate to :class:`CommandRunner`/:class:`ScriptRunner`."""
+"""Builtin modules that run through the :class:`ModuleContext` path."""
 
 
 class ModuleInvocation(OFXBaseModel):
@@ -53,10 +51,9 @@ class ModuleInvocation(OFXBaseModel):
 class ModuleRunner(Runner[ModuleInvocation]):
     """Run builtin modules and user-defined functions.
 
-    Builtin ``shell``/``python`` modules delegate to the existing
-    :class:`CommandRunner`/:class:`ScriptRunner` machinery; UDFs, ``ofx.api``
-    functions, and the pure-Python builtins execute in a worker thread against
-    a :class:`ModuleContext`.
+    Every builtin — including ``shell`` and ``python`` — executes through
+    :meth:`_invoke_udf` with a :class:`ModuleContext`; the legacy
+    :class:`CommandRunner`/:class:`ScriptRunner` machinery is gone.
     """
 
     def __init__(
@@ -83,13 +80,10 @@ class ModuleRunner(Runner[ModuleInvocation]):
         registry = ModuleRegistry(workflow_dir=self.ctx.workflow_dir)
         spec = registry.resolve(self.model.name)
         try:
-            if self._uses_command_runner(spec):
-                await self._run_builtin(spec)
-            else:
-                module_result = await asyncio.to_thread(self._invoke_udf, spec)
-                self._outputs.update(self._module_result_outputs(module_result))
-                if module_result.exit_code not in (0, None):
-                    raise RuntimeError(self._udf_failure_message(module_result))
+            module_result = await asyncio.to_thread(self._invoke_udf, spec)
+            self._outputs.update(self._module_result_outputs(module_result))
+            if module_result.exit_code not in (0, None):
+                raise RuntimeError(self._udf_failure_message(module_result))
         finally:
             await self.reg_update(RunnerRegistryKeys.OUTPUTS, self._outputs)
 
@@ -101,100 +95,32 @@ class ModuleRunner(Runner[ModuleInvocation]):
             f" with context: \n---\n{self.ctx}\n---"
         )
 
-    @staticmethod
-    def _uses_command_runner(spec: ModuleSpec) -> bool:
-        """Return whether *spec* is a builtin backed by a command/script runner.
+    def _scope_models(self) -> tuple[Any, Any, Any] | None:
+        """Return ``(workflow_model, job_model, step_model)`` for python scripts.
 
-        UDFs, ``ofx.api`` functions, and the pure-Python builtins (``merge_lists``,
-        ``normalize_targets``, ``classify_targets``) all run through
-        :meth:`_invoke_udf` with a :class:`ModuleContext`; only the builtin
-        ``shell``/``python`` modules need :class:`CommandRunner`/
-        :class:`ScriptRunner`.
+        Walked from the step runner chain (ModuleRunner's parent is the
+        StepRunner; its parent is the JobRunner; its parent is the
+        WorkflowRunner), matching the legacy ScriptRunner resolution.
         """
-        return spec.kind == "builtin" and spec.name in COMMAND_BUILTINS
-
-    async def _run_builtin(self, spec: ModuleSpec) -> None:
-        """Run the builtin ``shell``/``python`` module for *spec*.
-
-        Only reached when :meth:`_uses_command_runner` accepts the spec; every
-        other module kind runs through :meth:`_invoke_udf`.
-        """
-        # Imported lazily: importing the command/script runners eagerly here
-        # would re-enter the importing ofx.runner package (see ofx/runner/
-        # __init__.py) and is never needed for UDF/api modules.
-        from ofx.modules.execution.command import CommandRunner, ScriptRunner
-
-        if spec.name == "python":
-            child: Runner[Any] = ScriptRunner(
-                self._build_script(),
-                context_copy(self.ctx),
-                parent=self,
-            )
-        else:
-            child = CommandRunner(
-                self._build_command(),
-                context_copy(self.ctx),
-                parent=self,
-            )
-        result = await child.run()
-        self._outputs.update(result.outputs)
-        if result.status != RunnerStatus.COMPLETED:
-            raise RuntimeError(
-                result.error or f"Module {self.model.name} failed with exit code "
-                f"{result.outputs.get('exit_code')}"
-            )
-
-    def _build_command(self) -> Command:
-        cmd = self.model.args.get("cmd")
-        if not cmd:
-            raise RuntimeError(
-                "shell module requires 'cmd' in args. "
-                "Accepted form: 'with: {cmd: <shell command>}' "
-                "(the command string may use {{ inputs.* }} in a template)."
-            )
-        return Command(
-            cmd=str(cmd),
-            shell=self.model.shell,
-            working_directory=self.model.working_directory,
-            timeout_minutes=self.model.timeout_minutes,
-            interactive=self.model.interactive and self.ctx.allow_interactive,
-        )
-
-    def _build_script(self) -> Script:
-        args = self.model.args
-        script = args.get("script")
-        if not script and args.get("script_file"):
-            script_file = Path(args["script_file"])
-            if not script_file.is_absolute() and self.ctx.workflow_dir:
-                script_file = self.ctx.workflow_dir / script_file
-            try:
-                script = script_file.read_text(encoding="utf-8")
-            except OSError as exc:
-                raise RuntimeError(
-                    f"Failed to read script file {script_file}: {exc}"
-                ) from exc
-        if not script:
-            raise RuntimeError(
-                f"{PYTHON_MODULE_REQUIRES_SCRIPT}. Accepted forms: "
-                f"'with: {{script: <inline code>}}' or "
-                f"'with: {{script_file: <path to .py>}}'."
-            )
-        return Script(
-            script=str(script),
-            shell=self.model.shell,
-            working_directory=self.model.working_directory,
-            timeout_minutes=self.model.timeout_minutes,
-            interactive=self.model.interactive and self.ctx.allow_interactive,
-        )
+        step_runner = self.parent
+        step_model = getattr(step_runner, "model", None)
+        job_runner = getattr(step_runner, "parent", None)
+        job_model = getattr(job_runner, "model", None)
+        workflow_model = getattr(getattr(job_runner, "parent", None), "model", None)
+        if workflow_model is None and job_model is None and step_model is None:
+            return None
+        return (workflow_model, job_model, step_model)
 
     def _invoke_udf(self, spec: ModuleSpec) -> ModuleResult:
-        """Execute a UDF or ``ofx.api`` module synchronously (worker thread).
+        """Execute a UDF, ``ofx.api`` module, or builtin synchronously.
 
         UDFs always receive the :class:`ModuleContext`. ``ofx.api`` functions
         are kwargs-style: the invocation args (merged workflow inputs plus the
         step's ``with:`` args) are filtered to their signature, so unrelated
         keys are ignored. A function that declares a ``ctx`` parameter is
-        treated like a UDF and receives the context instead.
+        treated like a UDF and receives the context instead. Builtin modules
+        (including ``shell``/``python``) are called with the context through
+        their ``run(ctx)`` entry point.
         """
         callable_obj = spec.callable
         if callable_obj is None:
@@ -206,17 +132,27 @@ class ModuleRunner(Runner[ModuleInvocation]):
         stdout_capture = io.StringIO()
         stderr_capture = io.StringIO()
         store = ChannelStore(settings.channels_dir)
+        module_args = dict(self.model.args)
+        if spec.kind == "builtin" and spec.name in COMMAND_BUILTINS:
+            # The step-level timeout (ModuleInvocation.timeout_minutes) backs
+            # the builtin's default; an explicit ``timeout_minutes`` in the
+            # step's ``with:`` args still wins.
+            module_args.setdefault("timeout_minutes", self.model.timeout_minutes)
         module_ctx = ModuleContext(
             inputs=dict(self.model.args),
             secrets=dict(self.ctx.secrets),
             env=dict(self.ctx.envs),
-            args=dict(self.model.args),
+            args=module_args,
             working_directory=self.model.working_directory,
+            workflow_dir=self.ctx.workflow_dir,
             logger=self._log_debug,
             add_outputs=lambda **kwargs: module_outputs.update(kwargs),
             publish=store.publish,
             subscribe=store.subscribe,
             wait_for=store.wait_for,
+            scope_models=self._scope_models(),
+            channels_dir=Path(settings.channels_dir),
+            interactive=self.model.interactive,
         )
 
         def _call() -> Any:
@@ -241,6 +177,15 @@ class ModuleRunner(Runner[ModuleInvocation]):
         if isinstance(returned, ModuleResult):
             module_outputs.update(returned.outputs)
             returned_result = returned.result
+            # Builtins return a ModuleResult carrying their own captured
+            # stdout/stderr and exit code (e.g. the shell module's subprocess
+            # output); surface those instead of the (empty) redirect capture.
+            if returned.exit_code is not None:
+                exit_code = returned.exit_code
+            if returned.stdout:
+                stdout_capture.write(returned.stdout)
+            if returned.stderr:
+                stderr_capture.write(returned.stderr)
         elif isinstance(returned, dict):
             module_outputs.update(returned)
             returned_result = None

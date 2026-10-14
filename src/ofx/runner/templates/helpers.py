@@ -9,7 +9,6 @@ in *resolver.py* short.
 from __future__ import annotations
 
 import base64
-from functools import partial
 import hashlib
 import json
 import logging
@@ -20,6 +19,7 @@ import socket
 import string
 import uuid as _uuid
 from datetime import datetime
+from functools import partial
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote, unquote
@@ -408,7 +408,7 @@ def build_all_helpers() -> dict[str, Any]:
     Called by :pymethod:`TemplateResolver.get_support_functions` and also
     usable in tests for direct validation.
     """
-    from ofx.modules.execution.shell_functions import get_shell_exports
+    from ofx.modules.builtins.shell import get_shell_exports
     from ofx.runner.findings_export import export_typed_outputs
     from ofx.settings import IS_WINDOWS
 

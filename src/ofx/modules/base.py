@@ -26,11 +26,19 @@ class ModuleContext:
     env: dict[str, Any] = field(default_factory=dict)
     args: dict[str, Any] = field(default_factory=dict)
     working_directory: Path = field(default_factory=Path.cwd)
+    workflow_dir: Path | None = None
+    """Directory of the currently executing workflow (relative assets)."""
     logger: Callable[[str], None] | logging.Logger | None = None
     add_outputs: Callable[..., None] | None = None
     publish: Callable[..., Any] | None = None
     subscribe: Callable[..., Any] | None = None
     wait_for: Callable[..., Any] | None = None
+    scope_models: tuple[Any, Any, Any] | None = None
+    """``(workflow_model, job_model, step_model)`` for python scripts."""
+    channels_dir: Path | None = None
+    """Directory used by the channel store (``None`` when unconfigured)."""
+    interactive: bool = False
+    """Whether interactive mode is allowed (step model + ctx.allow_interactive)."""
 
     def log(self, message: str) -> None:
         """Log a message through the step logger (no-op if unset)."""

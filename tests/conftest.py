@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-import asyncio
-import contextlib
 import fnmatch
 import os
 import sys
 import types as types_mod
-from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -127,70 +124,6 @@ def _mock_registry_backends() -> None:
 
     yield None
     monkeypatch.undo()
-
-
-# ---------------------------------------------------------------------------
-# Shared fixtures/helpers for command & script runner tests
-# ---------------------------------------------------------------------------
-
-
-class _FakeFuture:
-    """Minimal future whose ``result()`` returns a fixed value."""
-
-    def __init__(self, value: Any) -> None:
-        self._value = value
-
-    def result(self) -> Any:
-        return self._value
-
-
-class _FakeExecutor:
-    """Executor stub recording submissions and returning a fixed result."""
-
-    def __init__(self, result: Any = "future-result") -> None:
-        self.result = result
-        self.submitted: list[tuple[Any, tuple]] = []
-
-    def submit(self, fn, *args):
-        self.submitted.append((fn, args))
-        return _FakeFuture(self.result)
-
-    def shutdown(self, **kwargs) -> None:
-        return None
-
-
-_KEEP_SHARED_EXECUTOR = object()
-
-
-@contextlib.contextmanager
-def _shared_executor_override(
-    pool: Any = _KEEP_SHARED_EXECUTOR,
-) -> Iterator[Any]:
-    """Temporarily install a shared executor and sync ``run_in_executor``.
-
-    Patches ``ofx.modules.execution.command._shared_executor`` and the running
-    loop's ``run_in_executor`` (so submitted calls run inline), restoring both
-    on exit. ``pool`` defaults to a fresh ``_FakeExecutor``; pass ``None`` to
-    clear the module-level executor so the runner under test builds its own.
-    Yields the pool that was installed.
-    """
-    import ofx.modules.execution.command as command_module
-
-    executor = _FakeExecutor() if pool is _KEEP_SHARED_EXECUTOR else pool
-    original_shared_executor = command_module._shared_executor
-    loop = asyncio.get_running_loop()
-    original_run_in_executor = loop.run_in_executor
-
-    async def _fake_run_in_executor(_executor, fn, *args):
-        return fn(*args)
-
-    command_module._shared_executor = executor
-    loop.run_in_executor = _fake_run_in_executor
-    try:
-        yield executor
-    finally:
-        loop.run_in_executor = original_run_in_executor
-        command_module._shared_executor = original_shared_executor
 
 
 # ---------------------------------------------------------------------------
