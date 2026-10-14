@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from ofx.cloud.fleet_distributor import FleetDistributor, expand_fleet_to_matrix
-from ofx.cloud.fleet_input import FleetInputParser, split_subnet
+from ofx.cloud.fleet.distributor import FleetDistributor, expand_fleet_to_matrix
+from ofx.cloud.fleet.input import FleetInputParser, split_subnet
 
 
 class TestFleetInputParserBasic:
@@ -212,7 +212,7 @@ class TestFleetDistributorChunk:
     def test_more_instances_than_targets_logs_reduction(self, monkeypatch):
         messages: list[tuple[int, int, int]] = []
         monkeypatch.setattr(
-            "ofx.cloud.fleet_distributor.logger.info",
+            "ofx.cloud.fleet.distributor.logger.info",
             lambda _message, count, effective_count, target_count: messages.append(
                 (count, effective_count, target_count)
             ),
@@ -325,7 +325,7 @@ class TestFleetDistributorEdgeCases:
     def test_unknown_mode_logs_warning(self, monkeypatch):
         warnings: list[tuple[str, str]] = []
         monkeypatch.setattr(
-            "ofx.cloud.fleet_distributor.logger.warning",
+            "ofx.cloud.fleet.distributor.logger.warning",
             lambda message, mode: warnings.append((message, mode)),
         )
 

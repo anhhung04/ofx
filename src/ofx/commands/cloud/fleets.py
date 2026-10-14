@@ -78,11 +78,11 @@ def _get_fleet_run_deps():
 
     fleet_input_parser_cls = FleetInputParser
     if fleet_input_parser_cls is None:
-        from ofx.cloud.fleet_input import FleetInputParser as fleet_input_parser_cls
+        from ofx.cloud.fleet.input import FleetInputParser as fleet_input_parser_cls
 
     fleet_distributor_cls = FleetDistributor
     if fleet_distributor_cls is None:
-        from ofx.cloud.fleet_distributor import (
+        from ofx.cloud.fleet.distributor import (
             FleetDistributor as fleet_distributor_cls,
         )
 

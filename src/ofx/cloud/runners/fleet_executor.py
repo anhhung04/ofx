@@ -66,7 +66,7 @@ class FleetExecutor(Executor):
         if not strategy or not strategy.fleet:
             return [{}]
 
-        from ofx.cloud.fleet_distributor import expand_fleet_to_matrix
+        from ofx.cloud.fleet.distributor import expand_fleet_to_matrix
 
         fleet = strategy.fleet
         combos, runner._chunk_files = expand_fleet_to_matrix(

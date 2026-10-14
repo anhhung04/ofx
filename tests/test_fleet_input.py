@@ -1,6 +1,6 @@
 """Tests for FleetInputParser — IP, CIDR, range, hostname parsing and distribution."""
 
-from ofx.cloud.fleet_input import FleetInputParser, split_subnet
+from ofx.cloud.fleet.input import FleetInputParser, split_subnet
 
 
 class TestParseIP:

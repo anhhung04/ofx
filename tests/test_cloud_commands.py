@@ -316,11 +316,11 @@ def test_fleet_run_uses_module_input_parser_and_distributor(monkeypatch):
 
     class BrokenParser:
         def __init__(self, *args, **kwargs):
-            raise RuntimeError("should not use ofx.cloud.fleet_input.FleetInputParser")
+            raise RuntimeError("should not use ofx.cloud.fleet.input.FleetInputParser")
 
     class BrokenDistributor:
         def __init__(self, *args, **kwargs):
-            raise RuntimeError("should not use ofx.cloud.fleet_distributor.FleetDistributor")
+            raise RuntimeError("should not use ofx.cloud.fleet.distributor.FleetDistributor")
 
     class FakeParser:
         def parse(self, targets):
@@ -344,8 +344,8 @@ def test_fleet_run_uses_module_input_parser_and_distributor(monkeypatch):
     monkeypatch.setattr("ofx.commands.cloud.fleets.SessionManager", lambda: _SubmitManager(submitted), raising=False)
     monkeypatch.setattr("ofx.commands.cloud.fleets.FleetInputParser", FakeParser, raising=False)
     monkeypatch.setattr("ofx.commands.cloud.fleets.FleetDistributor", FakeDistributor, raising=False)
-    monkeypatch.setattr("ofx.cloud.fleet_input.FleetInputParser", BrokenParser)
-    monkeypatch.setattr("ofx.cloud.fleet_distributor.FleetDistributor", BrokenDistributor)
+    monkeypatch.setattr("ofx.cloud.fleet.input.FleetInputParser", BrokenParser)
+    monkeypatch.setattr("ofx.cloud.fleet.distributor.FleetDistributor", BrokenDistributor)
     monkeypatch.setattr("secrets.token_hex", lambda _n: "abcd")
 
     result = runner.invoke(

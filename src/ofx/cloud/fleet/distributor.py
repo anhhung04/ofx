@@ -12,7 +12,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from ofx.cloud.fleet_input import FleetInputParser
+from ofx.cloud.fleet.input import FleetInputParser
 from ofx.utils.file_cleanup import remove_files_and_parent_dir
 
 logger = logging.getLogger("ofx")
