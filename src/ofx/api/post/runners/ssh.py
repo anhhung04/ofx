@@ -14,10 +14,12 @@ from pathlib import Path
 from random import uniform
 
 import paramiko
+
 from ofx.utils.file_cleanup import remove_file
 
 from ..base import AuthenticationError, ConnectionError, PostRunnerBase, PostRunnerError
 from ..registry import RunnerRegistry
+from ._common import RemoteTempFilesMixin
 
 __all__ = ["PostSSH"]
 
@@ -41,7 +43,7 @@ class SSHCommandError(PostRunnerError):
         self.stderr = stderr
 
 @RunnerRegistry.register("ssh")
-class PostSSH(PostRunnerBase):
+class PostSSH(RemoteTempFilesMixin, PostRunnerBase):
     """Post-exploitation runner over SSH via paramiko.
 
     Features:
@@ -404,10 +406,6 @@ class PostSSH(PostRunnerBase):
             return self._run_direct(wrapper, timeout)
         finally:
             self._forget_remote_temp_file(remote_tmp)
-
-    def _forget_remote_temp_file(self, remote_tmp: str) -> None:
-        if remote_tmp in self._remote_temp_files:
-            self._remote_temp_files.remove(remote_tmp)
 
     def _cleanup_remote_temp_files(self) -> None:
         if not self._remote_temp_files:

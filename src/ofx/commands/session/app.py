@@ -24,6 +24,10 @@ from typing import Annotated, Any
 import typer
 from rich.table import Table
 
+from ofx.commands._session_helpers import (
+    _resolve_session_manager_cls,
+    _resolve_session_store_cls,
+)
 from ofx.commands.ui_helpers import (
     error_exit,
     print_info,
@@ -109,18 +113,11 @@ def _session_detail_table(session) -> Table:
     return table
 
 def _get_session_manager_cls():
-    session_manager_cls = SessionManager
-    if session_manager_cls is None:
-        from ofx.cloud.sessions import SessionManager as session_manager_cls
+    return _resolve_session_manager_cls(SessionManager)
 
-    return session_manager_cls
 
 def _get_session_store_cls():
-    session_store_cls = SessionStore
-    if session_store_cls is None:
-        from ofx.cloud.sessions import SessionStore as session_store_cls
-
-    return session_store_cls
+    return _resolve_session_store_cls(SessionStore)
 
 def _get_session_status_cls():
     session_status_cls = SessionStatus

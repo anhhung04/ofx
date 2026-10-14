@@ -9,10 +9,9 @@ from ofx.api._compat import CONFIG_FILE, get_logger
 from ofx.api.credential_config import load_section_values, save_section_values
 from ofx.api.http import requests
 
-logger = get_logger()
+from ._common import is_ipv6_address_format
 
-def is_ipv6_address_format(address: str) -> bool:
-    return ":" in address and "." not in address
+logger = get_logger()
 
 class ZoomEye:
     """ZoomEye cyberspace search engine client.

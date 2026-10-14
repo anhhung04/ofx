@@ -14,6 +14,7 @@ from typing import Any
 from ...core.base import PostRunnerProtocol
 from ..base import ConnectionError, PostRunnerError
 from ..registry import RunnerRegistry
+from ._common import RemoteTempFilesMixin
 
 __all__ = ["PostWinRM"]
 
@@ -32,7 +33,7 @@ class WinRMCommandError(PostRunnerError):
 
 @RunnerRegistry.register("winrm")
 @dataclass
-class PostWinRM(PostRunnerProtocol):
+class PostWinRM(RemoteTempFilesMixin, PostRunnerProtocol):
     """Post-exploitation runner over WinRM with stability and opsec features.
 
     Requires the optional ``pywinrm`` package.
@@ -143,10 +144,6 @@ class PostWinRM(PostRunnerProtocol):
             self.run_ps(f'Remove-Item -Force "{remote_tmp}" -ErrorAction SilentlyContinue')
         except Exception as e:
             logger.debug("Failed to remove remote temp file %s: %s", remote_tmp, e)
-
-    def _forget_remote_temp_file(self, remote_tmp: str) -> None:
-        if remote_tmp in self._remote_temp_files:
-            self._remote_temp_files.remove(remote_tmp)
 
     def run(self, command: str, timeout: int | None = None) -> str:
         """Execute a CMD command via WinRM with retry logic.

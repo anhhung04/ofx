@@ -8,6 +8,10 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
+from ofx.commands._session_helpers import (
+    _resolve_session_manager_cls,
+    _resolve_session_store_cls,
+)
 from ofx.commands.cloud.helpers import create_cloud_provider, run_cloud_sync
 from ofx.commands.project.project_manager import ProjectManager
 from ofx.commands.ui_helpers import session_status_style
@@ -46,16 +50,11 @@ async def _refresh_sessions(mgr, sessions: list):
     return refreshed
 
 def _get_session_store_cls():
-    session_store_cls = SessionStore
-    if session_store_cls is None:
-        from ofx.cloud.sessions import SessionStore as session_store_cls
-    return session_store_cls
+    return _resolve_session_store_cls(SessionStore)
+
 
 def _get_session_manager_cls():
-    session_manager_cls = SessionManager
-    if session_manager_cls is None:
-        from ofx.cloud.sessions import SessionManager as session_manager_cls
-    return session_manager_cls
+    return _resolve_session_manager_cls(SessionManager)
 
 def _get_session_target_cls():
     session_target_cls = SessionTarget
