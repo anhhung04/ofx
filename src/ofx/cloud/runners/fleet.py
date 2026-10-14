@@ -5,11 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from ofx.cloud.runners.fleet_executor import FleetExecutor
 from ofx.models.job import Job
 from ofx.models.workflow import Workflow
 from ofx.runner.context import RunContext
-from ofx.runner.executors.fleet import FleetExecutor
 from ofx.runner.runner import Runner
+
 
 class CloudFleetRunner(Runner[Job]):
     def __init__(

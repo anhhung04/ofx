@@ -268,7 +268,7 @@ class CloudExecutor(JobExecutor):
         await self._execute_steps(runner, suffix=suffix, loop_ctx=loop_ctx)
 
     def _create_step_runner(self, runner, step, step_ctx):
-        from ofx.runner.cloud_step import CloudStepRunner
+        from ofx.cloud.runners.step import CloudStepRunner
 
         return CloudStepRunner(
             step,

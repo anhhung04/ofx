@@ -26,12 +26,12 @@ from ofx.cloud.payload import (
     build_module_step_payload,
     parse_module_outputs_sentinel,
 )
+from ofx.cloud.runners.step import CloudStepRunner, _RemoteHandlerRunner
 from ofx.cloud.sessions.python_steps import iter_python_step_bundles
 from ofx.cloud.sessions.script_builder import build_session_script
 from ofx.cloud.udf_wrapper import build_udf_step_source
 from ofx.models.step import Step
 from ofx.runner import RunContext
-from ofx.runner.cloud_step import CloudStepRunner, _RemoteHandlerRunner
 
 _SENTINEL = "__OFX_MODULE_OUTPUTS__"
 
@@ -315,7 +315,7 @@ class TestCloudUDFDispatch:
         uploaded: list[tuple[str, str]] = []
 
         monkeypatch.setattr(
-            "ofx.runner.cloud_step.upload_temp_content",
+            "ofx.cloud.runners.step.upload_temp_content",
             lambda _remote, content, remote_path, suffix="": uploaded.append(
                 (content, remote_path)
             ),

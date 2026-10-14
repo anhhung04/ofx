@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+
 class TestCloudConfig:
     def test_parse_cloud_field_string(self):
         from ofx.models.cloud import parse_cloud_field

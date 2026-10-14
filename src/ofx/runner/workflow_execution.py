@@ -18,13 +18,13 @@ def _job_runner_class(job):
     has_fleet = bool(job.strategy and job.strategy.fleet)
 
     if has_cloud and has_fleet:
-        from ofx.runner.cloud_fleet import CloudFleetRunner
+        from ofx.cloud.runners.fleet import CloudFleetRunner
         return CloudFleetRunner
     if has_cloud and has_matrix:
-        from ofx.runner.cloud_matrix import CloudMatrixJobRunner
+        from ofx.cloud.runners.matrix import CloudMatrixJobRunner
         return CloudMatrixJobRunner
     if has_cloud:
-        from ofx.runner.cloud_job import CloudJobRunner
+        from ofx.cloud.runners.job import CloudJobRunner
         return CloudJobRunner
     if has_matrix:
         from ofx.runner.job import MatrixJobRunner

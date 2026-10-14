@@ -1,9 +1,9 @@
-from rich.console import Console
-from typer.testing import CliRunner
 from types import SimpleNamespace
 
-from ofx.commands.cloud.fleets import fleet_app
+from rich.console import Console
+from typer.testing import CliRunner
 
+from ofx.commands.cloud.fleets import fleet_app
 
 runner = CliRunner()
 

@@ -2,6 +2,7 @@
 
 from ofx.cloud.fleet_input import FleetInputParser, split_subnet
 
+
 class TestParseIP:
     def test_single_ip(self):
         p = FleetInputParser()

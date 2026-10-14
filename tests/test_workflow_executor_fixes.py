@@ -17,10 +17,10 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from ofx.cloud.runners.fleet_executor import FleetExecutor
 from ofx.models.pipe import PipeConfig
 from ofx.models.workflow import ToolConfig, Workflow
 from ofx.runner import RunContext, RunnerRegistryKeys
-from ofx.runner.executors.fleet import FleetExecutor
 from ofx.runner.executors.parallel import (
     parallel_run_settings,
     run_limited_fail_fast,
@@ -345,8 +345,8 @@ async def test_execution_summary_uses_registry_key_member() -> None:
 async def test_cloud_executor_stores_instance_metadata_under_key_member(
     monkeypatch,
 ) -> None:
+    from ofx.cloud.runners.executor import CloudExecutor
     from ofx.models.cloud import CloudConfig
-    from ofx.runner.executors.cloud import CloudExecutor
 
     cfg = CloudConfig(provider="static", host="10.0.0.1")
     registry_updates: list[tuple[str, dict]] = []
@@ -376,7 +376,7 @@ async def test_cloud_executor_stores_instance_metadata_under_key_member(
     monkeypatch.setattr(executor, "provision_instance", _provision_instance)
     monkeypatch.setattr(executor, "_store_job_model", AsyncMock(return_value=None))
     monkeypatch.setattr(
-        "ofx.runner.executors.cloud.register_secrets", lambda _values: None
+        "ofx.cloud.runners.executor.register_secrets", lambda _values: None
     )
 
     await executor.pre_run(runner)

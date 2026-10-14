@@ -330,7 +330,7 @@ class TestStepDescriptors:
 
 class TestCloudRetryBackoff:
     def test_retry_delay_exponential(self):
-        from ofx.runner.cloud_step import CloudStepRunner
+        from ofx.cloud.runners.step import CloudStepRunner
 
         for attempt in range(5):
             delay = CloudStepRunner._retry_delay_seconds(attempt, base_delay=10)
@@ -339,13 +339,13 @@ class TestCloudRetryBackoff:
             assert expected_capped * 0.5 <= delay <= expected_capped * 1.0
 
     def test_retry_delay_capped_at_300(self):
-        from ofx.runner.cloud_step import CloudStepRunner
+        from ofx.cloud.runners.step import CloudStepRunner
 
         delay = CloudStepRunner._retry_delay_seconds(10, base_delay=10)
         assert delay <= 300
 
     def test_matches_local_step_runner(self):
-        from ofx.runner.cloud_step import CloudStepRunner
+        from ofx.cloud.runners.step import CloudStepRunner
         from ofx.runner.step import StepRunner
 
         for attempt in range(5):

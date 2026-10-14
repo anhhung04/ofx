@@ -98,11 +98,11 @@ class FleetExecutor(Executor):
         )
 
         if runner.model.strategy and runner.model.strategy.matrix:
-            from ofx.runner.cloud_matrix import CloudMatrixJobRunner
+            from ofx.cloud.runners.matrix import CloudMatrixJobRunner
 
             runner_cls = CloudMatrixJobRunner
         else:
-            from ofx.runner.cloud_job import CloudJobRunner
+            from ofx.cloud.runners.job import CloudJobRunner
 
             runner_cls = CloudJobRunner
 
@@ -116,8 +116,8 @@ class FleetExecutor(Executor):
         return await child_runner.run()
 
     async def report_surviving_instances(self, runner) -> None:
-        from ofx.runner.cloud_job import CloudJobRunner
-        from ofx.runner.executors.cloud import CloudExecutor
+        from ofx.cloud.runners.executor import CloudExecutor
+        from ofx.cloud.runners.job import CloudJobRunner
 
         surviving_runners: list[CloudJobRunner] = []
         surviving_lines: list[str] = []

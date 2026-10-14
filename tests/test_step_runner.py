@@ -8,12 +8,11 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from ofx.models.step import Step
+from ofx.cloud.runners.step import CloudStepRunner
+from ofx.models.step import RunType, Step
 from ofx.runner import RunContext, RunnerStatus
-from ofx.runner.cloud_step import CloudStepRunner
 from ofx.runner.executors.step import _create_step_child_runner as _create
 from ofx.runner.step import StepRunner
-from ofx.models.step import RunType
 
 
 def _capture_save_runner_output(monkeypatch):

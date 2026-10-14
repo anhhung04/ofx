@@ -9,6 +9,7 @@ import pytest
 from ofx.cloud.fleet_distributor import FleetDistributor, expand_fleet_to_matrix
 from ofx.cloud.fleet_input import FleetInputParser, split_subnet
 
+
 class TestFleetInputParserBasic:
     """Core parsing of IPs, CIDRs, ranges, hostnames."""
 

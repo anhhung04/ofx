@@ -17,8 +17,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from ofx.cloud.runners.executor import CloudExecutor
 from ofx.runner.context import RunContext
-from ofx.runner.executors.cloud import CloudExecutor
+
 
 class _Provider:
     def __init__(self) -> None:
@@ -91,7 +92,7 @@ async def test_pre_run_resolves_cloud_config_and_registers_all_credentials(monke
     monkeypatch.setattr(executor, "provision_instance", AsyncMock(return_value=None))
     monkeypatch.setattr(executor, "_store_job_model", AsyncMock(return_value=None))
     monkeypatch.setattr(
-        "ofx.runner.executors.cloud.register_secrets",
+        "ofx.cloud.runners.executor.register_secrets",
         lambda values: secret_calls.append(list(values)),
     )
 
@@ -129,7 +130,7 @@ async def test_pre_run_parses_string_cloud_config_before_resolution(monkeypatch)
     monkeypatch.setattr(executor, "provision_instance", AsyncMock(return_value=None))
     monkeypatch.setattr(executor, "_store_job_model", AsyncMock(return_value=None))
     monkeypatch.setattr(
-        "ofx.runner.executors.cloud.register_secrets",
+        "ofx.cloud.runners.executor.register_secrets",
         lambda _values: None,
     )
 
@@ -174,7 +175,7 @@ async def test_pre_run_registers_cloud_credentials(monkeypatch):
     monkeypatch.setattr(executor, "provision_instance", AsyncMock(return_value=None))
     monkeypatch.setattr(executor, "_store_job_model", AsyncMock(return_value=None))
     monkeypatch.setattr(
-        "ofx.runner.executors.cloud.register_secrets",
+        "ofx.cloud.runners.executor.register_secrets",
         lambda values: secret_calls.append(list(values)),
     )
 
@@ -214,7 +215,7 @@ async def test_pre_run_stores_cloud_instance_metadata(monkeypatch):
     monkeypatch.setattr(executor, "provision_instance", _provision_instance)
     monkeypatch.setattr(executor, "_store_job_model", AsyncMock(return_value=None))
     monkeypatch.setattr(
-        "ofx.runner.executors.cloud.register_secrets",
+        "ofx.cloud.runners.executor.register_secrets",
         lambda _values: None,
     )
 
@@ -437,7 +438,7 @@ def test_destroyability_and_reportability_helpers_cover_runner_state():
 
 @pytest.mark.asyncio
 async def test_dispatch_remote_steps_merges_matrix_into_copied_context(monkeypatch):
-    import ofx.runner.cloud_step as cloud_step_module
+    import ofx.cloud.runners.step as cloud_step_module
     from ofx.runner import RunContext
 
     captured_contexts = []
@@ -481,7 +482,7 @@ async def test_dispatch_remote_steps_merges_matrix_into_copied_context(monkeypat
 
 @pytest.mark.asyncio
 async def test_dispatch_remote_steps_resets_non_inherited_step_secrets(monkeypatch):
-    import ofx.runner.cloud_step as cloud_step_module
+    import ofx.cloud.runners.step as cloud_step_module
     from ofx.runner import RunContext
 
     captured_secrets = {}
@@ -539,7 +540,7 @@ async def test_dispatch_remote_steps_merges_matrix_and_create_step_runner_kwargs
     loop_contexts: list[RunContext] = []
 
     monkeypatch.setattr(
-        "ofx.runner.cloud_step.CloudStepRunner",
+        "ofx.cloud.runners.step.CloudStepRunner",
         lambda step, step_ctx, parent, **kwargs: captured.update(
             {
                 "step": step,

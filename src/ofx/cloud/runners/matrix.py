@@ -4,15 +4,18 @@ from __future__ import annotations
 
 from typing import Any
 
+from ofx.cloud.runners.job import CloudJobRunner
+from ofx.cloud.runners.matrix_executor import (
+    CloudMatrixExecutor as _CloudMatrixExecutor,
+)
 from ofx.models.cloud import CloudConfig
 from ofx.models.job import Job
 from ofx.models.workflow import Workflow
-from ofx.runner.cloud_job import CloudJobRunner
 from ofx.runner.context import RunContext
-from ofx.runner.executors.cloud_matrix import CloudMatrixExecutor as _CloudMatrixExecutor
 from ofx.runner.executors.matrix import MatrixExecutor
 from ofx.runner.metadata import ModelContext
 from ofx.runner.runner import Runner
+
 
 class CloudMatrixJobRunner(CloudJobRunner):
     def __init__(

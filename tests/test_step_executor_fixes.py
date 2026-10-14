@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from ofx.runner.cloud_step import _RemoteHandlerRunner
+from ofx.cloud.runners.step import _RemoteHandlerRunner
 from ofx.runner.context import ConditionNotMetError, RunnerStatus, RunResult
 from ofx.runner.executors.step import StepExecutor
 from ofx.runner.registry_keys import RunnerRegistryKeys

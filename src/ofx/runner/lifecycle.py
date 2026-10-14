@@ -176,7 +176,7 @@ class LifecycleManager:
         try:
             # Only the root runner owns the registry lifecycle; children
             # share the parent's registry (job.py:89-91, step.py:32-35,
-            # cloud_step.py:120-123), so closing it here would break later
+            # cloud/runners/step.py:120-123), so closing it here would break later
             # registry access by sibling runners.
             if self._runner.parent is None and self._runner._registry is not None:
                 await cleanup_registry(self._runner._registry)

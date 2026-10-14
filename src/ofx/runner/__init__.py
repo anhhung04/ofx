@@ -1,10 +1,10 @@
 """Public API for the OFX runner package."""
 
+from ofx.cloud.runners.executor import CloudExecutor
+from ofx.cloud.runners.fleet_executor import FleetExecutor
 from ofx.runner.api import run_workflow
 from ofx.runner.context import RunContext, RunnerStatus, RunResult
 from ofx.runner.executors.base import Executor
-from ofx.runner.executors.cloud import CloudExecutor
-from ofx.runner.executors.fleet import FleetExecutor
 from ofx.runner.executors.job import JobExecutor
 from ofx.runner.executors.matrix import MatrixExecutor
 from ofx.runner.executors.pipe import PipeExecutor

@@ -6,12 +6,12 @@ import asyncio
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from ofx.cloud.runners.executor import CloudExecutor
 from ofx.cloud.runtime import is_windows_config, remote_join
 from ofx.models.cloud import CloudConfig
 from ofx.models.job import Job
 from ofx.models.workflow import Workflow
 from ofx.runner.context import RunContext
-from ofx.runner.executors.cloud import CloudExecutor
 from ofx.runner.metadata import ModelContext
 from ofx.runner.runner import Runner
 

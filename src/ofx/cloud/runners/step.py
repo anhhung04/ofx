@@ -40,7 +40,7 @@ from ofx.runner.step_mixin import StepRunnerMixin
 from ofx.utils.shell import bash_dquote_escape
 
 if TYPE_CHECKING:
-    from ofx.runner.cloud_job import CloudJobRunner
+    from ofx.cloud.runners.job import CloudJobRunner
 
 _NETWORK_GRACE_SECONDS = 30
 _RUNNER_ENV_PREFIXES: tuple[str, ...] = ("FLEET_", "REMOTE_")

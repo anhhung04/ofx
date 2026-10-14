@@ -82,7 +82,9 @@ def _get_fleet_run_deps():
 
     fleet_distributor_cls = FleetDistributor
     if fleet_distributor_cls is None:
-        from ofx.cloud.fleet_distributor import FleetDistributor as fleet_distributor_cls
+        from ofx.cloud.fleet_distributor import (
+            FleetDistributor as fleet_distributor_cls,
+        )
 
     return (
         key_value_parser,
@@ -113,7 +115,8 @@ def _get_fleet_temp_dir_deps():
     temp_dir = TEMP_DIR
     ensure_dir_fn = ensure_dir
     if temp_dir is None or ensure_dir_fn is None:
-        from ofx.settings import TEMP_DIR as temp_dir, ensure_dir as ensure_dir_fn
+        from ofx.settings import TEMP_DIR as temp_dir
+        from ofx.settings import ensure_dir as ensure_dir_fn
 
     return temp_dir, ensure_dir_fn
 

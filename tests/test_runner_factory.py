@@ -4,11 +4,11 @@ from unittest.mock import MagicMock
 
 import yaml
 
+from ofx.cloud.runners.fleet import CloudFleetRunner
+from ofx.cloud.runners.job import CloudJobRunner
+from ofx.cloud.runners.matrix import CloudMatrixJobRunner
 from ofx.models.workflow import Workflow
 from ofx.runner import RunContext
-from ofx.runner.cloud_fleet import CloudFleetRunner
-from ofx.runner.cloud_job import CloudJobRunner
-from ofx.runner.cloud_matrix import CloudMatrixJobRunner
 from ofx.runner.job import JobRunner, MatrixJobRunner
 from ofx.runner.workflow_execution import _job_runner_class as job_runner_class
 
