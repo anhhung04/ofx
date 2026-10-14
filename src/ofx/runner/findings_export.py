@@ -31,24 +31,12 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from ofx.runner.execution_summary import (
+    _runner_leaf_descendants as _runner_leaf_descendants,
+)
 from ofx.runner.registry_keys import RunnerRegistryKeys
 from ofx.settings import settings
 
-
-def _runner_leaf_descendants(runner):
-    """Yield leaf runners (no children) from a runner tree."""
-    if runner is None:
-        return []
-    leaves = []
-    stack = [runner]
-    while stack:
-        current = stack.pop()
-        children = list(getattr(current, "_runners", {}).values())
-        if not children:
-            leaves.append(current)
-            continue
-        stack.extend(reversed(children))
-    return leaves
 _UNSAFE_TARGET_CHARS_RE = re.compile(r"[^A-Za-z0-9._-]")
 _MULTIPLE_UNDERSCORES_RE = re.compile(r"_+")
 

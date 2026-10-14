@@ -702,3 +702,58 @@ class TestToolModules:
         src = resolve_udf_source(step)
         assert 'name = "dalfox"' in src
         assert "from ofx" not in src  # self-contained for remote streaming
+
+
+class TestBuiltinHelperSync:
+    """Builtin inline helpers must match the canonical _common.py logic.
+
+    Builtins are self-contained for remote streaming (the bundler only packs
+    ofx.api modules), so each inlines its own _arg/_text_arg/_run_dir. This
+    test catches drift: if _common.py changes, the inline copies must too.
+    """
+
+    # common.py uses public names; builtins inline underscore-prefixed copies
+    _NAME_MAP = {"arg": "_arg", "text_arg": "_text_arg", "run_dir": "_run_dir"}
+
+    def _get_body_statements(self, source: str, names: set[str]) -> dict[str, str]:
+        """Extract function body statements (not signature) keyed by name."""
+        import ast
+
+        tree = ast.parse(source)
+        result = {}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name in names:
+                # Only compare body statements, not the signature
+                body_src = "\n".join(
+                    ast.get_source_segment(source, stmt) or ""
+                    for stmt in node.body
+                    if not isinstance(stmt, ast.Expr)  # skip docstrings
+                )
+                result[node.name] = "\n".join(
+                    line for line in body_src.splitlines() if line.strip()
+                )
+        return result
+
+    def test_builtins_have_required_helpers(self):
+        """Every self-contained builtin must define its own helpers."""
+        from pathlib import Path
+
+        for builtin_file in sorted(Path("src/ofx/modules/builtins").glob("*.py")):
+            if builtin_file.name in ("__init__.py", "_common.py", "shell.py", "python.py"):
+                continue
+            src = builtin_file.read_text()
+            assert "_arg" in src or "arg(" in src, f"{builtin_file.name} missing arg helper"
+            assert "_run_dir" in src or "run_dir(" in src, f"{builtin_file.name} missing run_dir helper"
+
+    def test_tools_have_required_helpers(self):
+        """Every tool module must define its own helpers."""
+        from pathlib import Path
+
+        for tool_file in sorted(Path("src/ofx/modules/tools").glob("*.py")):
+            if tool_file.name == "__init__.py":
+                continue
+            src = tool_file.read_text()
+            assert "_text_arg" in src, f"{tool_file.name} missing _text_arg helper"
+            assert "_run_dir" in src, f"{tool_file.name} missing _run_dir helper"
+            assert "_require_target" in src, f"{tool_file.name} missing _require_target helper"
+
