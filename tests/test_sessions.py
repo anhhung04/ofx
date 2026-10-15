@@ -50,6 +50,15 @@ def _clear_active_project():
     yield
     _settings_mod.settings.active_project = original
 
+
+@pytest.fixture(autouse=True)
+def _isolate_projects_env(monkeypatch, tmp_path):
+    """Isolate projects path so session subprocesses don't see a stale active project."""
+    projects_dir = tmp_path / ".ofx" / "projects"
+    projects_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("OFX_PROJECTS_PATH", str(projects_dir))
+    yield
+
 class TestSessionModel:
     def test_create_minimal(self):
         s = Session(id="aabbccdd", workflow_file="scan.yml")
