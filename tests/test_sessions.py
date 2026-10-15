@@ -60,6 +60,8 @@ def _isolate_session_env(monkeypatch, tmp_path):
         "model_config",
         {**_settings_mod.Settings.model_config, "yaml_file": config_path},
     )
+    # Clear any leaked OFX_ACTIVE_PROJECT env var from project tests
+    monkeypatch.delenv("OFX_ACTIVE_PROJECT", raising=False)
     original = getattr(_settings_mod.settings, "active_project", None)
     _settings_mod.settings.active_project = None
     yield
