@@ -581,7 +581,7 @@ class TestSessionManagerLocal:
         assert _wait_until(_is_done, timeout=30), "session did not complete in time"
 
         session = asyncio.run(mgr.status(session.id))
-        assert session.status == SessionStatus.COMPLETED
+        assert session.status == SessionStatus.COMPLETED, f"session failed: {session.error}"
 
         work = Path(session.remote_work_dir)
         assert (work / "output.enc").exists(), (
@@ -607,7 +607,7 @@ class TestSessionManagerLocal:
 
         assert _wait_until(_is_done, timeout=20), "session did not complete in time"
 
-        assert session.status == SessionStatus.COMPLETED
+        assert session.status == SessionStatus.COMPLETED, f"session failed: {session.error}"
         results_path = asyncio.run(mgr.fetch(session.id))
         trace = (results_path / "trace.txt").read_text()
         assert "FIRST_JOB" in trace
@@ -630,7 +630,7 @@ class TestSessionManagerLocal:
 
         assert _wait_until(_is_done, timeout=20), "session did not complete in time"
 
-        assert session.status == SessionStatus.COMPLETED
+        assert session.status == SessionStatus.COMPLETED, f"session failed: {session.error}"
         results_path = asyncio.run(mgr.fetch(session.id))
         trace = (results_path / "trace.txt").read_text()
         assert "FIRST_JOB" not in trace
@@ -707,7 +707,7 @@ class TestSessionManagerLocal:
 
         assert _wait_until(_is_done, timeout=20), "session did not complete in time"
 
-        assert session.status == SessionStatus.COMPLETED
+        assert session.status == SessionStatus.COMPLETED, f"session failed: {session.error}"
 
     def test_logs_returns_output(self, tmp_path):
         wf_path = self._create_test_workflow(tmp_path)
@@ -784,7 +784,7 @@ class TestSessionManagerLocal:
 
         assert _wait_until(_is_done, timeout=20), "session did not complete in time"
 
-        assert session.status == SessionStatus.COMPLETED
+        assert session.status == SessionStatus.COMPLETED, f"session failed: {session.error}"
 
         results_path = asyncio.run(mgr.fetch(session.id))
         assert results_path.exists()
