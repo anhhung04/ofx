@@ -5,7 +5,7 @@ Quick guide to locate OFX data files and add custom shellcode/webshell connector
 ## Where data lives
 
 - Static assets ship inside the package (`ofx/data/...`).
-- Built-in connectors live under `ofx/api/exploitation/...`.
+- Built-in connectors live under `ofx/lib/exploitation/...`.
 - User extensions live under `~/.ofx/`.
 - Programmatic lookup:
   - Built-in: `from ofx.settings import DATA_DIR`
@@ -21,7 +21,7 @@ python -c "from ofx.settings import DATA_DIR, BASE_DATA_DIR; print(DATA_DIR); pr
 1) Create a file in `~/.ofx/shellcode/connectors/`.
 2) Subclass `ShellcodeConnector`; implement `generate()` and optionally `_check_availability()`.
 ```python
-from ofx.api.exploitation.shellcode.connectors.base import ShellcodeConnector
+from ofx.lib.exploitation.shellcode.connectors.base import ShellcodeConnector
 import shutil, subprocess
 
 class CustomShellcodeConnector(ShellcodeConnector):
@@ -39,7 +39,7 @@ class CustomShellcodeConnector(ShellcodeConnector):
 1) Add a file under `~/.ofx/webshell/connectors/` and subclass `WebshellConnector`.
 2) Implement `generate(language, password, encoder, **kwargs)` and `_check_availability` if needed.
 ```python
-from ofx.api.exploitation.webshell.connectors.base import WebshellConnector
+from ofx.lib.exploitation.webshell.connectors.base import WebshellConnector
 
 class MinimalWebshellConnector(WebshellConnector):
     def __init__(self):
@@ -54,8 +54,8 @@ class MinimalWebshellConnector(WebshellConnector):
 ## Using custom connectors
 
 ```python
-from ofx.api.exploitation.shellcode.connectors import get_connector as get_shellcode_connector
-from ofx.api.exploitation.webshell.connectors import get_connector as get_webshell_connector
+from ofx.lib.exploitation.shellcode.connectors import get_connector as get_shellcode_connector
+from ofx.lib.exploitation.webshell.connectors import get_connector as get_webshell_connector
 
 payload = get_shellcode_connector("custom-tool").generate(arch="x64")
 php = get_webshell_connector("mini").generate(language="php", password="s3cr3t")
@@ -70,26 +70,30 @@ jobs:
   generate_payload:
     steps:
       - name: Generate shellcode
-        run: |
-          from ofx.api.exploitation.shellcode.connectors import get_connector
-          connector = get_connector("custom-tool")
-          shellcode = connector.generate(
-            arch="x64",
-            lhost="{{ secrets.lhost }}",
-            lport=4444
-          )
-          with open("payload.bin", "wb") as f:
-              f.write(shellcode)
-      
+        module: python
+        with:
+          script: |
+            from ofx.lib.exploitation.shellcode.connectors import get_connector
+            connector = get_connector("custom-tool")
+            shellcode = connector.generate(
+              arch="x64",
+              lhost="{{ secrets.lhost }}",
+              lport=4444
+            )
+            with open("payload.bin", "wb") as f:
+                f.write(shellcode)
+
       - name: Generate webshell
-        run: |
-          from ofx.api.exploitation.webshell.connectors import get_connector
-          connector = get_connector("advanced")
-          code = connector.generate(
-            language="php",
-            password="{{ secrets.webshell_pass }}"
-          )
-          print(f"webshell={code}")
+        module: python
+        with:
+          script: |
+            from ofx.lib.exploitation.webshell.connectors import get_connector
+            connector = get_connector("advanced")
+            code = connector.generate(
+              language="php",
+              password="{{ secrets.webshell_pass }}"
+            )
+            print(f"webshell={code}")
         outputs:
           webshell: "{{ step.webshell }}"
 ```
@@ -156,7 +160,7 @@ Create tests for your connectors:
 # tests/test_custom_connector.py
 
 import pytest
-from ofx.api.exploitation.shellcode.connectors.custom_connector import (
+from ofx.lib.exploitation.shellcode.connectors.custom_connector import (
     CustomShellcodeConnector,
 )
 
@@ -187,7 +191,7 @@ def test_invalid_arch():
 
 ## Additional Resources
 
-- [Shellcode API Documentation](../api/overview.md)
-- [Webshell API Documentation](../api/overview.md)
+- [Shellcode API Documentation](../lib/overview.md)
+- [Webshell API Documentation](../lib/overview.md)
 - [Workflow Integration](workflows.md)
 - [Template System](templates.md)

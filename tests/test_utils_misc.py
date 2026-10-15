@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+
 class TestEnumEncoder:
     def test_encodes_enum_as_value(self):
         from ofx.utils.json_utils import EnumEncoder
@@ -181,7 +182,7 @@ class TestExpandJobs:
     def _make_job(self, matrix: dict | None = None, needs: list | None = None):
         from ofx.models.job import Job
 
-        data: dict = {"steps": [{"run": "echo hi"}]}
+        data: dict = {"steps": [{"module": "shell", "with": {"cmd": "echo hi"}}]}
         if matrix:
             data["strategy"] = {"matrix": matrix}
         if needs:
@@ -220,7 +221,7 @@ class TestGetExpandedJobIds:
 
         jobs = {}
         for jid in jids:
-            j = Job.model_validate({"steps": [{"run": "echo"}]})
+            j = Job.model_validate({"steps": [{"module": "shell", "with": {"cmd": "echo"}}]})
             j.jid = jid
             j.original_job_id = original
             jobs[jid] = j

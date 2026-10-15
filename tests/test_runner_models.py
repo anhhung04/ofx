@@ -8,7 +8,6 @@ from pydantic import BaseModel
 
 from ofx.models.step import RunType
 from ofx.runner.context import RunContext, RunnerStatus, RunResult
-from ofx.runner.metadata import ModelContext
 from ofx.runner.runner import Runner
 
 
@@ -34,16 +33,14 @@ class TestRunType:
 
     def test_run_type_values(self):
         """Test all RunType enum values"""
-        assert RunType.SCRIPT.value == "script"
-        assert RunType.COMMAND.value == "command"
+        assert RunType.MODULE.value == "module"
         assert RunType.WORKFLOW.value == "workflow"
-        assert RunType.SCRIPT_FILE.value == "script_file"
         assert RunType.PIPE.value == "pipe"
 
     def test_run_type_equality(self):
         """Test RunType equality comparison"""
-        assert RunType.SCRIPT == RunType.SCRIPT
-        assert RunType.COMMAND != RunType.WORKFLOW
+        assert RunType.MODULE == RunType.MODULE
+        assert RunType.MODULE != RunType.WORKFLOW
 
 
 class TestRunContext:

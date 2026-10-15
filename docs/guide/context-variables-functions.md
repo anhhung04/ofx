@@ -37,7 +37,9 @@ These properties represent runtime environmental context specific to your local 
 
 *Example usage:*
 ```yaml
-run: echo "Given target: {{ inputs.target }} against execution workspace {{ tools_dir }} on {{ platform }}"
+module: shell
+with:
+  cmd: 'echo "Given target: {{ inputs.target }} against execution workspace {{ tools_dir }} on {{ platform }}"'
 ```
 
 ---
@@ -108,7 +110,7 @@ You can use these helper functions inside any template expression (`{{ ... }}`).
 
 ### Typed Output Helpers
 
-Filter task typed outputs by type. These accept a list of typed output dicts and return only items matching the specified type:
+Filter typed outputs by type. These accept a list of typed output dicts and return only items matching the specified type:
 
 | Function | Filters for `_type` |
 |---|---|
@@ -147,9 +149,11 @@ These functions transform lists of data and are available both as template funct
 
 **Example — chaining filters:**
 ```yaml
-run: |
-  echo "Top 10 unique hosts:"
-  echo "{{ steps['scan'].outputs.typed_outputs | ports | pluck('host') | unique_by('host') | first(10) | to_lines }}"
+module: shell
+with:
+  cmd: |
+    echo "Top 10 unique hosts:"
+    echo "{{ steps['scan'].outputs.typed_outputs | ports | pluck('host') | unique_by('host') | first(10) | to_lines }}"
 ```
 
 ### Findings Export
@@ -162,7 +166,7 @@ run: |
 
 ## Shell Helper Functions
 
-The following shell functions are automatically prepended and exported to your environment when using the `run` step. They work transparently across **Bash** and **PowerShell**:
+The following shell functions are automatically prepended and exported to your environment when using `module: shell` steps. They work transparently across **Bash** and **PowerShell**:
 
 ### Installation Helpers
 These simplify setting up tools quickly without dealing with raw package managers in multiple OS environments:

@@ -139,9 +139,11 @@ jobs:
   scan:
     steps:
       - name: Scan with API
-        run: |
-          curl -H "X-API-Key: {{ secrets.SHODAN_API_KEY }}" \
-            https://api.shodan.io/search
+        module: shell
+        with:
+          cmd: |
+            curl -H "X-API-Key: {{ secrets.SHODAN_API_KEY }}" \
+              https://api.shodan.io/search
 ```
 
 ## Import/Export Format

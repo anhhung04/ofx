@@ -71,3 +71,23 @@ def test_create_project_uses_minimal_workspace_tree(tmp_path, monkeypatch):
         "workflows",
     }
     assert "Rules of Engagement" in (project / "README.md").read_text()
+
+
+class TestProjectInit:
+    """`ofx project init` with --use."""
+
+    def test_init_use_sets_active_project_name(self, temp_home):
+        result = runner.invoke(app, ["init", "named-proj", "--use"], input="\n")
+
+        assert result.exit_code == 0, result.output
+        cfg = yaml.safe_load(_config_path(temp_home).read_text()) or {}
+        assert cfg.get("active_project") == "named-proj"
+        assert (temp_home / ".ofx" / "projects" / "named-proj").is_dir()
+
+    def test_init_without_use_leaves_active_project_unset(self, temp_home):
+        result = runner.invoke(app, ["init", "plain-proj"], input="\n")
+
+        assert result.exit_code == 0, result.output
+        cfg_file = _config_path(temp_home)
+        cfg = yaml.safe_load(cfg_file.read_text()) if cfg_file.exists() else {}
+        assert not (cfg or {}).get("active_project")

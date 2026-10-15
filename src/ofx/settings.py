@@ -45,6 +45,7 @@ USER_SHELLCODE_CONNECTORS_DIR = BASE_DATA_DIR / "shellcode" / "connectors"
 USER_WEBSHELL_CONNECTORS_DIR = BASE_DATA_DIR / "webshell" / "connectors"
 SESSIONS_DIR = BASE_DATA_DIR / "sessions"
 COLLECTIONS_DIR = BASE_DATA_DIR / "collections"
+MODULES_DIR = Path(os.getenv("OFX_MODULES_DIR", BASE_DATA_DIR / "modules"))
 CHANNELS_DIR = TEMP_DIR / "channels"
 
 ALLOWED_WORKFLOW_FILE_EXTENSIONS = (".yml", ".yaml")
@@ -144,6 +145,7 @@ def _ensure_default_layout() -> None:
         USER_WEBSHELL_CONNECTORS_DIR,
         SESSIONS_DIR,
         COLLECTIONS_DIR,
+        MODULES_DIR,
     ):
         ensure_dir(path)
 
@@ -181,6 +183,24 @@ def get_github_token() -> str:
     Returns an empty string when no token is available.
     """
     return settings.github_token.get_secret_value() or _gh_cli_token()
+
+def authenticated_git_url(source: str) -> str:
+    """Inject the GitHub token into HTTPS GitHub clone URLs.
+
+    Used for private repo access when cloning remote modules and
+    collections. If no token is available, or the URL is not an HTTPS
+    GitHub URL, the original URL is returned unchanged.
+    """
+    token = get_github_token()
+    if not token:
+        return source
+    if source.startswith("https://github.com/"):
+        return source.replace(
+            "https://github.com/",
+            f"https://x-access-token:{token}@github.com/",
+            1,
+        )
+    return source
 
 _console = None
 

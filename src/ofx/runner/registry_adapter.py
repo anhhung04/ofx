@@ -1,5 +1,6 @@
 """Registry adapter abstraction shared by runner registry backends."""
 
+import asyncio
 import copy
 import json
 import logging
@@ -205,13 +206,23 @@ class SerializedPrefixedRegistryAdapter(PrefixedRegistryAdapter):
         return None
 
     async def _update(self, key: str, updates: dict[str, Any]) -> None:
-        merged = self._merged_updated_value(await self._get(key), updates)
-        json_value = self._serialize_value(key, merged)
-        if json_value is None:
-            return
-        await self._write_storage_value(self._storage_key(key), json_value)
-        await self._after_storage_write(key)
+        lock = self._get_update_lock()
+        async with lock:
+            merged = self._merged_updated_value(await self._get(key), updates)
+            json_value = self._serialize_value(key, merged)
+            if json_value is None:
+                return
+            await self._write_storage_value(self._storage_key(key), json_value)
+            await self._after_storage_write(key)
         self._log_backend_key_action("Updated", key)
+
+    def _get_update_lock(self) -> asyncio.Lock:
+        """Return the per-instance lock guarding read-modify-write updates."""
+        lock = getattr(self, "_update_lock", None)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._update_lock = lock
+        return lock
 
     async def _delete(self, key: str) -> bool:
         storage_key = self._storage_key(key)

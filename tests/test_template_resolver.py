@@ -17,6 +17,7 @@ from ofx.runner.templates.resolver import (
     _tojson_python,
 )
 
+
 @pytest.fixture
 def resolver():
     """Fresh TemplateResolver with cleared caches."""

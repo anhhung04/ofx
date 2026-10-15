@@ -19,25 +19,33 @@ jobs:
     name: Reconnaissance
     steps:
       - name: Scan target
-        run: nmap {{ inputs.target }}
+        module: shell
+        with:
+          cmd: nmap {{ inputs.target }}
   exploit:
     name: Exploitation
     needs: recon
     steps:
       - name: Run exploit
-        run: python exploit.py
+        module: shell
+        with:
+          cmd: python exploit.py
   loot:
     name: Data Exfiltration
     needs: exploit
     steps:
       - name: Collect data
-        run: ./loot.sh
+        module: shell
+        with:
+          cmd: ./loot.sh
   notify:
     name: Notification
     needs: recon
     steps:
       - name: Send alert
-        run: ./notify.sh
+        module: shell
+        with:
+          cmd: ./notify.sh
 ```
 
 **Stages:**

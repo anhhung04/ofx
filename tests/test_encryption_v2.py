@@ -5,6 +5,7 @@ import tempfile
 
 import pytest
 
+
 def test_v2_round_trip():
     """v2 format: magic + salt + nonce + ciphertext round-trips correctly."""
     from ofx.commands.project.encryption import (

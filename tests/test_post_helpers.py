@@ -4,17 +4,18 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ofx.api.post import (
+from ofx.lib.post import (
     PostRunnerBase,
     PostRunnerError,
     PostSSH,
 )
-from ofx.api.post.enum import (
+from ofx.lib.post.enum import (
     bundled_tool_path,
     linpeas_command,
     linux_exploit_suggester_command,
     winpeas_command,
 )
+
 
 class InTestRunner(PostRunnerBase):
     """Concrete runner for testing purposes."""

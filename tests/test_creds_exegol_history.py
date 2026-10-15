@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from ofx.api.creds.exegol_history import Credential, ExegolHistoryDB, Host
+from ofx.lib.creds.exegol_history import Credential, ExegolHistoryDB, Host
 
 
 @dataclass

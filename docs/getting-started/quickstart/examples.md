@@ -14,7 +14,9 @@ jobs:
   greet:
     steps:
       - name: Say hello
-        run: echo "Hello from OFX!"
+        module: shell
+        with:
+          cmd: echo "Hello from OFX!"
 ```
 
 ```bash
@@ -46,7 +48,9 @@ jobs:
   scan:
     steps:
       - name: Port scan
-        run: nmap -sT -p {{ inputs.ports }} {{ inputs.target }}
+        module: shell
+        with:
+          cmd: nmap -sT -p {{ inputs.ports }} {{ inputs.target }}
 ```
 
 ```bash
@@ -73,7 +77,9 @@ jobs:
   enumerate:
     steps:
       - name: Find subdomains
-        run: subfinder -d {{ inputs.domain }} -silent -o subs.txt
+        module: shell
+        with:
+          cmd: subfinder -d {{ inputs.domain }} -silent -o subs.txt
     outputs:
       subs_file: subs.txt
 
@@ -81,7 +87,9 @@ jobs:
     needs: [enumerate]
     steps:
       - name: HTTP probe
-        run: httpx -l {{ jobs['enumerate'].outputs.subs_file }} -silent
+        module: shell
+        with:
+          cmd: httpx -l {{ jobs['enumerate'].outputs.subs_file }} -silent
 ```
 
 ```bash
@@ -106,7 +114,9 @@ jobs:
       max_parallel: 3
     steps:
       - name: Scan host
-        run: nmap -sV {{ matrix.target }} -oN scan_{{ matrix.target }}.txt
+        module: shell
+        with:
+          cmd: nmap -sV {{ matrix.target }} -oN scan_{{ matrix.target }}.txt
 ```
 
 ```bash
@@ -132,19 +142,21 @@ jobs:
   check:
     steps:
       - name: Authenticated request
-        run: |
-          curl -s -H "Authorization: Bearer {{ secrets.API_KEY }}" \
-            https://api.example.com/status
+        module: shell
+        with:
+          cmd: |
+            curl -s -H "Authorization: Bearer {{ secrets.API_KEY }}" \
+              https://api.example.com/status
 ```
 
 ---
 
-## 6. Task Steps (Built-in Tool Wrappers)
+## 6. Module Steps (Structured Output)
 
-Use pre-built task wrappers for common security tools — they parse output into structured data.
+Modules — built-in (`shell`, `python`) or user-defined — run your logic and share results via outputs. A user-defined module (see [Steps → Modules](../../guide/jobs-steps/steps.md#modules)) can parse a tool's output into structured data:
 
 ```yaml
-name: task-example
+name: module-example
 description: Port scan with structured output
 
 dispatch:
@@ -157,23 +169,34 @@ jobs:
   discover:
     steps:
       - name: Port scan
-        task: nmap
+        module: shell
         with:
-          target: "{{ inputs.target }}"
-          top_ports: 100
-          version_detection: true
+          cmd: nmap -p 1-1000 -oG - {{ inputs.target }}
         timeout: 10
+
+      - name: Parse ports
+        module: python
+        with:
+          script: |
+            import re
+            ports = []
+            for line in """{{ steps['Port scan'].stdout }}""".splitlines():
+                m = re.match(r'^(\S+)\s+(\d+)/open', line)
+                if m:
+                    ports.append({'_type': 'port', 'host': m.group(1), 'port': int(m.group(2))})
+            add_outputs(typed_outputs=ports)
     outputs:
-      open_ports: "{{ ports(steps['Port scan'].outputs.typed_outputs) | map(attribute='port') | join(',') }}"
+      open_ports: "{{ ports(steps['Parse ports'].outputs.typed_outputs) | map(attribute='port') | join(',') }}"
 ```
 
-You can also run tasks directly from the CLI without a workflow:
+You can also run a single command directly from the CLI without a workflow using `ofx flow tools` to prepare the environment, then `ofx flow run` with an inline workflow.
 
 ```bash
-ofx flow tasks run nmap 10.10.10.5 --opt top_ports=100 --opt version_detection
+ofx flow tools --all          # Install tool dependencies
+ofx flow run module-example.yml --input target=10.10.10.5
 ```
 
-Available tasks: `nmap`, `nuclei`, `httpx`, `subfinder`, `ffuf`, `feroxbuster`, `katana`, and [many more](../../guide/builtin-workflows/recon.md).
+For structured output from common security tools (`nmap`, `nuclei`, `httpx`, `subfinder`, ...), write small [user-defined modules](../../guide/jobs-steps/steps.md#modules) that wrap the tool and emit `typed_outputs` — see [Outputs → Typed outputs](../../guide/jobs-steps/outputs.md#typed-outputs).
 
 ---
 
@@ -232,7 +255,12 @@ ofx flow run recon/subdomain-recon --input target=acme.com --project pentest-acm
 
 ```yaml
 - name: Exploit only if vulnerable
-  run: python3 exploit.py {{ inputs.target }}
+  module: python
+  with:
+    script: |
+      # ... check output from the previous step ...
+      if 'VULNERABLE' in """{{ steps['Check vuln'].stdout }}""":
+          print(f"Target {{ inputs.target }} is vulnerable")
   if: "{{ 'VULNERABLE' in steps['Check vuln'].stdout }}"
 ```
 
@@ -240,9 +268,34 @@ ofx flow run recon/subdomain-recon --input target=acme.com --project pentest-acm
 
 ```yaml
 - name: Flaky network request
-  run: curl -s https://unstable-api.example.com
+  module: shell
+  with:
+    cmd: curl -s https://unstable-api.example.com
   retry: 3
   retry-delay: 5
+```
+
+Retries use exponential backoff with jitter. Branch on the outcome with `if: success()` / `if: failure()` — retry the attempt, then loot on success or fall back on failure:
+
+```yaml
+- name: exploit-attempt
+  module: modules/exploit.py
+  with:
+    target: "{{ inputs.target }}"
+  retry: 2
+  retry-delay: 5
+
+- name: collect-loot
+  module: shell
+  if: success()
+  with:
+    cmd: ./loot.sh --session {{ steps['exploit-attempt'].outputs.session_id }}
+
+- name: fallback-exploit
+  module: modules/fallback_exploit.py
+  if: failure()
+  with:
+    target: "{{ inputs.target }}"
 ```
 
 ### Tool Installation

@@ -79,7 +79,9 @@ jobs:
   job1:
     steps:
       - name: step1
-        run: echo "hello"
+        module: shell
+        with:
+          cmd: echo "hello"
 ```
 
 ---

@@ -17,6 +17,7 @@ from ofx.runner.executors.matrix import MatrixExecutor
 from ofx.runner.logging import bubble_context_log
 from ofx.runner.runner import Runner
 
+
 def build_indexed_job_context(
     runner,
     *,
@@ -72,7 +73,7 @@ def attach_indexed_job_runner(
         parent=parent or runner.parent,
         **runner_kwargs,
     )
-    runner._runners[job_copy.jid] = child_runner
+    runner.register_runner(job_copy.jid, child_runner)
     return job_copy, child_runner
 
 class JobRunner(Runner[Job]):

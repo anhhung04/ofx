@@ -13,6 +13,7 @@ from ofx.models.config import DurableRunConfig
 from ofx.settings import get_workflow_search_dirs
 from ofx.utils.env import populate_env
 
+
 class RunnerStatus(Enum):
     """Status of a runner execution."""
 

@@ -3,7 +3,9 @@ from __future__ import annotations
 import fnmatch
 import os
 import sys
+import types as types_mod
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -122,3 +124,70 @@ def _mock_registry_backends() -> None:
 
     yield None
     monkeypatch.undo()
+
+
+# ---------------------------------------------------------------------------
+# Shared helpers for remote module (git clone) tests
+# ---------------------------------------------------------------------------
+
+
+class _FakeGitRepo:
+    """Stand-in for a GitPython ``Repo`` returned by a faked clone."""
+
+    def __init__(self, checkout_calls: list[str] | None = None) -> None:
+        self._checkout_calls = checkout_calls
+        self.git = types_mod.SimpleNamespace(checkout=self._checkout)
+
+    def _checkout(self, ref: str) -> None:
+        if self._checkout_calls is not None:
+            self._checkout_calls.append(ref)
+
+    def close(self) -> None:
+        pass
+
+
+def _install_fake_clone(
+    monkeypatch: pytest.MonkeyPatch,
+    manifest: str,
+    *,
+    modules: dict[str, str] | None = None,
+    fail_clone: bool = False,
+    clone_hook=None,
+) -> tuple[list[tuple[str, str]], list[str]]:
+    """Patch ``ofx.modules.remote`` with a no-network git clone layer.
+
+    The clone materialises a cache dir containing ``ofx-modules.yml`` (the
+    supplied ``manifest``) plus any ``modules`` files (``name -> source``,
+    written under ``modules/``). The GitHub token resolver is stubbed to an
+    empty token so tests stay hermetic regardless of machine auth state.
+
+    Returns ``(clone_calls, checkout_calls)`` for assertions.
+    """
+    clone_calls: list[tuple[str, str]] = []
+    checkout_calls: list[str] = []
+
+    monkeypatch.setattr("ofx.settings.get_github_token", lambda: "")
+
+    def fake_clone_from(url: str, target: str, multi_options=None):
+        clone_calls.append((url, target))
+        if fail_clone:
+            raise ImportError(f"boom: {url}")
+        target_path = Path(target)
+        target_path.mkdir(parents=True, exist_ok=True)
+        (target_path / "ofx-modules.yml").write_text(manifest)
+        if modules:
+            modules_dir = target_path / "modules"
+            modules_dir.mkdir(exist_ok=True)
+            for name, source in modules.items():
+                (modules_dir / name).write_text(source)
+        if clone_hook is not None:
+            clone_hook(target_path)
+        return _FakeGitRepo(checkout_calls)
+
+    monkeypatch.setattr(
+        "ofx.modules.remote.git",
+        types_mod.SimpleNamespace(
+            Repo=types_mod.SimpleNamespace(clone_from=fake_clone_from)
+        ),
+    )
+    return clone_calls, checkout_calls

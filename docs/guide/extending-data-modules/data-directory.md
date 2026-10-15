@@ -34,13 +34,14 @@ User extension layout:
 ## Example: Using a Payload
 ```yaml
 steps:
-	- name: Use Payload
-		run: |
-			from ofx.settings import DATA_DIR
-			with open(DATA_DIR / 'shellcode' / 'payload.bin', 'rb') as f:
-					data = f.read()
-			# Use data in exploit
-		script:
+  - name: Use Payload
+    module: python
+    with:
+      script: |
+        from ofx.settings import DATA_DIR
+        with open(DATA_DIR / 'shellcode' / 'payload.bin', 'rb') as f:
+            data = f.read()
+        # Use data in exploit
 ```
 
 ---

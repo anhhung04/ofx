@@ -12,12 +12,30 @@ from typing import Any
 
 from ofx.models.step import RunType
 from ofx.runner.context import ConditionNotMetError, RunnerStatus
-from ofx.runner.step_fields import BASE_STEP_TEMPLATE_FIELDS, RUN_TYPE_TEMPLATE_FIELDS
+
+BASE_STEP_TEMPLATE_FIELDS: tuple[str, ...] = (
+    "name",
+    "shell",
+    "working_directory",
+    "log_stdout",
+    "log_command",
+    "env",
+    "run_if",
+)
+
+RUN_TYPE_TEMPLATE_FIELDS: dict[RunType, list[str]] = {
+    RunType.WORKFLOW: ["uses"],
+    RunType.MODULE: ["module", "run_with"],
+    RunType.PIPE: [],
+}
 
 _MAX_BACKOFF_SECONDS = 300
 _JITTER_MIN = 0.5
 _JITTER_MAX = 1.0
-_DEFAULT_TIMEOUT_MINUTES = 60
+# Unparseable timeout expressions fall back to a single shared default that
+# matches coerce_timeout_minutes (error_helpers.py). Both must stay 1440 so the
+# step executor and the step runner agree on the unparseable-timeout budget (L2).
+_DEFAULT_TIMEOUT_MINUTES = 1440
 
 class StepRunnerMixin:
     """Mixin providing methods shared by StepRunner and CloudStepRunner."""
@@ -128,7 +146,7 @@ class StepRunnerMixin:
             self.model.timeout = int(float(resolved))
         except (ValueError, TypeError):
             self._log_warning(
-                f"Invalid timeout expression result: {resolved!r}, using 60 min"
+                f"Invalid timeout expression result: {resolved!r}, using 1440 min"
             )
             self.model.timeout = _DEFAULT_TIMEOUT_MINUTES
 
@@ -179,7 +197,7 @@ class StepRunnerMixin:
 
         format_typed_outputs(
             typed_outputs,
-            task_name=self.model.name or self.model.task or "",
+            task_name=self.model.name or self.model.module or "",
             console=get_console(),
         )
         return True

@@ -32,23 +32,20 @@ dispatch:
 jobs:
   nuclei-scan:
     name: Nuclei Vulnerability Scan
+    outputs:
+      total: '{{ steps.summarize.outputs.total }}'
+      severity_count: '{{ steps.summarize.outputs.severity_count }}'
     steps:
+    - name: targets
+      module: local.builtin.normalize_targets
     - name: nuclei
-      run: nuclei -l {{ inputs.target }} -severity {{ inputs.severity }}{% if inputs.tags
-        %} -tags {{ inputs.tags }}{% endif %} -rate-limit {{ inputs.rate_limit }}
-        -silent -jsonl -o {{ env.OFX_RUN_DIR }}/nuclei_results.jsonl -stats -stats-interval
-        30 2>&1
-      continue-on-error: true
+      module: local.builtin.shell
+      with:
+        cmd: nuclei -l "{{ steps.targets.outputs.target_file }}" -severity {{ inputs.severity
+          }}{% if inputs.tags %} -tags {{ inputs.tags }}{% endif %} -rate-limit {{ inputs.rate_limit
+          }} -silent -jsonl -o {{ env.OFX_RUN_DIR }}/nuclei_results.jsonl -stats -stats-interval
+          30 2>&1
       log-command: '{{ inputs.log_command }}'
       timeout: 120
     - name: summarize
-      script: "import os, json\n\nf = os.path.join(os.environ[\"OFX_RUN_DIR\"], \"\
-        nuclei_results.jsonl\")\nseverity_count = {\"critical\": 0, \"high\": 0, \"\
-        medium\": 0, \"low\": 0, \"info\": 0}\ntry:\n    with open(f) as fh:\n   \
-        \     for line in fh:\n            try:\n                item = json.loads(line)\n\
-        \                sev = item.get(\"info\", {}).get(\"severity\", \"info\").lower()\n\
-        \                severity_count[sev] = severity_count.get(sev, 0) + 1\n  \
-        \          except:\n                pass\n    total = sum(severity_count.values())\n\
-        \    print(f\"Total findings: {total}\")\n    for k, v in severity_count.items():\n\
-        \        if v:\n            print(f\"  {k}: {v}\")\nexcept FileNotFoundError:\n\
-        \    print(\"No nuclei results found\")"
+      module: local.summarize

@@ -16,12 +16,16 @@ name: RunIf Failure Workflow
 jobs:
   fail_job:
     steps:
-      - run: exit 1
+      - module: shell
+        with:
+          cmd: exit 1
   on_failure:
     needs: [fail_job]
     run_if: failure()
     steps:
-      - run: echo "ran on failure"
+      - module: shell
+        with:
+          cmd: echo "ran on failure"
 """
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         runner = WorkflowRunner(workflow, RunContext())
@@ -39,9 +43,13 @@ name: RunIf Step Canceled
 jobs:
   test_job:
     steps:
-      - run: echo "skip"
+      - module: shell
+        with:
+          cmd: echo "skip"
         run_if: false
-      - run: echo "next"
+      - module: shell
+        with:
+          cmd: echo "next"
 """
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         runner = WorkflowRunner(workflow, RunContext())

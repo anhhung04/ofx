@@ -31,4 +31,4 @@ ofx api exploit --module ms17_010 --target 192.168.1.10
 
 ---
 
-[← Back to API Reference](../../reference/api.md)
+[← Back to API Reference](../../reference/lib.md)

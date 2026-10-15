@@ -4,13 +4,13 @@ from unittest.mock import MagicMock
 
 import yaml
 
+from ofx.cloud.runners.fleet import CloudFleetRunner
+from ofx.cloud.runners.job import CloudJobRunner
+from ofx.cloud.runners.matrix import CloudMatrixJobRunner
 from ofx.models.workflow import Workflow
 from ofx.runner import RunContext
-from ofx.runner.cloud_fleet import CloudFleetRunner
-from ofx.runner.cloud_job import CloudJobRunner
-from ofx.runner.cloud_matrix import CloudMatrixJobRunner
 from ofx.runner.job import JobRunner, MatrixJobRunner
-from ofx.runner.runner_factory import job_runner_class
+from ofx.runner.workflow_execution import _job_runner_class as job_runner_class
 
 
 def _job(spec: str):
@@ -24,7 +24,9 @@ name: test
 jobs:
   j1:
     steps:
-      - run: echo hi
+      - module: shell
+        with:
+          cmd: echo hi
 """)
     runner = job_runner_class(job)(job, RunContext(), parent=MagicMock())
     assert isinstance(runner, JobRunner)
@@ -40,7 +42,9 @@ jobs:
       matrix:
         target: [a, b]
     steps:
-      - run: echo hi
+      - module: shell
+        with:
+          cmd: echo hi
 """)
     runner = job_runner_class(job)(job, RunContext(), parent=MagicMock())
     assert isinstance(runner, MatrixJobRunner)
@@ -56,7 +60,9 @@ jobs:
       provider: static
       ssh_host: 1.2.3.4
     steps:
-      - run: echo hi
+      - module: shell
+        with:
+          cmd: echo hi
 """)
     runner = job_runner_class(job)(job, RunContext(), parent=MagicMock())
     assert isinstance(runner, CloudJobRunner)
@@ -75,7 +81,9 @@ jobs:
       matrix:
         target: [a, b]
     steps:
-      - run: echo hi
+      - module: shell
+        with:
+          cmd: echo hi
 """)
     runner = job_runner_class(job)(job, RunContext(), parent=MagicMock())
     assert isinstance(runner, CloudMatrixJobRunner)
@@ -95,7 +103,9 @@ jobs:
         count: 2
         input: "1.1.1.1\\n2.2.2.2"
     steps:
-      - run: echo hi
+      - module: shell
+        with:
+          cmd: echo hi
 """)
     runner = job_runner_class(job)(job, RunContext(), parent=MagicMock())
     assert isinstance(runner, CloudFleetRunner)
@@ -108,7 +118,9 @@ name: test
 jobs:
   j1:
     steps:
-      - run: echo hi
+      - module: shell
+        with:
+          cmd: echo hi
 """)
     cloud = _job("""
 name: test
@@ -118,7 +130,9 @@ jobs:
       provider: static
       ssh_host: 1.2.3.4
     steps:
-      - run: echo hi
+      - module: shell
+        with:
+          cmd: echo hi
 """)
     matrix = _job("""
 name: test
@@ -128,7 +142,9 @@ jobs:
       matrix:
         target: [a, b]
     steps:
-      - run: echo hi
+      - module: shell
+        with:
+          cmd: echo hi
 """)
     fleet = _job("""
 name: test
@@ -139,7 +155,9 @@ jobs:
         count: 2
         input: "1.1.1.1"
     steps:
-      - run: echo hi
+      - module: shell
+        with:
+          cmd: echo hi
 """)
 
     assert job_runner_class(plain) is JobRunner

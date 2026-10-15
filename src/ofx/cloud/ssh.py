@@ -113,7 +113,7 @@ async def wait_for_connectivity(
     return await wait_for_ssh(host, ssh_port, timeout)
 
 def _probe_ssh_login(host: str, cfg: CloudConfig) -> None:
-    from ofx.api.post.runners.ssh import PostSSH
+    from ofx.lib.post.runners.ssh import PostSSH
 
     runner = PostSSH(
         host=host,
@@ -126,7 +126,7 @@ def _probe_ssh_login(host: str, cfg: CloudConfig) -> None:
     runner.run("id")
 
 def _probe_winrm_login(host: str, cfg: CloudConfig) -> None:
-    from ofx.api.post.runners.winrm import PostWinRM
+    from ofx.lib.post.runners.winrm import PostWinRM
 
     runner = PostWinRM(
         host=host,

@@ -58,6 +58,7 @@ ofx secret set API_KEY
 - [Flow visualize](commands/visualize.md)
 - [Flow schema](commands/schema.md)
 - [Flow collections](commands/collection.md)
+- [Flow modules](commands/modules.md)
 - [Project commands](commands/project.md)
 - [Secret commands](commands/secret.md)
 - [API command](commands/api.md)

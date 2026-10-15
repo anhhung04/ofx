@@ -31,7 +31,9 @@ jobs:
     name: Scan Target
     steps:
       - name: port_scan
-        run: |
+        module: shell
+        with:
+          cmd: |
             echo "Scanning {{{{ inputs.target }}}}..."
             echo "result=success" >> "$OFX_OUTPUTS"
 

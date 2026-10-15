@@ -18,6 +18,7 @@ from ofx.runner.registry import FileRegistry, MemoryJobRegistry, RegistryAdapter
 from ofx.runner.registry_backends.memcached import MemcachedJobRegistry
 from ofx.runner.registry_backends.memory import RegistryOverflowError
 
+
 class TestMemoryRegistryMaxsize:
     async def test_default_maxsize_is_large(self):
         reg = MemoryJobRegistry()

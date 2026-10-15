@@ -1,41 +1,53 @@
 name: cloud-enum
-description: Cloud resource enumeration — discover S3 buckets, Azure blobs, GCP storage,
-  and cloud assets for a target.
+description: Cloud resource enumeration — discover publicly exposed storage buckets
+  for a target. Only AWS is implemented; the provider input must be 'aws'.
 tags:
 - recon
 - cloud
 - aws
-- azure
-- gcp
 - s3
 dispatch:
   inputs:
     target:
       required: true
       type: string
-      description: Target domain or organization name
+      description: Bucket name or organization name to enumerate
       alias: t
     provider:
       type: string
       default: aws
-      description: 'Cloud provider: aws, azure, gcp, all'
+      description: 'Cloud provider (only aws is supported)'
     log_command:
       type: string
       default: 'true'
       description: Enable command logging
 jobs:
+  validate:
+    name: Validate Provider
+    steps:
+    - name: validate-provider
+      module: local.check_provider
+    outputs:
+      provider: "{{ steps['validate-provider'].outputs.provider }}"
   s3-discovery:
     name: S3 Bucket Discovery
-    run_if: '{{ inputs.provider == ''aws'' or inputs.provider == ''all'' }}'
+    needs:
+    - validate
     steps:
     - name: s3scanner
-      run: s3scanner --bucket {{ inputs.target }} --enumerate 2>&1
+      module: local.builtin.shell
+      with:
+        cmd: s3scanner --bucket {{ inputs.target }} --enumerate 2>&1
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
+      timeout: 120
   cloud-assets:
     name: Cloud Asset Enumeration
     steps:
     - name: cloudfox
-      run: cloudfox aws --profile default 2>&1
+      module: local.builtin.shell
+      with:
+        cmd: cloudfox aws --profile default 2>&1
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
+      timeout: 60

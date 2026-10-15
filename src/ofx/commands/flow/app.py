@@ -8,6 +8,7 @@ import typer
 
 from ofx.commands.flow.checkpoint import app as checkpoint_app
 from ofx.commands.flow.collection import app as collection_app
+from ofx.commands.flow.modules import app as modules_app
 from ofx.commands.flow.profile_commands import app as profile_cmd_app
 from ofx.commands.flow.schema import app as dump_app
 from ofx.commands.project.project_manager import ProjectManager
@@ -26,6 +27,9 @@ class VisualizeFormat(str, enum.Enum):
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 app.add_typer(dump_app, name="dump", help="Dumping workflow/job/step model schemas")
 app.add_typer(collection_app, name="collection", help="Manage workflow collections")
+app.add_typer(
+    modules_app, name="modules", help="Manage namespaced remote modules"
+)
 app.add_typer(
     checkpoint_app, name="checkpoint", help="Manage durable execution checkpoints"
 )
@@ -50,7 +54,9 @@ def _complete_workflow_names(incomplete: str) -> list[str]:
     """
     workflow_file_extensions = ALLOWED_WORKFLOW_FILE_EXTENSIONS
     if workflow_file_extensions is None:
-        from ofx.settings import ALLOWED_WORKFLOW_FILE_EXTENSIONS as workflow_file_extensions
+        from ofx.settings import (
+            ALLOWED_WORKFLOW_FILE_EXTENSIONS as workflow_file_extensions,
+        )
 
     workflow_search_dirs_getter = get_workflow_search_dirs
     if workflow_search_dirs_getter is None:
@@ -99,7 +105,9 @@ def _complete_tag_names(incomplete: str) -> list[str]:
     """Shell completion for workflow tags."""
     workflow_file_extensions = ALLOWED_WORKFLOW_FILE_EXTENSIONS
     if workflow_file_extensions is None:
-        from ofx.settings import ALLOWED_WORKFLOW_FILE_EXTENSIONS as workflow_file_extensions
+        from ofx.settings import (
+            ALLOWED_WORKFLOW_FILE_EXTENSIONS as workflow_file_extensions,
+        )
 
     workflow_search_dirs_getter = get_workflow_search_dirs
     if workflow_search_dirs_getter is None:
@@ -346,7 +354,7 @@ def run(
         if active_path:
             project = active_path.name
 
-    asyncio.run(
+    result = asyncio.run(
         FlowRunHandler(
             workflow_name=workflow_name,
             input=input or [],
@@ -369,6 +377,8 @@ def run(
             time_window=time_window,
         ).run()
     )
+    if result.status.value == "failed":
+        raise typer.Exit(code=1)
 
 @app.command()
 def validate(
@@ -383,16 +393,10 @@ def validate(
         bool,
         typer.Option("--all", help="Validate all discoverable workflows."),
     ] = False,
-    check_tasks: Annotated[
-        bool,
-        typer.Option(
-            "--check-tasks", help="Verify that referenced tasks are registered."
-        ),
-    ] = False,
 ):
     """Validate workflow configuration with detailed diagnostics.
 
-    Reports schema validity, structure summary, and optionally checks task references.
+    Reports schema validity and structure summary.
     Use --all to bulk-validate every discoverable workflow.
     """
     from ofx.commands.flow.validate import validate_workflows
@@ -400,7 +404,6 @@ def validate(
     validate_workflows(
         workflow_name=workflow_name,
         all_workflows=all_workflows,
-        check_tasks=check_tasks,
     )
 
 @app.command()

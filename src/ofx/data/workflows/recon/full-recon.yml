@@ -35,26 +35,7 @@ jobs:
       target_type: '{{ steps.classify.outputs.target_type }}'
     steps:
     - name: classify
-      script: |
-        import os
-        from ofx.api.recon.targets import split_targets
-
-        src = str(__inputs__.get("target", ""))
-        rd = os.environ["OFX_RUN_DIR"]
-        values = open(src).read().splitlines() if os.path.isfile(src) else [src]
-        groups = split_targets(values)
-        counts = {t: len(items) for t, items in groups.items() if items}
-        for gtype, items in groups.items():
-            with open(os.path.join(rd, f"targets_{gtype}.txt"), "w") as fh:
-                fh.write("\n".join(items))
-        if len(counts) == 1:
-            target_type = next(iter(counts))
-        elif counts:
-            target_type = "mixed"
-        else:
-            target_type = "unknown"
-        print(f"target_type: {target_type} {counts}")
-        add_outputs(target_type=target_type)
+      module: local.builtin.classify_targets
   recon:
     name: Reconnaissance
     needs:
@@ -67,7 +48,7 @@ jobs:
       with:
         target: '{{ inputs.target }}'
         log_command: '{{ inputs.log_command }}'
-      continue-on-error: true
+        output_dir: '{{ env.OFX_RUN_DIR }}'
     - name: brute
       run_if: "{{ jobs.classify.outputs.target_type in ['domain', 'mixed'] }}"
       uses: recon/subdomain-brute
@@ -76,42 +57,32 @@ jobs:
         wordlist: '{{ inputs.wordlist }}'
         resolvers: '{{ inputs.resolvers }}'
         log_command: '{{ inputs.log_command }}'
-      continue-on-error: true
+        output_dir: '{{ env.OFX_RUN_DIR }}'
     - name: merge_subs
       run_if: "{{ jobs.classify.outputs.target_type in ['domain', 'mixed'] }}"
-      script: |
-        import os
-        rd = os.environ["OFX_RUN_DIR"]
-        sources = [
-            "{{ steps.passive.outputs.subdomain_file }}",
-            "{{ steps.brute.outputs.subdomains }}",
-        ]
-        seen = set()
-        for src in sources:
-            try:
-                with open(src) as fh:
-                    seen.update(line.strip() for line in fh if line.strip())
-            except (FileNotFoundError, OSError):
-                pass
-        out = os.path.join(rd, "all_subdomains.txt")
-        with open(out, "w") as fh:
-            fh.write("\n".join(sorted(seen)))
-        print(f"total unique subdomains: {len(seen)}")
-        add_outputs(subdomains=out, count=len(seen))
+      module: local.builtin.merge_lists
+      with:
+        files:
+        - '{{ steps.passive.outputs.subdomain_file }}'
+        - '{{ steps.brute.outputs.subdomains }}'
+        output: all_subdomains.txt
+        output_dir: '{{ env.OFX_RUN_DIR }}'
     - name: permute
       run_if: "{{ jobs.classify.outputs.target_type in ['domain', 'mixed'] }}"
       uses: recon/subdomain-permute
       with:
-        target: '{{ steps.merge_subs.outputs.subdomains }}'
+        target: '{{ steps.merge_subs.outputs.output_file }}'
         resolvers: '{{ inputs.resolvers }}'
         log_command: '{{ inputs.log_command }}'
+        output_dir: '{{ env.OFX_RUN_DIR }}'
       continue-on-error: true
     - name: takeover
       run_if: "{{ jobs.classify.outputs.target_type in ['domain', 'mixed'] }}"
       uses: recon/subdomain-takeover
       with:
-        target: '{{ steps.merge_subs.outputs.subdomains }}'
+        target: '{{ steps.merge_subs.outputs.output_file }}'
         log_command: '{{ inputs.log_command }}'
+        output_dir: '{{ env.OFX_RUN_DIR }}'
       continue-on-error: true
     # --- network path ---
     - name: host_discovery
@@ -120,61 +91,46 @@ jobs:
       with:
         target: '{{ inputs.target }}'
         log_command: '{{ inputs.log_command }}'
-      continue-on-error: true
+        output_dir: '{{ env.OFX_RUN_DIR }}'
     - name: port_scan
       run_if: "{{ jobs.classify.outputs.target_type in ['cidr', 'ip'] }}"
       uses: scan/port-scan
       with:
         target: '{{ inputs.target }}'
         log_command: '{{ inputs.log_command }}'
+        output_dir: '{{ env.OFX_RUN_DIR }}'
       continue-on-error: true
     # --- web phase (all target types) ---
     - name: web_targets
-      script: |
-        import os
-        rd = os.environ["OFX_RUN_DIR"]
-        target_type = "{{ jobs.classify.outputs.target_type }}"
-        seen = set()
-        candidates = {
-            "domain": [os.path.join(rd, "all_subdomains.txt"), os.path.join(rd, "targets_domain.txt")],
-            "subdomain": [os.path.join(rd, "targets_subdomain.txt")],
-            "cidr": ["{{ steps.host_discovery.outputs.host_file }}", os.path.join(rd, "targets_cidr.txt")],
-            "ip": [os.path.join(rd, "targets_ip.txt")],
-            "mixed": [os.path.join(rd, "all_subdomains.txt"), os.path.join(rd, "targets_domain.txt"), os.path.join(rd, "targets_subdomain.txt"), os.path.join(rd, "targets_ip.txt")],
-        }
-        for src in candidates.get(target_type, [os.path.join(rd, "targets_unknown.txt")]):
-            try:
-                with open(src) as fh:
-                    seen.update(line.strip() for line in fh if line.strip())
-            except (FileNotFoundError, OSError):
-                pass
-        out = os.path.join(rd, "web_targets.txt")
-        with open(out, "w") as fh:
-            fh.write("\n".join(sorted(seen)))
-        print(f"web targets: {len(seen)}")
-        add_outputs(web_targets=out)
+      module: local.web_targets
+      with:
+        target_type: '{{ jobs.classify.outputs.target_type }}'
+        host_file: '{{ steps.host_discovery.outputs.host_file }}'
     - name: web_probe
       uses: scan/web-probe
       with:
         target: '{{ steps.web_targets.outputs.web_targets }}'
         log_command: '{{ inputs.log_command }}'
+        output_dir: '{{ env.OFX_RUN_DIR }}'
       continue-on-error: true
     - name: waf_detect
       uses: scan/waf-detect
       with:
         target: '{{ steps.web_targets.outputs.web_targets }}'
         log_command: '{{ inputs.log_command }}'
-      continue-on-error: true
+        output_dir: '{{ env.OFX_RUN_DIR }}'
     - name: url_archive
       run_if: "{{ jobs.classify.outputs.target_type in ['domain', 'subdomain', 'mixed'] }}"
       uses: recon/url-archive
       with:
         target: '{{ steps.web_targets.outputs.web_targets }}'
         log_command: '{{ inputs.log_command }}'
+        output_dir: '{{ env.OFX_RUN_DIR }}'
       continue-on-error: true
     - name: js_analysis
       uses: recon/js-analysis
       with:
         target: '{{ steps.web_targets.outputs.web_targets }}'
         log_command: '{{ inputs.log_command }}'
+        output_dir: '{{ env.OFX_RUN_DIR }}'
       continue-on-error: true

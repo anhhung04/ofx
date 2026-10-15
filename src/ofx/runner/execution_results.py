@@ -8,6 +8,7 @@ from typing import Any
 from ofx.runner.context import RunnerStatus, normalized_runner_status_value
 from ofx.runner.metadata import ModelContext
 
+
 @dataclass
 class StepExecutionResult:
     step_index: int

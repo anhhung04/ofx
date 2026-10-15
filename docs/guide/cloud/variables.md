@@ -4,7 +4,7 @@ Cloud jobs run on remote VPS instances, so passing variables, environment, and s
 
 ## Template Variables
 
-Template variables are resolved **locally** before commands are sent to the VPS. When you write `{{ matrix.tool }}` in a step's `run:` field, OFX resolves it to the actual value, then sends the resolved command string over SSH/WinRM.
+Template variables are resolved **locally** before commands are sent to the VPS. When you write `{{ matrix.tool }}` in a module's `with.cmd`, OFX resolves it to the actual value, then sends the resolved command string over SSH/WinRM.
 
 ### Available template contexts
 
@@ -31,7 +31,9 @@ jobs:
         tool: [nmap, masscan]
         target: [10.0.0.0/24, 192.168.1.0/24]
     steps:
-      - run: "{{ matrix.tool }} {{ matrix.target }}"
+      - module: shell
+        with:
+          cmd: "{{ matrix.tool }} {{ matrix.target }}"
       # Resolves to: "nmap 10.0.0.0/24" (for combination 0)
 ```
 
@@ -54,7 +56,9 @@ The full strategy config is available as `{{ strategy }}`:
 
 ```yaml
 steps:
-  - run: echo "Running {{ matrix.fleet_index }} of {{ strategy.fleet.count }}"
+  - module: shell
+    with:
+      cmd: echo "Running {{ matrix.fleet_index }} of {{ strategy.fleet.count }}"
 ```
 
 ### Combined matrix + fleet
@@ -73,7 +77,9 @@ jobs:
         input: targets.txt
     steps:
       # 2 tools x 3 fleet chunks = 6 VPS instances
-      - run: "{{ matrix.tool }} -iL {{ matrix.fleet_input_file }}"
+      - module: shell
+        with:
+          cmd: "{{ matrix.tool }} -iL {{ matrix.fleet_input_file }}"
 ```
 
 ## Environment Variables on VPS
@@ -107,13 +113,17 @@ jobs:
       SCAN_TYPE: "full"
     steps:
       - name: install
-        run: apt install nmap -y
+        module: shell
+        with:
+          cmd: apt install nmap -y
 
       - name: scan
         env:
           OUTPUT_DIR: "/tmp/results"   # Only this step
-        run: |
-          nmap -T4 --min-rate $THREADS -oA $OUTPUT_DIR/scan target.com
+        module: shell
+        with:
+          cmd: |
+            nmap -T4 --min-rate $THREADS -oA $OUTPUT_DIR/scan target.com
 ```
 
 ### Fleet env vars
@@ -131,8 +141,10 @@ These are usable directly in shell commands without Jinja templates:
 
 ```yaml
 steps:
-  - run: |
-      nmap -iL $REMOTE_FLEET_INPUT_FILE -oA output/scan-$REMOTE_FLEET_INDEX
+  - module: shell
+    with:
+      cmd: |
+        nmap -iL $REMOTE_FLEET_INPUT_FILE -oA output/scan-$REMOTE_FLEET_INDEX
 ```
 
 ### What is NOT exported to VPS
@@ -165,10 +177,12 @@ jobs:
   scan:
     cloud: do-small
     steps:
-      - run: |
-          # {{ secrets.SHODAN_KEY }} is replaced with the actual value locally
-          # The resolved command is then sent over SSH
-          shodan search --key {{ secrets.SHODAN_KEY }} apache
+      - module: shell
+        with:
+          cmd: |
+            # {{ secrets.SHODAN_KEY }} is replaced with the actual value locally
+            # The resolved command is then sent over SSH
+            shodan search --key {{ secrets.SHODAN_KEY }} apache
 ```
 
 **Security note:** The resolved secret value **is** sent to the VPS as part of the command string. It will appear in the shell history on the VPS. To mitigate this:
@@ -189,9 +203,11 @@ jobs:
       API_KEY: "{{ secrets.API_KEY }}"
       DB_PASSWORD: "{{ secrets.DB_PASSWORD }}"
     steps:
-      - run: |
-          # Available as $API_KEY on the VPS
-          curl -H "Authorization: Bearer $API_KEY" https://api.example.com
+      - module: shell
+        with:
+          cmd: |
+            # Available as $API_KEY on the VPS
+            curl -H "Authorization: Bearer $API_KEY" https://api.example.com
 ```
 
 ### Log redaction
@@ -229,13 +245,15 @@ A common point of confusion — know the difference:
 
 ```yaml
 steps:
-  - run: |
-      # Jinja template — resolved locally before SSH
-      echo "Fleet instance {{ matrix.fleet_index }} of {{ matrix.fleet_total }}"
+  - module: shell
+    with:
+      cmd: |
+        # Jinja template — resolved locally before SSH
+        echo "Fleet instance {{ matrix.fleet_index }} of {{ matrix.fleet_total }}"
 
-      # Shell variable — resolved on VPS at runtime
-      nmap -iL $REMOTE_FLEET_INPUT_FILE -oA output/scan-$REMOTE_FLEET_INDEX
+        # Shell variable — resolved on VPS at runtime
+        nmap -iL $REMOTE_FLEET_INPUT_FILE -oA output/scan-$REMOTE_FLEET_INDEX
 
-      # Both work for fleet vars. Use whichever you prefer:
-      # {{ matrix.remote_fleet_input_file }} == $REMOTE_FLEET_INPUT_FILE
+        # Both work for fleet vars. Use whichever you prefer:
+        # {{ matrix.remote_fleet_input_file }} == $REMOTE_FLEET_INPUT_FILE
 ```

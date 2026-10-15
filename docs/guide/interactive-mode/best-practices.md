@@ -4,7 +4,9 @@
 Always set timeouts for interactive sessions to prevent hanging:
 ```yaml
 - name: Interactive Session
-  run: bash
+  module: shell
+  with:
+    cmd: bash
   interactive: true
   timeout: 15  # 15 minutes timeout
 ```
@@ -16,11 +18,15 @@ jobs:
   debug:
     steps:
       - name: Run Commands
-        run: |
-          ./setup.sh
-          ./process.sh
+        module: shell
+        with:
+          cmd: |
+            ./setup.sh
+            ./process.sh
       - name: Debug Session
-        run: bash
+        module: shell
+        with:
+          cmd: bash
         interactive: true
         if: failure()  # Only run if previous step failed
 ```
@@ -35,18 +41,24 @@ jobs:
     name: Preparation
     steps:
       - name: Run preparation script
-        run: ./prepare.sh
+        module: shell
+        with:
+          cmd: ./prepare.sh
   interact:
     name: Interactive Session
     needs: prepare  # Sequential execution
     steps:
       - name: Launch interactive shell
-        run: bash
+        module: shell
+        with:
+          cmd: bash
         interactive: true
   cleanup:
     name: Cleanup
     needs: interact  # Runs after interaction
     steps:
       - name: Run cleanup script
-        run: ./cleanup.sh
+        module: shell
+        with:
+          cmd: ./cleanup.sh
 ```

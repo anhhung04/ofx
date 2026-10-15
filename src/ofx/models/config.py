@@ -7,6 +7,7 @@ from pydantic import Field
 from ofx.models.base import OFXBaseModel
 from ofx.settings import DEFAULT_SHELL, DEFAULT_WORKFLOWS_DIR
 
+
 class RunConfig(OFXBaseModel):
     """Shell and working directory configuration."""
 

@@ -1,4 +1,5 @@
-from ofx.api.exploitation.webshell.connectors.template import TemplateConnector
+from ofx.lib.exploitation.webshell.connectors.template import TemplateConnector
+
 
 def test_templates():
     connector = TemplateConnector()

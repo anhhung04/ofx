@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from configparser import ConfigParser
 
-from ofx.api.credential_config import load_section_values, save_section_values
+from ofx.lib.credential_config import load_section_values, save_section_values
 
 
 def test_load_section_values_returns_requested_keys(tmp_path):

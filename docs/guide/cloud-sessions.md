@@ -336,11 +336,15 @@ jobs:
   scan:
     steps:
       - name: run-nmap
-        run: nmap -sV -oA output/scan {{ inputs.target }}
+        module: shell
+        with:
+          cmd: nmap -sV -oA output/scan {{ inputs.target }}
       - name: parse-results
-        run: |
-          mkdir -p output
-          grep "open" output/scan.nmap > output/open-ports.txt
+        module: shell
+        with:
+          cmd: |
+            mkdir -p output
+            grep "open" output/scan.nmap > output/open-ports.txt
 ```
 
 Submit with:

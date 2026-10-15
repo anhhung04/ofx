@@ -8,8 +8,29 @@ from dataclasses import dataclass, field
 
 from ofx.runner.context import context_with_update
 from ofx.runner.runner import Runner
-from ofx.runner.runner_factory import job_runner_class
 from ofx.settings import settings
+
+
+def _job_runner_class(job):
+    """Return the runner class appropriate for the given job configuration."""
+    has_cloud = job.cloud is not None
+    has_matrix = bool(job.strategy and job.strategy.matrix)
+    has_fleet = bool(job.strategy and job.strategy.fleet)
+
+    if has_cloud and has_fleet:
+        from ofx.cloud.runners.fleet import CloudFleetRunner
+        return CloudFleetRunner
+    if has_cloud and has_matrix:
+        from ofx.cloud.runners.matrix import CloudMatrixJobRunner
+        return CloudMatrixJobRunner
+    if has_cloud:
+        from ofx.cloud.runners.job import CloudJobRunner
+        return CloudJobRunner
+    if has_matrix:
+        from ofx.runner.job import MatrixJobRunner
+        return MatrixJobRunner
+    from ofx.runner.job import JobRunner
+    return JobRunner
 
 logger = logging.getLogger(settings.app_branding)
 _MEMORY_POLL_INTERVAL = 5
@@ -46,7 +67,7 @@ class WorkflowExecutionManager:
             stage_size = len(stage)
             for job_id in stage:
                 job = staged_jobs[job_id]
-                runner = job_runner_class(job)(
+                runner = _job_runner_class(job)(
                     job,
                     context_with_update(
                         self._parent.ctx,
@@ -55,7 +76,7 @@ class WorkflowExecutionManager:
                     parent=self._parent,
                 )
                 stage_runners[job_id] = runner
-                self._parent._runners[job_id] = runner
+                self._parent.register_runner(job_id, runner)
 
             failed_jobs = await self._run_stage(stage_index, stage_runners)
             if failed_jobs:
@@ -67,6 +88,7 @@ class WorkflowExecutionManager:
         if self._mem_limit <= 0:
             return
         warned = False
+        unavailable_logged = False
         while True:
             try:
                 with open("/proc/meminfo") as f:
@@ -81,7 +103,14 @@ class WorkflowExecutionManager:
                     available = info.get("MemAvailable", 0)
                     usage = (1 - available / total) * 100 if total > 0 else 0.0
             except (OSError, KeyError, ValueError, ZeroDivisionError):
-                logger.debug("Memory usage check unavailable, defaulting to 0%%", exc_info=True)
+                # Log the unavailable-memory notice once per wait, not on
+                # every poll (the non-Linux path would otherwise spam debug
+                # records every _MEMORY_POLL_INTERVAL seconds).  Also fixes
+                # the literal ``%%`` that previously rendered the message
+                # as "0%%" because it was passed as a %-format string.
+                if not unavailable_logged:
+                    logger.debug("Memory usage check unavailable, defaulting to 0%")
+                    unavailable_logged = True
                 usage = 0.0
             if usage <= 0 or usage < self._mem_limit:
                 return
@@ -104,8 +133,8 @@ class WorkflowExecutionManager:
             f"(concurrency limit: {self._max_parallel_jobs})"
         )
         async def _run_job(job_runner: Runner) -> None:
+            await self._wait_for_memory()
             async with self._job_semaphore:
-                await self._wait_for_memory()
                 await job_runner.run()
 
         task_map = {

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from ofx.api.service import detect_protocol, scan_banner
+from ofx.lib.service import detect_protocol, scan_banner
 
 
 class _FakeSocket:

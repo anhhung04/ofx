@@ -8,15 +8,21 @@ import secrets as _secrets
 import shlex
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+import yaml
 
 from ofx.cloud.sessions.models import Session, SessionStatus
 from ofx.cloud.sessions.python_steps import (
     iter_python_step_bundles as _iter_python_step_bundles,
 )
-from ofx.cloud.sessions.script_builder import build_session_script
+from ofx.cloud.sessions.script_builder import (
+    build_session_cli_script,
+    build_session_script,
+)
 from ofx.cloud.temp_upload import upload_temp_content
 
 logger = logging.getLogger("ofx")
@@ -72,6 +78,31 @@ def _cloud_connection_settings(
         "winrm_port": winrm_port or (5986 if normalized_winrm_ssl else 5985),
         "winrm_transport": winrm_transport or "ntlm",
     }
+
+def _write_session_workflow_file(workflow: Any, job_id: str, path: Path) -> None:
+    """Serialize (a possibly job-filtered subset of) a workflow for the CLI.
+
+    Local sessions fork ``ofx flow run``, which has no job selector, so a
+    ``job_id`` override is applied by materializing a single-job workflow.
+    Internal fields backfilled by the ``Workflow`` validator (``jid``, job
+    ``name``, ``step_index``) are dropped — they are recomputed on load — and
+    the selected job's ``needs`` are cleared so the subset validates standalone.
+    """
+    if job_id:
+        job = workflow.jobs[job_id].model_copy(update={"needs": []})
+        jobs: dict[str, Any] = {job_id: job}
+    else:
+        jobs = workflow.jobs
+    subset = workflow.model_copy(update={"jobs": jobs})
+    data = subset.model_dump(
+        exclude_defaults=True, by_alias=True, exclude={"workflow_path"}
+    )
+    for job_data in data["jobs"].values():
+        job_data.pop("jid", None)
+        job_data.pop("name", None)
+        for step_data in job_data.get("steps", []):
+            step_data.pop("step_index", None)
+    path.write_text(yaml.safe_dump(data, sort_keys=False))
 
 class SubmitMixin:
     @staticmethod
@@ -483,12 +514,20 @@ class SubmitMixin:
         session: Session,
         steps: list[Any],
         env: dict[str, str],
-        profile: Any | None = None,
+        workflow: Any,
         *,
         workflow_dir: Path | None,
         workflow_name: str,
     ) -> Session:
-        """Start workflow steps as a detached local background process."""
+        """Start a detached local session that forks ``ofx flow run``.
+
+        The session layer stages the workspace (workflow file, bundled step
+        artifacts, input files, at-rest key) and generates a wrapper script;
+        the wrapper runs the standard CLI — the same WorkflowRunner code path
+        as interactive runs — maps its exit code onto the task markers, and
+        encrypts results at rest. The session manager tracks the subprocess
+        PID, polls status, and fetches results as before.
+        """
         session_dir = self.store.session_dir(session.id)
         work_dir = session_dir / "workspace"
         output_dir = work_dir / "output"
@@ -526,14 +565,37 @@ class SubmitMixin:
             merged_env[f"INPUT_{key.upper()}"] = dest_str
             logger.debug("Staged session input file %s → %s", local, dest)
 
-        script_content = self._build_session_script_content(
-            steps,
-            session=session,
+        session_workflow_file = work_dir / "session.yml"
+        _write_session_workflow_file(workflow, session.job_id, session_workflow_file)
+
+        flow_args = [
+            "-m",
+            "ofx",
+            "flow",
+            "run",
+            str(session_workflow_file),
+            "-o",
+            str(output_dir),
+            "--quiet",
+            "--log-format",
+            "text",
+            "--no-durable",
+            "--no-events",
+            "--wait-lock",
+            "0",
+        ]
+        for key, value in session.inputs.items():
+            flow_args.extend(["-i", f"{key}={merged_env.get(key, value)}"])
+
+        script_content = build_session_cli_script(
+            session_id=session.id,
             work_dir=str(work_dir),
             workflow_name=workflow_name,
+            job_name=session.job_id,
             env=merged_env,
-            profile=profile,
-            os_type="linux",
+            python_executable=sys.executable,
+            flow_args=flow_args,
+            encrypt_at_rest=True,
         )
 
         script_path = work_dir / "run.sh"
@@ -553,10 +615,6 @@ class SubmitMixin:
         )
 
         child_env = {**os.environ, "SESSION_ID": session.id, **merged_env}
-        # Prevent grpc C extension from re-enabling the GIL in free-threaded
-        # Python builds — toggling the GIL during subprocess spawn can
-        # destabilise the parent process (CodeWhale, VS Code, etc.).
-        child_env.setdefault("PYTHON_GIL", "0")
 
         pid = subprocess.Popen(
             ["bash", str(script_path)],

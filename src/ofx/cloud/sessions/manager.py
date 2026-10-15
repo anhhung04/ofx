@@ -118,7 +118,7 @@ class SessionManager(SubmitMixin, StatusMixin, ResultsMixin):
                 session,
                 session_steps,
                 merged_env,
-                workflow_profile,
+                workflow,
                 workflow_dir=workflow.workflow_path.parent if workflow.workflow_path else None,
                 workflow_name=workflow_name,
             )

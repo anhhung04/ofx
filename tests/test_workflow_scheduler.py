@@ -6,6 +6,7 @@ import pytest
 
 from ofx.utils.scheduling import find_parallel_schedule
 
+
 class TestFindParallelSchedule:
     """Topological sort that groups independent jobs into parallel stages."""
 
@@ -83,7 +84,7 @@ class TestWorkflowScheduler:
         from ofx.models.step import Step
 
         return Job(
-            steps=[Step(run="echo test")],
+            steps=[Step(module="shell", run_with={"cmd": "echo test"})],
             needs=needs or [],
         )
 

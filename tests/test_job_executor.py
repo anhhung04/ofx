@@ -5,6 +5,16 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 from types import SimpleNamespace
+
+
+def _attach_register(ns):
+    """Attach a Runner.register_runner-equivalent to a SimpleNamespace fixture."""
+    def _register_runner(key, runner):
+        if key in ns._runners:
+            raise ValueError(f"Duplicate runner key {key!r}")
+        ns._runners[key] = runner
+    ns.register_runner = _register_runner
+    return ns
 from unittest.mock import AsyncMock
 
 import pytest
@@ -55,6 +65,7 @@ async def test_do_run_registers_and_configures_local_step_runners(monkeypatch):
         _runners={},
         _log_info=logs.append,
     )
+    _attach_register(runner)
     await JobExecutor().do_run(runner)
 
     assert list(runner._runners) == ["0", "1"]
@@ -80,22 +91,24 @@ async def test_do_run_raises_for_failed_step(monkeypatch):
 
     with pytest.raises(RuntimeError, match="step-1"):
         await JobExecutor().do_run(
-            SimpleNamespace(
-                ctx=RunContext(),
-                model=SimpleNamespace(
-                    name="Job Name",
-                    jid="job-1",
-                    steps=[
-                        SimpleNamespace(
-                            step_index=1,
-                            secrets={},
-                            continue_on_error=False,
-                            name="step-1",
-                        )
-                    ],
-                ),
-                _runners={},
-                _log_info=lambda _message: None,
+            _attach_register(
+                SimpleNamespace(
+                    ctx=RunContext(),
+                    model=SimpleNamespace(
+                        name="Job Name",
+                        jid="job-1",
+                        steps=[
+                            SimpleNamespace(
+                                step_index=1,
+                                secrets={},
+                                continue_on_error=False,
+                                name="step-1",
+                            )
+                        ],
+                    ),
+                    _runners={},
+                    _log_info=lambda _message: None,
+                )
             )
         )
 
@@ -299,6 +312,7 @@ async def test_cleanup_temp_task_files_logs_result_lookup_failure(tmp_path):
 async def test_execute_steps_registers_suffix_and_allows_continue_on_error(monkeypatch) -> None:
     step = SimpleNamespace(step_index=2, continue_on_error=True, name="step-2")
     runner = SimpleNamespace(ctx=RunContext(), model=SimpleNamespace(steps=[step]), _runners={})
+    _attach_register(runner)
 
     monkeypatch.setattr(
         "ofx.runner.step.StepRunner",

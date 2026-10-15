@@ -9,6 +9,7 @@ from ofx.models.step import Step
 from ofx.models.strategy import MatrixStrategy
 from ofx.models.workflow import Workflow
 
+
 class TestMatrixStrategyValidation:
     """Matrix key identifiers and field constraints."""
 
@@ -70,7 +71,9 @@ jobs:
   j1:
     needs: [nonexistent]
     steps:
-      - run: echo hi
+      - module: shell
+        with:
+          cmd: echo hi
 """
                 )
             )
@@ -84,7 +87,9 @@ name: test
 jobs:
   "job@1":
     steps:
-      - run: echo hi
+      - module: shell
+        with:
+          cmd: echo hi
 """
                 )
             )
@@ -97,7 +102,9 @@ name: test
 jobs:
   my-job_1:
     steps:
-      - run: echo hi
+      - module: shell
+        with:
+          cmd: echo hi
 """
             )
         )
@@ -112,8 +119,11 @@ name: test
 jobs:
   j1:
     steps:
-      - run: echo hi
-        script: print('hi')
+      - module: shell
+        with:
+          cmd: echo hi
+        pipe:
+          input: "{{ x }}"
 """
                 )
             )
@@ -144,7 +154,9 @@ jobs:
       matrix:
         host: "{{ inputs.targets }}"
     steps:
-      - run: echo hi
+      - module: shell
+        with:
+          cmd: echo hi
 """
             )
         )
@@ -161,11 +173,15 @@ jobs:
   a:
     needs: [b]
     steps:
-      - run: echo a
+      - module: shell
+        with:
+          cmd: echo a
   b:
     needs: [a]
     steps:
-      - run: echo b
+      - module: shell
+        with:
+          cmd: echo b
 """
                 )
             )
@@ -185,16 +201,18 @@ class TestStepValidation:
     """Step-level field constraints."""
 
     def test_valid_run_step(self):
-        step = Step.model_validate({"run": "echo hello"})
-        assert step.run == "echo hello"
+        step = Step.model_validate({"module": "shell", "with": {"cmd": "echo hello"}})
+        assert step.module == "shell"
+        assert step.run_with == {"cmd": "echo hello"}
 
     def test_valid_script_step(self):
-        step = Step.model_validate({"script": "print('hi')"})
-        assert step.script == "print('hi')"
+        step = Step.model_validate({"module": "python", "with": {"script": "print('hi')"}})
+        assert step.module == "python"
+        assert step.run_with == {"script": "print('hi')"}
 
     def test_both_run_and_script_raises(self):
         with pytest.raises(ValidationError, match="exactly one"):
-            Step.model_validate({"run": "echo hi", "script": "print('hi')"})
+            Step.model_validate({"module": "shell", "pipe": {"input": "{{ x }}"}})
 
     def test_no_run_type_raises(self):
         with pytest.raises(ValidationError, match="exactly one"):
@@ -202,19 +220,19 @@ class TestStepValidation:
 
     def test_negative_retry_raises(self):
         with pytest.raises(ValidationError):
-            Step.model_validate({"run": "echo hi", "retry": -1})
+            Step.model_validate({"module": "shell", "retry": -1})
 
     def test_negative_timeout_raises(self):
         with pytest.raises(ValidationError):
-            Step.model_validate({"run": "echo hi", "timeout": -1})
+            Step.model_validate({"module": "shell", "timeout": -1})
 
     def test_zero_timeout_raises(self):
         with pytest.raises(ValidationError):
-            Step.model_validate({"run": "echo hi", "timeout": 0})
+            Step.model_validate({"module": "shell", "timeout": 0})
 
     def test_negative_retry_delay_raises(self):
         with pytest.raises(ValidationError):
-            Step.model_validate({"run": "echo hi", "retry-delay": -1})
+            Step.model_validate({"module": "shell", "retry-delay": -1})
 
 class TestCloudConfigValidation:
     """CloudConfig defaults and normalization."""

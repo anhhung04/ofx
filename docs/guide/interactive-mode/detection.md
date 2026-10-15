@@ -11,26 +11,34 @@ jobs:
   job1:
     steps:
       - name: Interactive Step
-        run: bash
+        module: shell
+        with:
+          cmd: bash
         interactive: true  # ✓ Works - alone in stage
   # Stage 2: job2 and job3 in parallel - interactive disabled
   job2:
     needs: job1
     steps:
       - name: Try Interactive
-        run: bash
+        module: shell
+        with:
+          cmd: bash
         interactive: true  # ✗ Disabled - job3 runs in parallel
   job3:
     needs: job1
     steps:
       - name: Normal Step
-        run: echo "parallel with job2"
+        module: shell
+        with:
+          cmd: echo "parallel with job2"
   # Stage 3: job4 alone - interactive allowed again
   job4:
     needs: [job2, job3]
     steps:
       - name: Interactive Again
-        run: python3
+        module: shell
+        with:
+          cmd: python3
         interactive: true  # ✓ Works - alone in stage
 ```
 

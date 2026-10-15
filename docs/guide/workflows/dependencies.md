@@ -12,19 +12,25 @@ jobs:
     name: Build Application
     steps:
       - name: Compile code
-        run: make
+        module: shell
+        with:
+          cmd: make
   test:
     name: Run Tests
     needs: build
     steps:
       - name: Execute tests
-        run: pytest
+        module: shell
+        with:
+          cmd: pytest
   deploy:
     name: Deploy Application
     needs: [test]
     steps:
       - name: Deploy to production
-        run: ./deploy.sh
+        module: shell
+        with:
+          cmd: ./deploy.sh
 ```
 
 ---
@@ -45,25 +51,33 @@ Use `if` (alias: `run_if`) to control whether a job runs based on the outcome of
 jobs:
   scan:
     steps:
-      - run: nmap {{ inputs.target }}
+      - module: shell
+        with:
+          cmd: nmap {{ inputs.target }}
 
   exploit:
     needs: [scan]
     if: success()              # Only run if scan succeeded (default behavior)
     steps:
-      - run: python exploit.py
+      - module: shell
+        with:
+          cmd: python exploit.py
 
   cleanup:
     needs: [exploit]
     if: always()               # Run regardless of exploit outcome
     steps:
-      - run: ./cleanup.sh
+      - module: shell
+        with:
+          cmd: ./cleanup.sh
 
   notify-failure:
     needs: [exploit]
     if: failure()              # Only run if exploit failed
     steps:
-      - run: echo "Exploit failed" | notify
+      - module: shell
+        with:
+          cmd: echo "Exploit failed" | notify
 ```
 
 **Available conditions:**
@@ -72,6 +86,7 @@ jobs:
 |-----------|----------|
 | `success()` | Run only if all dependencies succeeded (default) |
 | `failure()` | Run only if any dependency failed |
+| `canceled()` | Run only if any dependency was canceled |
 | `always()` | Run regardless of dependency outcomes |
 | `true` / `false` | Unconditional enable/disable |
 | Jinja2 expression | Evaluated at runtime (e.g. `"{{ inputs.mode == 'full' }}"`) |
@@ -86,19 +101,25 @@ jobs:
     name: Environment Setup
     steps:
       - name: Initialize environment
-        run: ./setup.sh
+        module: shell
+        with:
+          cmd: ./setup.sh
   scan:
     name: Port Scan
     needs: setup
     steps:
       - name: Scan target
-        run: nmap {{ inputs.target }}
+        module: shell
+        with:
+          cmd: nmap {{ inputs.target }}
   exploit:
     name: Exploitation
     needs: [setup, scan]
     steps:
       - name: Run exploit
-        run: python exploit.py
+        module: shell
+        with:
+          cmd: python exploit.py
 ```
 
 In this example, `exploit` waits for both `setup` and `scan` to complete before running.

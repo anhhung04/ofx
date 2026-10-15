@@ -139,18 +139,11 @@ async def _probe_connectivity(cfg: Any, host: str, timeout: int) -> list[CheckRe
     return checks
 
 @app.command("workflows")
-def doctor_workflows(
-    check_tasks: Annotated[
-        bool,
-        typer.Option(
-            "--check-tasks", help="Verify that referenced tasks are registered"
-        ),
-    ] = False,
-):
+def doctor_workflows():
     """Validate all discoverable workflows and report a health summary."""
     from ofx.commands.flow.validate import validate_workflows
 
-    validate_workflows(all_workflows=True, check_tasks=check_tasks)
+    validate_workflows(all_workflows=True)
 
 @app.command("fleet")
 def doctor_fleet(

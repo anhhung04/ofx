@@ -8,9 +8,11 @@ This page covers the workflow model, execution behavior, and best practices.
 name: demo
 
 jobs:
-  run:
+  demo:
     steps:
-      - run: echo "hello"
+      - module: shell
+        with:
+          cmd: echo "hello"
 ```
 
 ## Core structure
@@ -39,12 +41,16 @@ defaults:
 jobs:
   recon:
     steps:
-      - run: subfinder -d {{ inputs.target }} -o {{ ctx.output_path }}/subs.txt
+      - module: shell
+        with:
+          cmd: subfinder -d {{ inputs.target }} -o {{ ctx.output_path }}/subs.txt
 
   scan:
     needs: [recon]
     steps:
-      - run: naabu -list {{ ctx.output_path }}/subs.txt -o {{ ctx.output_path }}/ports.txt
+      - module: shell
+        with:
+          cmd: naabu -list {{ ctx.output_path }}/subs.txt -o {{ ctx.output_path }}/ports.txt
 ```
 
 ## Required and optional fields
@@ -64,11 +70,10 @@ jobs:
 - `needs` creates dependency edges.
 - Steps run sequentially within each job.
 - A step must define exactly one execution mode:
-  - `run`
-  - `script`
-  - `script_file`
+  - `module: shell` — shell command (`with.cmd`)
+  - `module: python` — Python code (`with.script`) or file (`with.script_file`)
+  - `module: <file>::<func>` — user-defined function module
   - `uses`
-  - `task`
   - `pipe`
 
 ## Matrix strategy
@@ -83,7 +88,9 @@ jobs:
         port: [80, 443, 8080]
       max_parallel: 2
     steps:
-      - run: nmap -p {{ matrix.port }} {{ inputs.target }}
+      - module: shell
+        with:
+          cmd: nmap -p {{ matrix.port }} {{ inputs.target }}
 ```
 
 ## Workflow sources
@@ -111,7 +118,9 @@ steps:
 Always write artifacts under `{{ ctx.output_path }}`.
 
 ```yaml
-- run: nmap -oN {{ ctx.output_path }}/nmap.txt {{ inputs.target }}
+- module: shell
+  with:
+    cmd: nmap -oN {{ ctx.output_path }}/nmap.txt {{ inputs.target }}
 ```
 
 ## Durable execution

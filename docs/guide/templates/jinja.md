@@ -19,29 +19,39 @@ OFX uses Jinja2 for dynamic variable substitution, logic, and formatting in work
 
 ### Inputs and Secrets
 ```yaml
-run: echo "Target: {{ inputs.target }}, Key: {{ secrets.API_KEY }}"
+module: shell
+with:
+  cmd: 'echo "Target: {{ inputs.target }}, Key: {{ secrets.API_KEY }}"'
 ```
 
 ### Job and Step Outputs
 ```yaml
 # Reference step outputs within the same job
-run: echo "{{ steps['scan'].outputs.open_ports }}"
+module: shell
+with:
+  cmd: echo "{{ steps['scan'].outputs.open_ports }}"
 
 # Reference job outputs from a dependency
-run: echo "{{ jobs.scan.outputs.result }}"
+module: shell
+with:
+  cmd: echo "{{ jobs.scan.outputs.result }}"
 ```
 
 ### Matrix Values
 ```yaml
-run: echo "Scanning {{ matrix.target }} on port {{ matrix.port }}"
+module: shell
+with:
+  cmd: echo "Scanning {{ matrix.target }} on port {{ matrix.port }}"
 ```
 
 ### Context Variables
 ```yaml
-run: |
-  echo "Run: {{ ctx.run_id }}"
-  echo "Output: {{ ctx.output_path }}"
-  echo "Platform: {{ platform }}"
+module: shell
+with:
+  cmd: |
+    echo "Run: {{ ctx.run_id }}"
+    echo "Output: {{ ctx.output_path }}"
+    echo "Platform: {{ platform }}"
 ```
 
 ---
@@ -76,7 +86,9 @@ Filters transform values using the `|` pipe operator.
 
 ```yaml
 # Get unique sorted ports as a comma-separated string
-run: echo "{{ ports(steps['scan'].outputs.typed_outputs) | map(attribute='port') | sort | unique | join(',') }}"
+module: shell
+with:
+  cmd: echo "{{ ports(steps['scan'].outputs.typed_outputs) | map(attribute='port') | sort | unique | join(',') }}"
 ```
 
 ---
@@ -84,23 +96,27 @@ run: echo "{{ ports(steps['scan'].outputs.typed_outputs) | map(attribute='port')
 ## Conditionals
 
 ```yaml
-run: |
-  {% if inputs.mode == "stealth" %}
-  echo "Running in stealth mode"
-  nmap -sS -T2 {{ inputs.target }}
-  {% elif inputs.mode == "aggressive" %}
-  echo "Running aggressive scan"
-  nmap -A -T4 {{ inputs.target }}
-  {% else %}
-  echo "Default scan"
-  nmap {{ inputs.target }}
-  {% endif %}
+module: shell
+with:
+  cmd: |
+    {% if inputs.mode == "stealth" %}
+    echo "Running in stealth mode"
+    nmap -sS -T2 {{ inputs.target }}
+    {% elif inputs.mode == "aggressive" %}
+    echo "Running aggressive scan"
+    nmap -A -T4 {{ inputs.target }}
+    {% else %}
+    echo "Default scan"
+    nmap {{ inputs.target }}
+    {% endif %}
 ```
 
 ### Inline Conditionals (Ternary)
 
 ```yaml
-run: nmap {{ "-sS" if inputs.stealth else "-sT" }} {{ inputs.target }}
+module: shell
+with:
+  cmd: nmap {{ "-sS" if inputs.stealth else "-sT" }} {{ inputs.target }}
 ```
 
 ---
@@ -108,39 +124,49 @@ run: nmap {{ "-sS" if inputs.stealth else "-sT" }} {{ inputs.target }}
 ## Loops
 
 ```yaml
-run: |
-  {% for host in jobs.discover.outputs.hosts.split(",") %}
-  echo "Scanning {{ host }}"
-  nmap -sV {{ host }}
-  {% endfor %}
+module: shell
+with:
+  cmd: |
+    {% for host in jobs.discover.outputs.hosts.split(",") %}
+    echo "Scanning {{ host }}"
+    nmap -sV {{ host }}
+    {% endfor %}
 ```
 
 ### Loop with Index
 
 ```yaml
-run: |
-  {% for port in [22, 80, 443, 8080] %}
-  echo "Check {{ loop.index }}/{{ loop.length }}: port {{ port }}"
-  {% endfor %}
+module: shell
+with:
+  cmd: |
+    {% for port in [22, 80, 443, 8080] %}
+    echo "Check {{ loop.index }}/{{ loop.length }}: port {{ port }}"
+    {% endfor %}
 ```
 
 ---
 
 ## Typed Output Helpers
 
-When working with task step outputs, use the built-in helper functions:
+When working with module typed outputs, use the built-in helper functions:
 
 ```yaml
 # Filter by type
-run: echo "{{ ports(steps['scan'].outputs.typed_outputs) | length }} ports found"
+module: shell
+with:
+  cmd: echo "{{ ports(steps['scan'].outputs.typed_outputs) | length }} ports found"
 
 # Extract attributes
-run: echo "{{ urls(steps['probe'].outputs.typed_outputs) | map(attribute='url') | join('\n') }}"
+module: shell
+with:
+  cmd: echo "{{ urls(steps['probe'].outputs.typed_outputs) | map(attribute='url') | join('\n') }}"
 
 # Complex filtering
-run: |
-  {% set critical = vulns(steps['nuclei'].outputs.typed_outputs) | selectattr('severity', 'eq', 'critical') | list %}
-  echo "Critical vulns: {{ critical | length }}"
+module: shell
+with:
+  cmd: |
+    {% set critical = vulns(steps['nuclei'].outputs.typed_outputs) | selectattr('severity', 'eq', 'critical') | list %}
+    echo "Critical vulns: {{ critical | length }}"
 ```
 
 Available helpers: `ports()`, `urls()`, `vulns()`, `subdomains()`, `ips()`, `tags()`, `records()`, `domains()`, `users()`, `certs()`, `exploits()`, `of_type(items, "type_name")`.
@@ -149,7 +175,7 @@ Available helpers: `ports()`, `urls()`, `vulns()`, `subdomains()`, `ips()`, `tag
 
 ## ETL & Data Transformation Filters
 
-OFX registers additional Jinja2 filters for transforming lists of data. These are especially useful with [pipe steps](../jobs-steps/steps.md#pipe-steps) and task outputs.
+OFX registers additional Jinja2 filters for transforming lists of data. These are especially useful with [pipe steps](../jobs-steps/steps.md#pipe-steps) and module outputs.
 
 | Filter | Description |
 |--------|-------------|
@@ -171,19 +197,25 @@ OFX registers additional Jinja2 filters for transforming lists of data. These ar
 
 ```yaml
 # Extract and deduplicate hosts from scan results
-run: |
-  echo "{{ steps['scan'].outputs.typed_outputs | ports | pluck('host') | unique_by('host') | sort_by('host') | to_lines }}"
+module: shell
+with:
+  cmd: |
+    echo "{{ steps['scan'].outputs.typed_outputs | ports | pluck('host') | unique_by('host') | sort_by('host') | to_lines }}"
 
 # Count ports per host
-run: |
-  {% set counts = steps['scan'].outputs.typed_outputs | ports | count_by('host') %}
-  {% for host, n in counts.items() %}
-  echo "{{ host }}: {{ n }} ports"
-  {% endfor %}
+module: shell
+with:
+  cmd: |
+    {% set counts = steps['scan'].outputs.typed_outputs | ports | count_by('host') %}
+    {% for host, n in counts.items() %}
+    echo "{{ host }}: {{ n }} ports"
+    {% endfor %}
 
 # Filter and format as CSV
-run: |
-  echo "{{ steps['scan'].outputs.typed_outputs | ports | where('state', 'open') | to_csv('host,port,service') }}"
+module: shell
+with:
+  cmd: |
+    echo "{{ steps['scan'].outputs.typed_outputs | ports | where('state', 'open') | to_csv('host,port,service') }}"
 ```
 
 ---

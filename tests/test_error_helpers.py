@@ -11,9 +11,19 @@ from ofx.runner.error_helpers import (
     step_timeout_error,
 )
 
+
 def test_step_execution_error_basic():
     result = step_execution_error(1, "segfault")
-    assert result == "Step execution failed with status: 1, error: segfault"
+    assert result.splitlines()[0] == (
+        "Step execution failed with status: 1, error: segfault"
+    )
+
+
+def test_step_execution_error_names_why_and_remediation():
+    result = step_execution_error(1, "segfault")
+    assert "Why:" in result
+    assert "Remediation:" in result
+    assert "continue-on-error" in result
 
 def test_step_execution_error_none_status():
     result = step_execution_error(None, "oops")
@@ -35,11 +45,13 @@ def test_step_retry_error_format():
 
 def test_job_step_failed_with_name():
     result = job_step_failed("install-deps", "exit code 1")
-    assert result == "Step 'install-deps' failed: exit code 1"
+    assert result.splitlines()[0] == "Step 'install-deps' failed: exit code 1"
+    assert "Remediation:" in result
 
 def test_job_step_failed_with_index():
     result = job_step_failed(0, "timeout")
-    assert result == "Step '0' failed: timeout"
+    assert result.splitlines()[0] == "Step '0' failed: timeout"
+    assert "Why:" in result
 
 def test_extract_root_error_none():
     assert extract_root_error(None) == "Unknown error"

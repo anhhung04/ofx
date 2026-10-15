@@ -2,6 +2,7 @@
 
 from pydantic import BaseModel, ConfigDict
 
+
 class OFXBaseModel(BaseModel):
     """Base model with shared configuration for all OFX models."""
 

@@ -1,6 +1,6 @@
 name: dns-enum
 description: DNS enumeration — resolve A/AAAA/CNAME/MX/NS/TXT records for discovered
-  subdomains.
+  subdomains. Accepts a domain, a host file or a list of subdomains.
 tags:
 - recon
 - dns
@@ -10,7 +10,7 @@ dispatch:
     target:
       required: true
       type: string
-      description: Domain or file of subdomains
+      description: Domain, subdomain, or file of subdomains
       alias: t
     resolvers:
       type: string
@@ -23,17 +23,21 @@ dispatch:
 jobs:
   dns-resolve:
     name: DNS Resolution
+    outputs:
+      dns_file: "{{ steps['parse-results'].outputs.dns_file }}"
+      record_count: "{{ steps['parse-results'].outputs.record_count }}"
     steps:
+    - name: normalize
+      module: local.builtin.normalize_targets
+      with:
+        target: '{{ inputs.target }}'
+        output: dns_input.txt
     - name: dnsx-resolve
-      run: dnsx -l {{ inputs.target }} -a -aaaa -cname -mx -ns -txt -soa -silent -o
-        {{ env.OFX_RUN_DIR }}/dns_records.txt{% if inputs.resolvers %} -r {{ inputs.resolvers
-        }}{% endif %}
+      module: local.builtin.shell
+      with:
+        cmd: dnsx -l {{ steps.normalize.outputs.target_file }} -a -aaaa -cname -mx -ns
+          -txt -soa -silent -o {{ env.OFX_RUN_DIR }}/dns_records.txt{% if inputs.resolvers
+          %} -r {{ inputs.resolvers }}{% endif %}
       log-command: '{{ inputs.log_command }}'
     - name: parse-results
-      script: "import os, json\n\nrecords = {\"A\": [], \"AAAA\": [], \"CNAME\": [],\
-        \ \"MX\": [], \"NS\": [], \"TXT\": [], \"SOA\": []}\nout = os.path.join(os.environ[\"\
-        OFX_RUN_DIR\"], \"dns_records.txt\")\ntry:\n    with open(out) as f:\n   \
-        \     for line in f:\n            line = line.strip()\n            if not\
-        \ line:\n                continue\n            parts = line.split()\n    \
-        \        print(line)\nexcept FileNotFoundError:\n    print(\"No DNS records\
-        \ found\")\nadd_outputs(dns_file=out)"
+      module: local.parse_results

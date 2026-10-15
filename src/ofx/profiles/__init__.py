@@ -1,7 +1,7 @@
 """OFX Profiles — reusable option presets with time window enforcement.
 
 Profiles provide named configuration sets (rate limits, scan intensity,
-time windows) that can be applied to workflows, jobs, or tasks.
+time windows) that can be applied to workflows or jobs.
 
 Usage in workflows::
 
@@ -11,9 +11,10 @@ Usage in workflows::
     jobs:
       scan:
         steps:
-          - task: nmap
+          - name: Scan target
+            module: shell
             with:
-              target: "{{ inputs.target }}"
+              cmd: nmap {{ inputs.target }}
 
 CLI management::
 

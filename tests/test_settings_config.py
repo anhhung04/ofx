@@ -7,6 +7,7 @@ import threading
 import pytest
 import yaml
 
+
 @pytest.fixture()
 def isolated_config(tmp_path, monkeypatch):
     """Redirect CONFIG_YAML and BASE_DATA_DIR to a tmp dir for each test."""

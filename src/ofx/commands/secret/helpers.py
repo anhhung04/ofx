@@ -5,6 +5,7 @@ import typer
 
 from ofx.utils import secrets as secrets_store
 
+
 def _maybe_backup_store(
     backup_path: str, passphrase: str | None, overwrite: bool
 ) -> None:

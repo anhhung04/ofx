@@ -21,20 +21,41 @@ dispatch:
 jobs:
   email-discovery:
     name: Email Discovery
+    outputs:
+      harvester_report: '{{ env.OFX_RUN_DIR }}/harvester_results.html'
+      h8mail_report: '{{ env.OFX_RUN_DIR }}/h8mail_results.txt'
+      osint_files: "{{ steps['email-report'].outputs.produced_files }}"
     steps:
     - name: theharvester
-      run: theHarvester -d {{ inputs.target }} -b all -f {{ env.OFX_RUN_DIR }}/harvester_results.html
-        2>&1
+      module: local.builtin.shell
+      with:
+        cmd: theHarvester -d {{ inputs.target }} -b all -f {{ env.OFX_RUN_DIR }}/harvester_results.html
+          2>&1
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
+      timeout: 30
     - name: h8mail
-      run: h8mail -t {{ inputs.target }} -o {{ env.OFX_RUN_DIR }}/h8mail_results.txt
-        2>&1
+      module: local.builtin.shell
+      with:
+        cmd: h8mail -t {{ inputs.target }} -o {{ env.OFX_RUN_DIR }}/h8mail_results.txt
+          2>&1
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
+      timeout: 30
+    - name: email-report
+      module: local.builtin.require_artifacts
+      with:
+        files:
+        - harvester_results.html
+        - h8mail_results.txt
+        label: OSINT provider
   whois-lookup:
     name: WHOIS & Domain Info
     steps:
     - name: whois
-      run: whois {{ inputs.target }} 2>&1 | tee {{ env.OFX_RUN_DIR }}/whois.txt
+      module: local.builtin.shell
+      with:
+        cmd: whois {{ inputs.target }} 2>&1 | tee {{ env.OFX_RUN_DIR }}/whois.txt
       log-command: '{{ inputs.log_command }}'
+      timeout: 30
+      retry: 2

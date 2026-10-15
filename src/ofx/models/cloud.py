@@ -8,6 +8,7 @@ from pydantic import Field, model_validator
 
 from ofx.models.base import OFXBaseModel
 
+
 class CloudHostEntry(OFXBaseModel):
     """A single static host entry for fleet usage."""
 

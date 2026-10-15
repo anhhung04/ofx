@@ -25,6 +25,8 @@ OFX CLI provides commands for:
 | `ofx flow validate` | Validate workflow syntax |
 | `ofx flow visualize` | Visualize workflow DAG |
 | `ofx flow collection` | Manage workflow collections |
+| `ofx flow tools` | Install and manage workflow tool dependencies |
+| `ofx flow modules` | Manage namespaced remote modules (`<owner>.<repo>.<module>`) |
 | `ofx cloud` | Manage cloud profiles and instances |
 | `ofx session` | Manage detached sessions |
 | `ofx secret` | Manage secrets |

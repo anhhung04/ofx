@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ofx.api.post.runners.ssh import PostSSH
+from ofx.lib.post.runners.ssh import PostSSH
 
 
 def test_forget_remote_temp_file_removes_single_entry():

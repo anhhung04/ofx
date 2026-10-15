@@ -8,6 +8,7 @@ import pytest
 
 from ofx.runner import RegistryFactory
 
+
 def _can_import(module: str) -> bool:
     try:
         importlib.import_module(module)

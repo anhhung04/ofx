@@ -14,6 +14,7 @@ from ofx.collections.manager import (
     check_version_constraint,
 )
 
+
 class TestParseSemver:
     def test_basic(self):
         assert _parse_semver("1.2.3") == (1, 2, 3, "")

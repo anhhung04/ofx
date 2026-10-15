@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+
 def bash_dquote_escape(value: str) -> str:
     """Escape a string for safe embedding inside bash double-quoted contexts.
 

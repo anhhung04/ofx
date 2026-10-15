@@ -15,6 +15,7 @@ from __future__ import annotations
 from collections.abc import Generator
 from dataclasses import dataclass
 
+
 @dataclass(slots=True)
 class StreamChunk:
     """A single chunk from an LLM streaming response."""

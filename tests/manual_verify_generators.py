@@ -1,8 +1,9 @@
-from ofx.api.evasion import obfuscate_cmd, obfuscate_payload
-from ofx.api.exploitation.webshell.generators.aspx import AspxGenerator
-from ofx.api.exploitation.webshell.generators.jsp import JspGenerator
-from ofx.api.exploitation.webshell.generators.php import PhpGenerator
-from ofx.api.exploitation.webshell.generators.python import PythonGenerator
+from ofx.lib.evasion import obfuscate_cmd, obfuscate_payload
+from ofx.lib.exploitation.webshell.generators.aspx import AspxGenerator
+from ofx.lib.exploitation.webshell.generators.jsp import JspGenerator
+from ofx.lib.exploitation.webshell.generators.php import PhpGenerator
+from ofx.lib.exploitation.webshell.generators.python import PythonGenerator
+
 
 def test_evasion():
     print("Testing Evasion API:")

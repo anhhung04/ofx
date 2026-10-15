@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import re
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import patch
 
 from ofx.runner.templates.helpers import (
@@ -22,6 +21,7 @@ from ofx.runner.templates.helpers import (
     _type_filter_helpers,
     build_all_helpers,
 )
+
 
 class TestFileHelpers:
     def test_read_nonexistent(self):

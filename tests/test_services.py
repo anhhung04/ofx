@@ -11,6 +11,7 @@ import pytest
 from ofx.models.cloud import CloudConfig
 from ofx.runner.services.cloud_provisioner import CloudProvisioner
 
+
 @dataclass
 class FakeInstance:
     instance_id: str = "abc12345-6789"
@@ -248,7 +249,7 @@ class TestCloudProvisionerCreateRunner:
         )
         from ofx.cloud.runtime import create_remote_runner
 
-        with patch("ofx.api.post.RunnerRegistry") as mock_reg:
+        with patch("ofx.lib.post.RunnerRegistry") as mock_reg:
             mock_reg.create.return_value = MagicMock()
             create_remote_runner(cfg, "10.0.0.1")
             mock_reg.create.assert_called_once()
@@ -267,7 +268,7 @@ class TestCloudProvisionerCreateRunner:
         )
         from ofx.cloud.runtime import create_remote_runner
 
-        with patch("ofx.api.post.RunnerRegistry") as mock_reg:
+        with patch("ofx.lib.post.RunnerRegistry") as mock_reg:
             mock_reg.create.return_value = MagicMock()
             create_remote_runner(cfg, "10.0.0.1")
             call_kwargs = mock_reg.create.call_args

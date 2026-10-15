@@ -10,7 +10,8 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 
-from ofx.cloud.script_runtime import is_python_step_run_type
+from ofx.cloud.module_kind import is_python_module_step, is_udf_module_step
+from ofx.cloud.payload import TASK_ERR_MARKER, TASK_OK_MARKER
 from ofx.cloud.sessions.python_steps import step_bundle_filename
 from ofx.models.step import RunType, Step
 from ofx.utils.shell import bash_dquote_escape
@@ -49,6 +50,101 @@ def _append_step_blocks(
     for step_index, step in enumerate(steps):
         lines.extend(build_step_block(step, step_index))
         lines.append("")
+
+def build_session_cli_script(
+    *,
+    session_id: str,
+    work_dir: str,
+    workflow_name: str,
+    job_name: str,
+    env: dict[str, str],
+    python_executable: str,
+    flow_args: list[str],
+    encrypt_at_rest: bool = False,
+) -> str:
+    """Generate a bash wrapper that runs a workflow through ``ofx flow run``.
+
+    Used for local detached sessions: the session layer stages the workflow
+    file and bundled step artifacts, and this wrapper runs the standard CLI
+    (same WorkflowRunner code path as interactive runs) with output redirected
+    into the session log. The CLI exit code is mapped onto the task markers so
+    the session status poller can detect completion, and results are encrypted
+    at rest exactly like the step-by-step session script.
+
+    Args:
+        session_id: Session identifier (embedded in markers and env).
+        work_dir: Local working directory.
+        workflow_name: Workflow display name for log context.
+        job_name: Job display name/id for log context.
+        env: Extra environment variables to export.
+        python_executable: Interpreter used to launch ``python -m ofx``.
+        flow_args: CLI argument list (without the interpreter), each element
+            shell-quoted verbatim.
+        encrypt_at_rest: If True, appends the shared encryption epilogue.
+
+    Returns:
+        Script content as a string.
+    """
+    scope = bash_dquote_escape(job_name or "full-workflow")
+    workflow = bash_dquote_escape(workflow_name or "")
+    command = " ".join(bash_dquote_escape(arg) for arg in flow_args)
+    lines: list[str] = [
+        "#!/bin/bash",
+        f'export SESSION_ID="{bash_dquote_escape(session_id)}"',
+        f'WORK_DIR="{bash_dquote_escape(work_dir)}"',
+        'LOG_FILE="$WORK_DIR/output.log"',
+        'mkdir -p "$WORK_DIR/output"',
+        'cd "$WORK_DIR"',
+        "",
+    ]
+
+    lines.extend(
+        _iter_session_env_assignments(
+            env,
+            render_assignment=lambda key, value: f'export {key}="{bash_dquote_escape(value)}"',
+        )
+    )
+    if env:
+        lines.append("")
+
+    lines.extend(
+        [
+            '_log() { echo "[$(date +%Y-%m-%dT%H:%M:%S)] $*" >> "$LOG_FILE"; }',
+            f'_log "Session $SESSION_ID started (workflow={workflow} job={scope})"',
+            "",
+            '_log ">>> Running workflow via ofx flow run"',
+            f'( cd "$WORK_DIR" 2>/dev/null; exec "{bash_dquote_escape(python_executable)}" {command} ) >> "$LOG_FILE" 2>&1',
+            "STEP_RC=$?",
+            "if [ $STEP_RC -ne 0 ]; then",
+            '  _log "Session workflow FAILED (exit $STEP_RC)"',
+            f'  _log "{TASK_ERR_MARKER}"',
+            "  exit $STEP_RC",
+            "fi",
+            '_log "<<< Session workflow done"',
+            "",
+        ]
+    )
+
+    if encrypt_at_rest:
+        lines.extend(_bash_encrypt_epilogue())
+
+    lines.extend(
+        [
+            '_log "All steps completed successfully"',
+            f'_log "{TASK_OK_MARKER}"',
+        ]
+    )
+
+    if encrypt_at_rest:
+        lines.extend(
+            [
+                "",
+                "# Self-destruct (after markers written)",
+                'shred -u "$WORK_DIR/run.sh" 2>/dev/null || rm -f "$WORK_DIR/run.sh"',
+            ]
+        )
+
+    return "\n".join(lines) + "\n"
 
 def build_session_script(
     steps: list[Step],
@@ -156,7 +252,7 @@ def _build_bash(
     lines.extend(
         [
             '_log "All steps completed successfully"',
-            '_log "__TASK_OK__"',
+            f'_log "{TASK_OK_MARKER}"',
         ]
     )
 
@@ -199,7 +295,7 @@ def _build_bash_step_block(
                 "STEP_RC=$?",
                 "if [ $STEP_RC -ne 0 ]; then",
                 f'  _log "Step {step_index} ({step_desc}) FAILED (exit $STEP_RC)"',
-                '  _log "__TASK_ERR__"',
+                f'  _log "{TASK_ERR_MARKER}"',
                 "  exit $STEP_RC",
                 "fi",
             ]
@@ -236,10 +332,12 @@ def _step_command_for_session_script(
     """Build a shell-specific session command from shared step run-type rules."""
     run_type = step.get_run_type()
 
-    if run_type == RunType.COMMAND:
-        suffix = step.run or ""
-    elif is_python_step_run_type(run_type):
-        suffix = python_command
+    if run_type == RunType.MODULE:
+        if is_python_module_step(step) or is_udf_module_step(step):
+            suffix = python_command
+        else:
+            cmd = (step.run_with or {}).get("cmd")
+            suffix = str(cmd) if cmd else ""
     elif run_type == RunType.PIPE:
         return pipe_command
     else:
@@ -276,12 +374,12 @@ def _bash_encrypt_epilogue() -> list[str]:
         "    else",
         '      _log "FATAL: openssl encryption failed (rc=$ENC_RC); aborting to prevent unencrypted output on disk"',
         '      rm -f "$WORK_DIR/output.tar.gz"',
-        '      _log "__TASK_ERR__"',
+        f'      _log "{TASK_ERR_MARKER}"',
         "      exit 1",
         "    fi",
         "  else",
         '    _log "FATAL: tar failed (rc=$TAR_RC); aborting to prevent unencrypted output on disk"',
-        '    _log "__TASK_ERR__"',
+        f'    _log "{TASK_ERR_MARKER}"',
         "    exit 1",
         "  fi",
         "else",
@@ -343,7 +441,12 @@ def _build_powershell(
     if encrypt_at_rest:
         lines.extend(_ps_encrypt_epilogue())
 
-    lines.extend(['Write-Log "All steps completed successfully"', 'Write-Log "__TASK_OK__"'])
+    lines.extend(
+        [
+            'Write-Log "All steps completed successfully"',
+            f'Write-Log "{TASK_OK_MARKER}"',
+        ]
+    )
 
     if encrypt_at_rest:
         lines.extend(
@@ -392,7 +495,7 @@ def _build_powershell_step_block(
             [
                 "} catch {",
                 f'  Write-Log "Step {step_index} ({step_desc}) FAILED: $_"',
-                '  Write-Log "__TASK_ERR__"',
+                f'  Write-Log "{TASK_ERR_MARKER}"',
                 "  exit 1",
                 "}",
             ]
@@ -436,7 +539,7 @@ def _ps_encrypt_epilogue() -> list[str]:
         "  } catch {",
         '    Write-Log "FATAL: Encryption failed: $_"',
         '    Remove-Item -Force "$WORK_DIR\\output.zip" -ErrorAction SilentlyContinue',
-        '    Write-Log "__TASK_ERR__"',
+        f'    Write-Log "{TASK_ERR_MARKER}"',
         "    exit 1",
         "  }",
         "} else {",

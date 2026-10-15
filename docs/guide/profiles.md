@@ -29,9 +29,9 @@ defaults:
 jobs:
   scan:
     steps:
-      - task: nmap
+      - module: shell
         with:
-          target: "{{ inputs.target }}"
+          cmd: nmap -sV {{ inputs.target }}
 ```
 
 ---
@@ -129,11 +129,11 @@ In addition to per-task overrides, profile-level settings are **automatically ma
 **Rules:**
 
 - Only non-zero/non-empty profile values are injected
-- The task must declare the opt in its `opts` dict (checked via `ofx flow tasks info <name>`)
+- The tool must declare the opt in its `opts` dict (checked via `ofx flow tools info <name>`)
 - Explicit user options (from `with:` or `--opt`) always take precedence
 - Per-task `task_options` overrides are applied after auto-injection
 
-**Example:** With this profile, every task that has a `threads` opt gets `threads=2`, and every task with a `proxy` opt gets the Tor proxy — without needing `task_options` entries for each tool:
+**Example:** With this profile, every tool that has a `threads` opt gets `threads=2`, and every tool with a `proxy` opt gets the Tor proxy — without needing `task_options` entries for each tool:
 
 ```yaml
 stealth:
@@ -142,10 +142,10 @@ stealth:
   rate_limit: 30
 ```
 
-This also works when running tasks directly from the CLI:
+This also works when running tools directly from the CLI:
 
 ```bash
-ofx flow tasks run httpx example.com --profile stealth
+ofx flow tools run httpx example.com --profile stealth
 # → httpx runs with -threads 2 -proxy socks5://127.0.0.1:9050 -rate-limit 30
 ```
 
@@ -349,10 +349,12 @@ When a profile is active, its settings are available in templates via `{{ profil
 
 ```yaml
 steps:
-  - run: |
-      echo "Rate limit: {{ profile.rate_limit }}"
-      echo "Threads: {{ profile.threads }}"
-      {% if profile.proxy %}
-      echo "Using proxy: {{ profile.proxy }}"
-      {% endif %}
+  - module: shell
+    with:
+      cmd: |
+        echo "Rate limit: {{ profile.rate_limit }}"
+        echo "Threads: {{ profile.threads }}"
+        {% if profile.proxy %}
+        echo "Using proxy: {{ profile.proxy }}"
+        {% endif %}
 ```

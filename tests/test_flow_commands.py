@@ -1,7 +1,7 @@
 """Tests for flow commands: info, visualize, validate, lint, diff, init, list, search."""
 
-from pathlib import Path
 import importlib
+from pathlib import Path
 
 import pytest
 import typer
@@ -26,15 +26,15 @@ MINIMAL_WORKFLOW = {
     "jobs": {
         "job1": {
             "name": "First Job",
-            "steps": [{"name": "step1", "run": "echo hello"}],
+            "steps": [{"name": "step1", "module": "shell", "with": {"cmd": "echo hello"}}],
             "outputs": {"result": "{{ steps.step1.outputs.result }}"},
         },
         "job2": {
             "name": "Second Job",
             "needs": ["job1"],
             "steps": [
-                {"name": "step2", "run": "echo world"},
-                {"name": "step3", "run": "echo done"},
+                {"name": "step2", "module": "shell", "with": {"cmd": "echo world"}},
+                {"name": "step3", "module": "shell", "with": {"cmd": "echo done"}},
             ],
         },
     },
@@ -117,11 +117,11 @@ class TestFlowInfo:
         show_info("fallback")
 
     def test_step_type_label(self):
-        from ofx.runner.step_descriptors import step_type_label
         from ofx.models.step import Step
+        from ofx.runner.step_descriptors import step_type_label
 
-        assert "run:" in step_type_label(Step(run="echo hi", name="s"))
-        assert "script" == step_type_label(Step(script="print(1)", name="s"))
+        assert "module: " in step_type_label(Step(module="shell", run_with={"cmd": "echo hi"}, name="s"))
+        assert step_type_label(Step(module="python", run_with={"script": "print(1)"}, name="s")) == "module: python"
         assert "uses:" in step_type_label(Step(uses="./other.yml", name="s"))
 
 class TestFlowCompletions:
@@ -166,15 +166,15 @@ class TestFlowDiff:
             "name": "workflow-a",
             "description": "First workflow",
             "tags": ["recon"],
-            "jobs": {"scan": {"steps": [{"name": "s1", "run": "echo a"}]}},
+            "jobs": {"scan": {"steps": [{"name": "s1", "module": "shell", "with": {"cmd": "echo a"}}]}},
         }
         wf_b = {
             "name": "workflow-b",
             "description": "Second workflow",
             "tags": ["recon", "web"],
             "jobs": {
-                "scan": {"steps": [{"name": "s1", "run": "echo b"}]},
-                "report": {"steps": [{"name": "s2", "run": "echo report"}]},
+                "scan": {"steps": [{"name": "s1", "module": "shell", "with": {"cmd": "echo b"}}]},
+                "report": {"steps": [{"name": "s2", "module": "shell", "with": {"cmd": "echo report"}}]},
             },
         }
         path_a = tmp_path / "wf-a.yml"
@@ -194,7 +194,7 @@ class TestFlowDiff:
             "tags": ["recon"],
             "env": {"A": "1"},
             "tools": {"httpx": "1.0"},
-            "jobs": {"scan": {"steps": [{"name": "s1", "run": "echo a"}]}},
+            "jobs": {"scan": {"steps": [{"name": "s1", "module": "shell", "with": {"cmd": "echo a"}}]}},
         }
         wf_b = {
             "name": "workflow-b",
@@ -203,8 +203,8 @@ class TestFlowDiff:
             "env": {"A": "2", "B": "3"},
             "tools": {},
             "jobs": {
-                "scan": {"steps": [{"name": "s1", "run": "echo a"}]},
-                "report": {"steps": [{"name": "s2", "run": "echo report"}]},
+                "scan": {"steps": [{"name": "s1", "module": "shell", "with": {"cmd": "echo a"}}]},
+                "report": {"steps": [{"name": "s2", "module": "shell", "with": {"cmd": "echo report"}}]},
             },
         }
         path_a = tmp_path / "wf-a.yml"
@@ -228,6 +228,7 @@ class TestFlowDiff:
 class TestFlowVisualize:
     def test_visualize_json_prints_dag_structure(self, workflow_file: Path, monkeypatch):
         import json
+
         import ofx.commands.flow.visualize as visualize_mod
 
         console = Console(record=True, width=120)
@@ -264,6 +265,7 @@ class TestFlowVisualize:
 
     def test_visualize_json_writes_output_file(self, workflow_file: Path, tmp_path: Path, monkeypatch):
         import json
+
         import ofx.commands.flow.visualize as visualize_mod
 
         workflow = Workflow.model_validate(yaml.safe_load(workflow_file.read_text()))
@@ -320,7 +322,7 @@ class TestFlowValidate:
         )
         monkeypatch.setattr(validate, "get_console", lambda: Console(record=True, width=120))
 
-        validate.validate_workflows(str(workflow_file), check_tasks=False)
+        validate.validate_workflows(str(workflow_file))
 
         assert success_calls == [
             (
@@ -358,7 +360,7 @@ class TestFlowValidate:
         monkeypatch.setattr(validate, "get_console", lambda: Console(record=True, width=120))
 
         with pytest.raises(typer.Exit):
-            validate.validate_workflows(str(bad_file), check_tasks=False)
+            validate.validate_workflows(str(bad_file))
 
         assert errors
         assert errors[0][0] == "Validation Failed"
@@ -370,7 +372,7 @@ class TestFlowValidate:
             "name": "warn-test",
             "jobs": {
                 "job1": {
-                    "steps": [{"name": "s", "run": "echo"}],
+                    "steps": [{"name": "s", "module": "shell", "with": {"cmd": "echo"}}],
                 }
             },
         }
@@ -388,7 +390,7 @@ class TestFlowValidate:
         monkeypatch.setattr("ofx.commands.ui_helpers.print_success", lambda *args, **kwargs: None)
         monkeypatch.setattr(validate, "get_console", lambda: console)
 
-        validate.validate_workflows(str(path), check_tasks=False)
+        validate.validate_workflows(str(path))
 
         assert "No dispatch or call trigger defined" in console.export_text()
 
@@ -423,7 +425,7 @@ class TestFlowValidate:
         monkeypatch.setattr("ofx.commands.ui_helpers.print_warning", lambda *args, **kwargs: None)
         monkeypatch.setattr(validate, "get_console", lambda: console)
 
-        validate.validate_workflows(all_workflows=True, check_tasks=False)
+        validate.validate_workflows(all_workflows=True)
 
         output = console.export_text()
         assert "Workflow Validation" in output
@@ -518,7 +520,7 @@ class TestFlowLint:
 
         wf_data = {
             "name": "no-desc",
-            "jobs": {"j": {"steps": [{"name": "s", "run": "echo"}]}},
+            "jobs": {"j": {"steps": [{"name": "s", "module": "shell", "with": {"cmd": "echo"}}]}},
         }
         path = tmp_path / "no-desc.yml"
         path.write_text(yaml.dump(wf_data))
@@ -820,6 +822,47 @@ class TestFlowCommandExitCodes:
             ["flow", "visualize", str(workflow_file), "--format", "mermaid"]
         )
         assert result.exit_code != 0
+
+class TestFlowRunExitCodes:
+    """flow run must exit non-zero when the workflow fails (scripting/CI contract)."""
+
+    def _invoke_run(self, monkeypatch, status_value: str):
+        from typer.testing import CliRunner
+
+        import ofx.commands.flow.run as flow_run
+        from ofx.commands.__init__ import _register_commands, app
+        from ofx.runner.context import RunnerStatus, RunResult
+
+        fake_result = RunResult(
+            name="wf",
+            run_id="test-run",
+            status=RunnerStatus(status_value),
+            outputs={},
+        )
+
+        class _FakeHandler:
+            def __init__(self, **kwargs):
+                pass
+
+            async def run(self):
+                return fake_result
+
+        monkeypatch.setattr(flow_run, "FlowRunHandler", _FakeHandler)
+        _register_commands()
+        return CliRunner().invoke(app, ["flow", "run", "whatever.yml"])
+
+    def test_failed_workflow_exits_nonzero(self, monkeypatch):
+        result = self._invoke_run(monkeypatch, "failed")
+        assert result.exit_code == 1
+
+    def test_completed_workflow_exits_zero(self, monkeypatch):
+        result = self._invoke_run(monkeypatch, "completed")
+        assert result.exit_code == 0
+
+    def test_canceled_workflow_exits_zero(self, monkeypatch):
+        result = self._invoke_run(monkeypatch, "canceled")
+        assert result.exit_code == 0
+
 
 class TestFlowInit:
     """Tests for the flow init command and FlowInitHandler."""
