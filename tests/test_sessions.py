@@ -8,6 +8,7 @@ import os
 import shutil
 import tarfile
 import textwrap
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -24,11 +25,47 @@ from ofx.cloud.sessions.store import SessionStore
 from ofx.models.step import Step
 
 
+def _wait_until(cond, *, timeout: float = 10.0, interval: float = 0.05) -> bool:
+    """Poll *cond* until it returns True or *timeout* seconds elapse."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if cond():
+            return True
+        time.sleep(interval)
+    return False
+
+
 @pytest.fixture(autouse=True)
 def _restore_workflow_dirs():
     original = list(_settings_mod.DEFAULT_WORKFLOWS_DIRS)
     yield
     _settings_mod.DEFAULT_WORKFLOWS_DIRS = original
+
+
+@pytest.fixture(autouse=True)
+def _isolate_session_env(monkeypatch, tmp_path):
+    """Isolate all session-relevant env vars and settings so subprocesses don't see stale state."""
+    home = tmp_path / "home"
+    home.mkdir()
+    ofx_dir = home / ".ofx"
+    projects_dir = ofx_dir / "projects"
+    projects_dir.mkdir(parents=True, exist_ok=True)
+    config_path = ofx_dir / "config.yml"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("OFX_PROJECTS_PATH", str(projects_dir))
+    monkeypatch.setattr(_settings_mod, "CONFIG_YAML", config_path)
+    # Point Settings to a fresh config so subprocesses don't see a stale active_project
+    monkeypatch.setattr(
+        _settings_mod.Settings,
+        "model_config",
+        {**_settings_mod.Settings.model_config, "yaml_file": config_path},
+    )
+    # Clear any leaked OFX_ACTIVE_PROJECT env var from project tests
+    monkeypatch.delenv("OFX_ACTIVE_PROJECT", raising=False)
+    original = getattr(_settings_mod.settings, "active_project", None)
+    _settings_mod.settings.active_project = None
+    yield
+    _settings_mod.settings.active_project = original
 
 class TestSessionModel:
     def test_create_minimal(self):
@@ -561,17 +598,19 @@ class TestSessionManagerLocal:
 
         session = asyncio.run(mgr.submit(str(wf_path), target=SessionTarget.LOCAL))
 
-        import time
 
-        for _ in range(50):
-            time.sleep(0.1)
-            try:
-                os.kill(session.remote_pid, 0)
-            except ProcessLookupError:
-                break
+        def _is_done():
+            nonlocal session
+            session = asyncio.run(mgr.status(session.id))
+            return session.is_done()
+
+        assert _wait_until(_is_done, timeout=30), "session did not complete in time"
 
         session = asyncio.run(mgr.status(session.id))
-        assert session.status == SessionStatus.COMPLETED
+        assert session.status == SessionStatus.COMPLETED, (
+            f"session failed: {session.error}"
+            + chr(10) + asyncio.run(mgr.logs(session.id, tail=20))
+        )
 
         work = Path(session.remote_work_dir)
         assert (work / "output.enc").exists(), (
@@ -590,15 +629,17 @@ class TestSessionManagerLocal:
         session = asyncio.run(mgr.submit(str(wf_path), target=SessionTarget.LOCAL))
         assert session.job_id == ""
 
-        import time
-
-        for _ in range(60):
-            time.sleep(0.1)
+        def _is_done():
+            nonlocal session
             session = asyncio.run(mgr.status(session.id))
-            if session.is_done():
-                break
+            return session.is_done()
 
-        assert session.status == SessionStatus.COMPLETED
+        assert _wait_until(_is_done, timeout=20), "session did not complete in time"
+
+        assert session.status == SessionStatus.COMPLETED, (
+            f"session failed: {session.error}"
+            + chr(10) + asyncio.run(mgr.logs(session.id, tail=20))
+        )
         results_path = asyncio.run(mgr.fetch(session.id))
         trace = (results_path / "trace.txt").read_text()
         assert "FIRST_JOB" in trace
@@ -614,15 +655,17 @@ class TestSessionManagerLocal:
         )
         assert session.job_id == "second-job"
 
-        import time
-
-        for _ in range(60):
-            time.sleep(0.1)
+        def _is_done():
+            nonlocal session
             session = asyncio.run(mgr.status(session.id))
-            if session.is_done():
-                break
+            return session.is_done()
 
-        assert session.status == SessionStatus.COMPLETED
+        assert _wait_until(_is_done, timeout=20), "session did not complete in time"
+
+        assert session.status == SessionStatus.COMPLETED, (
+            f"session failed: {session.error}"
+            + chr(10) + asyncio.run(mgr.logs(session.id, tail=20))
+        )
         results_path = asyncio.run(mgr.fetch(session.id))
         trace = (results_path / "trace.txt").read_text()
         assert "FIRST_JOB" not in trace
@@ -692,15 +735,17 @@ class TestSessionManagerLocal:
 
         session = asyncio.run(mgr.submit(str(wf_path), target=SessionTarget.LOCAL))
 
-        import time
-
-        for _ in range(50):
-            time.sleep(0.1)
+        def _is_done():
+            nonlocal session
             session = asyncio.run(mgr.status(session.id))
-            if session.is_done():
-                break
+            return session.is_done()
 
-        assert session.status == SessionStatus.COMPLETED
+        assert _wait_until(_is_done, timeout=20), "session did not complete in time"
+
+        assert session.status == SessionStatus.COMPLETED, (
+            f"session failed: {session.error}"
+            + chr(10) + asyncio.run(mgr.logs(session.id, tail=20))
+        )
 
     def test_logs_returns_output(self, tmp_path):
         wf_path = self._create_test_workflow(tmp_path)
@@ -709,13 +754,12 @@ class TestSessionManagerLocal:
 
         session = asyncio.run(mgr.submit(str(wf_path), target=SessionTarget.LOCAL))
 
-        import time
-
-        for _ in range(50):
-            time.sleep(0.1)
+        def _is_done():
+            nonlocal session
             session = asyncio.run(mgr.status(session.id))
-            if session.is_done():
-                break
+            return session.is_done()
+
+        assert _wait_until(_is_done, timeout=20), "session did not complete in time"
 
         logs = asyncio.run(mgr.logs(session.id))
         assert "Session" in logs or "started" in logs
@@ -771,15 +815,17 @@ class TestSessionManagerLocal:
 
         session = asyncio.run(mgr.submit(str(wf_path), target=SessionTarget.LOCAL))
 
-        import time
-
-        for _ in range(50):
-            time.sleep(0.1)
+        def _is_done():
+            nonlocal session
             session = asyncio.run(mgr.status(session.id))
-            if session.is_done():
-                break
+            return session.is_done()
 
-        assert session.status == SessionStatus.COMPLETED
+        assert _wait_until(_is_done, timeout=20), "session did not complete in time"
+
+        assert session.status == SessionStatus.COMPLETED, (
+            f"session failed: {session.error}"
+            + chr(10) + asyncio.run(mgr.logs(session.id, tail=20))
+        )
 
         results_path = asyncio.run(mgr.fetch(session.id))
         assert results_path.exists()
@@ -798,13 +844,12 @@ class TestSessionManagerLocal:
 
         session = asyncio.run(mgr.submit(str(wf_path), target=SessionTarget.LOCAL))
 
-        import time
-
-        for _ in range(50):
-            time.sleep(0.1)
+        def _is_done():
+            nonlocal session
             session = asyncio.run(mgr.status(session.id))
-            if session.is_done():
-                break
+            return session.is_done()
+
+        assert _wait_until(_is_done, timeout=20), "session did not complete in time"
 
         enc_path = asyncio.run(mgr.fetch(session.id, passphrase="s3cret"))
         assert enc_path.exists()
@@ -835,13 +880,18 @@ class TestSessionManagerLocal:
         session = asyncio.run(mgr.submit(str(wf), target=SessionTarget.LOCAL))
         assert session.remote_pid is not None
 
-        import time
+        def _proc_running():
+            try:
+                os.kill(session.remote_pid, 0)
+                return True
+            except ProcessLookupError:
+                return False
 
-        time.sleep(0.2)
+        assert _wait_until(_proc_running, timeout=5), "session process did not start"
         session = asyncio.run(mgr.cancel(session.id))
         assert session.status == SessionStatus.CANCELED
 
-        time.sleep(0.2)
+        assert _wait_until(lambda: not _proc_running(), timeout=5), "session process did not stop"
         try:
             os.kill(session.remote_pid, 0)
         except ProcessLookupError:
@@ -855,13 +905,12 @@ class TestSessionManagerLocal:
         session = asyncio.run(mgr.submit(str(wf_path), target=SessionTarget.LOCAL))
         work_dir = Path(session.remote_work_dir)
 
-        import time
-
-        for _ in range(50):
-            time.sleep(0.1)
+        def _is_done():
+            nonlocal session
             session = asyncio.run(mgr.status(session.id))
-            if session.is_done():
-                break
+            return session.is_done()
+
+        assert _wait_until(_is_done, timeout=20), "session did not complete in time"
 
         assert work_dir.exists()
 
@@ -876,13 +925,12 @@ class TestSessionManagerLocal:
         mgr = _make_manager(store, tmp_path)
 
         session = asyncio.run(mgr.submit(str(wf_path), target=SessionTarget.LOCAL))
-        import time
-
-        for _ in range(50):
-            time.sleep(0.1)
+        def _is_done():
+            nonlocal session
             session = asyncio.run(mgr.status(session.id))
-            if session.is_done():
-                break
+            return session.is_done()
+
+        assert _wait_until(_is_done, timeout=20), "session did not complete in time"
 
         asyncio.run(mgr.fetch(session.id))
         bundle = asyncio.run(mgr.bundle_artifacts(session.id))
@@ -895,13 +943,12 @@ class TestSessionManagerLocal:
         mgr = _make_manager(store, tmp_path)
 
         session = asyncio.run(mgr.submit(str(wf_path), target=SessionTarget.LOCAL))
-        import time
-
-        for _ in range(60):
-            time.sleep(0.1)
+        def _is_done():
+            nonlocal session
             session = asyncio.run(mgr.status(session.id))
-            if session.is_done():
-                break
+            return session.is_done()
+
+        assert _wait_until(_is_done, timeout=20), "session did not complete in time"
 
         asyncio.run(mgr.fetch(session.id))
         bundle = asyncio.run(mgr.bundle_artifacts(session.id))
@@ -921,13 +968,12 @@ class TestSessionManagerLocal:
         session = asyncio.run(
             mgr.submit(str(wf_path), target=SessionTarget.LOCAL, job_id="second-job")
         )
-        import time
-
-        for _ in range(60):
-            time.sleep(0.1)
+        def _is_done():
+            nonlocal session
             session = asyncio.run(mgr.status(session.id))
-            if session.is_done():
-                break
+            return session.is_done()
+
+        assert _wait_until(_is_done, timeout=20), "session did not complete in time"
 
         asyncio.run(mgr.fetch(session.id))
         bundle = asyncio.run(mgr.bundle_artifacts(session.id))

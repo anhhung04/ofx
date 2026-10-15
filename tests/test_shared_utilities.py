@@ -8,6 +8,14 @@ from ofx.runner.matrix_utils import (
     estimate_matrix_count,
     generate_matrix_combinations,
 )
+from ofx.runner.services.credential_store import (
+    should_store_creds,
+)
+from ofx.runner.step_descriptors import (
+    step_timeline_params,
+    step_type_label,
+)
+from ofx.runner.step_output import log_output, save_output_file
 
 
 class TestMatrixCombinationBuilder:
@@ -106,10 +114,6 @@ class TestMatrixCombinationBuilder:
             {"target": "example.com"}
         ]
 
-from ofx.runner.services.credential_store import (
-    should_store_creds,
-)
-
 
 class TestShouldStoreCreds:
     def test_step_explicit_true(self):
@@ -133,12 +137,6 @@ class TestShouldStoreCreds:
     def test_step_overrides_parent(self):
         parent = SimpleNamespace(defaults=SimpleNamespace(store_creds=True))
         assert should_store_creds(False, parent) is False
-
-from ofx.runner.step_descriptors import (
-    step_timeline_params,
-    step_type_label,
-)
-from ofx.runner.step_output import log_output, save_output_file
 
 
 class TestLogOutput:

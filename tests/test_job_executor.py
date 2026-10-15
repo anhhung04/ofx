@@ -5,19 +5,10 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 from types import SimpleNamespace
-
-
-def _attach_register(ns):
-    """Attach a Runner.register_runner-equivalent to a SimpleNamespace fixture."""
-    def _register_runner(key, runner):
-        if key in ns._runners:
-            raise ValueError(f"Duplicate runner key {key!r}")
-        ns._runners[key] = runner
-    ns.register_runner = _register_runner
-    return ns
 from unittest.mock import AsyncMock
 
 import pytest
+from conftest import attach_register_runner as _attach_register
 
 from ofx.runner import RunContext
 from ofx.runner.context import ConditionNotMetError, RunnerStatus

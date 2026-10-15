@@ -1,11 +1,11 @@
-# flow schema
+# flow dump
 
 Inspect OFX data model schemas for workflows, jobs, and steps.
 
 ## Usage
 
 ```bash
-ofx flow schema <subcommand> [options]
+ofx flow dump <subcommand> [options]
 ```
 
 ---
@@ -17,7 +17,7 @@ ofx flow schema <subcommand> [options]
 Export the OFX workflow model schema as a JSON file.
 
 ```bash
-ofx flow schema schema [options]
+ofx flow dump schema [options]
 ```
 
 **Options:**
@@ -29,7 +29,7 @@ ofx flow schema schema [options]
 **Example:**
 
 ```bash
-ofx flow schema schema -o workflow_schema.json
+ofx flow dump schema -o workflow_schema.json
 ```
 
 ---
@@ -39,7 +39,7 @@ ofx flow schema schema -o workflow_schema.json
 Display the Workflow model schema as a rich, human-readable tree in the terminal.
 
 ```bash
-ofx flow schema flow
+ofx flow dump flow
 ```
 
 Shows all properties of the top-level `Workflow` model including types, defaults, and descriptions.
@@ -51,7 +51,7 @@ Shows all properties of the top-level `Workflow` model including types, defaults
 Display the Job model schema as a rich, human-readable tree.
 
 ```bash
-ofx flow schema job
+ofx flow dump job
 ```
 
 Shows all properties of the `Job` model including matrix strategy, cloud config, environment, and step definitions.
@@ -63,7 +63,7 @@ Shows all properties of the `Job` model including matrix strategy, cloud config,
 Display the Step model schema as a rich, human-readable tree.
 
 ```bash
-ofx flow schema step
+ofx flow dump step
 ```
 
 Shows all properties of the `Step` model including run/script/uses, retry, timeout, and output options.
@@ -75,7 +75,7 @@ Shows all properties of the `Step` model including run/script/uses, retry, timeo
 ### Export full JSON schema
 
 ```bash
-ofx flow schema schema -o /tmp/ofx-schema.json
+ofx flow dump schema -o /tmp/ofx-schema.json
 cat /tmp/ofx-schema.json | python -m json.tool
 ```
 
@@ -83,13 +83,13 @@ cat /tmp/ofx-schema.json | python -m json.tool
 
 ```bash
 # See workflow-level fields
-ofx flow schema flow
+ofx flow dump flow
 
 # Drill into job configuration
-ofx flow schema job
+ofx flow dump job
 
 # Inspect step options
-ofx flow schema step
+ofx flow dump step
 ```
 
 ---

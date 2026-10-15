@@ -536,7 +536,7 @@ return self.parse_output({
 
 ## See Also
 
-- [API Documentation](../cli/commands/docs-serve.md)
+- [API Documentation](../cli/commands/api-show.md)
 - [Exploit API Reference](../lib/overview.md)
 - [Webshell API Reference](../lib/overview.md)
 - [Shellcode API Reference](../lib/overview.md)

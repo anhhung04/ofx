@@ -288,7 +288,7 @@ jobs:
         monkeypatch.setattr("ofx.utils.workflow_utils.httpx.get", lambda url, timeout=30: _Response())
 
         with pytest.raises(RuntimeError, match="Invalid YAML in remote workflow https://example.com/test.yml"):
-            find_workflow("https://example.com/test.yml", tuple())
+            find_workflow("https://example.com/test.yml", ())
 
     def test_find_workflow_with_invalid_cloned_yaml_reports_action_path(self, monkeypatch, tmp_path):
         repo_dir = tmp_path / "repo"
@@ -298,7 +298,7 @@ jobs:
         monkeypatch.setattr("ofx.utils.workflow_utils.clone_remote_repo", lambda workflow_name, flow_registry_url: repo_dir)
 
         with pytest.raises(RuntimeError, match=r"Invalid YAML in workflow file .*action.yml"):
-            find_workflow("org/repo", tuple())
+            find_workflow("org/repo", ())
 
     def test_find_workflow_caching(self, tmp_path):
         """Test that find_workflow uses LRU cache"""

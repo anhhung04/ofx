@@ -164,7 +164,6 @@ async def test_restore_from_checkpoint_restores_empty_outputs(monkeypatch, tmp_p
 
 @pytest.mark.asyncio
 async def test_restore_from_checkpoint_restores_error_timestamps_and_completed_status(monkeypatch, tmp_path):
-    durable = DurableRunConfig(enabled=True, backend="file")
     state_calls: list[RunnerStatus] = []
     runner = FakeRunner(
         model=SimpleNamespace(name="wf"),

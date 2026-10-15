@@ -11,7 +11,6 @@ from pydantic import BaseModel, Field
 from rich.console import Console
 
 from ofx.models.workflow import ToolConfig
-from ofx.modules.builtins.shell import get_shell_functions
 from ofx.runner.context import RunContext
 from ofx.runner.runner import Runner
 from ofx.settings import DEFAULT_SHELL, TOOLS_BIN_DIR, ensure_dir
@@ -71,6 +70,9 @@ class ToolInstallerRunner(Runner[ToolInstallation]):
             **os.environ,
             **{str(key): str(value) for key, value in env.items()},
         }
+        # Lazy: keeps the runner → modules direction acyclic at import time.
+        from ofx.modules.builtins.shell import get_shell_functions
+
         completed = await asyncio.to_thread(
             subprocess.run,
             f"{get_shell_functions()}\n{cmd}",

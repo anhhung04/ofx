@@ -191,3 +191,22 @@ def _install_fake_clone(
         ),
     )
     return clone_calls, checkout_calls
+
+
+def attach_register_runner(ns: types_mod.SimpleNamespace) -> types_mod.SimpleNamespace:
+    """Attach a ``Runner.register_runner``-equivalent to a namespace fixture."""
+
+    def _register_runner(key, runner):
+        if key in ns._runners:
+            raise ValueError(f"Duplicate runner key {key!r}")
+        ns._runners[key] = runner
+
+    ns.register_runner = _register_runner
+    return ns
+
+
+@pytest.fixture(autouse=True)
+def _clear_active_project(monkeypatch):
+    """Ensure no test sees a stale active_project from another test's settings write."""
+    monkeypatch.setattr("ofx.settings.settings.active_project", None, raising=False)
+    yield

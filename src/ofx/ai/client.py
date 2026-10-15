@@ -25,12 +25,9 @@ class StreamChunk:
 
 def check_ai_available() -> bool:
     """Return True if the openai SDK is installed."""
-    try:
-        import openai
+    import importlib.util
 
-        return True
-    except ImportError:
-        return False
+    return importlib.util.find_spec("openai") is not None
 
 def require_ai() -> None:
     """Raise ImportError with install instructions if openai is missing."""
