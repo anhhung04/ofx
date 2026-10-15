@@ -34,7 +34,7 @@ from typing import Any
 from ofx.modules.base import ModuleContext, ModuleResult
 
 name = "shell"
-description = "Execute a shell command (equivalent to a legacy ``run:`` step)."
+description = "Execute a shell command."
 args_schema: dict[str, Any] = {
     "cmd": {
         "type": "string",

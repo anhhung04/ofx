@@ -64,8 +64,8 @@ def run(ctx: ModuleContext) -> ModuleResult:
     if not script and script_file:
         path = Path(script_file)
         if not path.is_absolute():
-            # Relative script files resolve against the workflow directory (the
-            # legacy ModuleRunner behavior), falling back to the working dir.
+            # Relative script files resolve against the workflow directory,
+            # falling back to the working dir.
             workflow_dir = ctx.workflow_dir or ctx.working_directory
             candidates = [
                 workflow_dir / path,
@@ -101,9 +101,6 @@ def run(ctx: ModuleContext) -> ModuleResult:
         """Read ``key=value`` lines from the outputs file (no delete).
 
         The step runner owns cleanup of the file; the builtin only reads it.
-        Mirrors the legacy ScriptRunner merge: file values (strings) win over
-        the in-memory dict so downstream ``steps.<name>.outputs`` templates
-        resolve to JSON-serialized strings (matching the old behavior).
         """
         if not outputs_file or not Path(outputs_file).exists():
             return {}

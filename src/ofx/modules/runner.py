@@ -100,7 +100,7 @@ class ModuleRunner(Runner[ModuleInvocation]):
 
         Walked from the step runner chain (ModuleRunner's parent is the
         StepRunner; its parent is the JobRunner; its parent is the
-        WorkflowRunner), matching the legacy ScriptRunner resolution.
+        WorkflowRunner), matching the standard resolution.
         """
         step_runner = self.parent
         step_model = getattr(step_runner, "model", None)
