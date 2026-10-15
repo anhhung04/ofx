@@ -53,11 +53,18 @@ def _clear_active_project():
 
 @pytest.fixture(autouse=True)
 def _isolate_projects_env(monkeypatch, tmp_path):
-    """Isolate projects path so session subprocesses don't see a stale active project."""
-    projects_dir = tmp_path / ".ofx" / "projects"
+    """Isolate projects path and config so session subprocesses don't see stale state."""
+    ofx_dir = tmp_path / ".ofx"
+    projects_dir = ofx_dir / "projects"
     projects_dir.mkdir(parents=True, exist_ok=True)
+    config_path = ofx_dir / "config.yml"
     monkeypatch.setenv("OFX_PROJECTS_PATH", str(projects_dir))
+    monkeypatch.setattr(_settings_mod, "CONFIG_YAML", config_path)
+    # Clear active_project from the in-memory settings for the subprocess
+    original = getattr(_settings_mod.settings, "active_project", None)
+    _settings_mod.settings.active_project = None
     yield
+    _settings_mod.settings.active_project = original
 
 class TestSessionModel:
     def test_create_minimal(self):
