@@ -7,6 +7,7 @@ from pathlib import Path
 from ofx.modules.api import resolve_api_callable
 from ofx.modules.base import DEFAULT_MODULE_FUNCTION, ModuleSpec
 from ofx.modules.builtins import BUILTIN_MODULES
+from ofx.modules.library import build_library_specs
 from ofx.modules.refs import (
     API_KIND,
     BUILTIN_KIND,
@@ -67,6 +68,18 @@ class ModuleRegistry:
             )
             for module in TOOL_MODULES
         }
+        self._library: dict[str, ModuleSpec] | None = None  # lazy — 132 modules
+
+    def _library_specs(self) -> dict[str, ModuleSpec]:
+        """Lazily build and cache the library module specs."""
+        if self._library is None:
+            self._library = build_library_specs()
+        return self._library
+
+    @property
+    def library_names(self) -> tuple[str, ...]:
+        """Names of the library modules, sorted."""
+        return tuple(sorted(self._library_specs()))
 
     @property
     def builtin_names(self) -> tuple[str, ...]:
@@ -97,9 +110,12 @@ class ModuleRegistry:
             builtin = self._builtins.get(name)
             if builtin is not None:
                 return builtin
-            # Unified namespace: an unregistered dotted ``local.builtin.*``
-            # name is an ofx.api function path (e.g. local.builtin.recon.targets.split_targets).
             if "." in name:
+                # Library modules (declared wrappers) take precedence over
+                # the raw dynamic api fallback.
+                lib_spec = self._library_specs().get(name)
+                if lib_spec is not None:
+                    return lib_spec
                 return ModuleSpec(
                     kind=API_KIND,
                     name=ref.raw,

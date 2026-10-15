@@ -169,6 +169,9 @@ def list_modules(
     for name in ModuleRegistry().tool_names:
         table.add_row("tool", name, "built-in")
 
+    for name in ModuleRegistry().library_names:
+        table.add_row("library", name, "ofx.api")
+
     for label, target in _iter_cached_clones():
         name = label.replace("/", ".")
         table.add_row("remote", name, str(target))
@@ -203,17 +206,46 @@ def info(
         typer.Argument(help="'<owner>.<repo>.<module>[@<ref>]' module to resolve."),
     ],
 ):
-    """Show the resolved entry file and function for a remote module."""
+    """Show details for a module: remote spec, builtin, tool, or library module."""
+    console = get_console()
+
+    # Try registry resolution first (builtin, tool, library)
+    from ofx.modules import ModuleRegistry
+
+    registry = ModuleRegistry()
+    spec = None
+    for candidate in (module.strip(), f"local.builtin.{module.strip()}"):
+        try:
+            spec = registry.resolve(candidate)
+            break
+        except ValueError:
+            continue
+
+    if spec is not None:
+        console.print(f"[bold]Module:[/bold] {spec.name}")
+        console.print(f"[bold]Kind:[/bold] {spec.kind}")
+        console.print(f"[bold]Description:[/bold] {spec.description or '(none)'}")
+        if spec.args_schema:
+            console.print("[bold]Arguments:[/bold]")
+            for arg_name, arg_spec in spec.args_schema.items():
+                req = " (required)" if arg_spec.get("required") else ""
+                default = f" [default: {arg_spec['default']}]" if "default" in arg_spec else ""
+                desc = arg_spec.get("description", "")
+                console.print(f"  {arg_name}: {arg_spec.get('type', 'any')}{req}{default}  {desc}")
+        else:
+            console.print("[bold]Arguments:[/bold] (none)")
+        return
+
+    # Remote module
     ref = parse_module_ref(module.strip())
     if ref.kind != REMOTE_KIND:
         raise typer.BadParameter(
-            f"Invalid module spec '{module}': expected '<owner>.<repo>.<module>[@<ref>]'"
+            f"Unknown module: '{module}'. Try 'ofx flow modules list' to see available modules."
         )
     try:
         entry = ensure_remote_module(ref)
     except Exception as exc:
         raise typer.BadParameter(str(exc)) from exc
-    console = get_console()
     console.print(f"[bold]Module:[/bold] {ref.raw}")
     if entry.api_path:
         console.print(f"[bold]API function:[/bold] ofx.api.{entry.api_path}")

@@ -757,3 +757,62 @@ class TestBuiltinHelperSync:
             assert "_run_dir" in src, f"{tool_file.name} missing _run_dir helper"
             assert "_require_target" in src, f"{tool_file.name} missing _require_target helper"
 
+
+
+class TestLibraryModules:
+    """Auto-generated library wrappers for ofx.api functions."""
+
+    def test_library_registered(self):
+        registry = ModuleRegistry()
+        names = registry.library_names
+        assert len(names) > 100, f"expected 100+ library modules, got {len(names)}"
+
+    def test_library_resolves_via_prefix(self):
+        registry = ModuleRegistry()
+        spec = registry.resolve("local.builtin.recon.targets.split_targets")
+        assert spec.kind == "api"
+        assert "values" in spec.args_schema
+        assert spec.args_schema["values"].get("required") is True
+
+    def test_library_resolves_c2(self):
+        registry = ModuleRegistry()
+        spec = registry.resolve("local.builtin.c2.bash_reverse_shell")
+        assert spec.kind == "api"
+        assert "lhost" in spec.args_schema
+        assert "lport" in spec.args_schema
+
+    def test_registered_builtins_win_over_library(self):
+        """Registered builtins (shell, python, merge_lists) take precedence."""
+        registry = ModuleRegistry()
+        spec = registry.resolve("local.builtin.shell")
+        assert spec.kind == "builtin"  # not api
+
+    def test_library_execution(self, tmp_path):
+        """A library module actually executes via ModuleRunner."""
+        import asyncio
+
+        from ofx.modules import ModuleInvocation, ModuleRunner
+        from ofx.runner import RunContext, RunnerStatus
+
+        inv = ModuleInvocation(
+            name="local.builtin.c2.bash_reverse_shell",
+            args={"lhost": "10.0.0.1", "lport": "4444"},
+        )
+        runner = ModuleRunner(inv, RunContext(output_path=tmp_path))
+        result = asyncio.run(runner.run())
+        assert result.status == RunnerStatus.COMPLETED
+        assert "result" in result.outputs
+        assert "10.0.0.1" in result.outputs["result"]
+
+    def test_library_no_args_function(self, tmp_path):
+        """A zero-arg library module (suid_commands) works."""
+        import asyncio
+
+        from ofx.modules import ModuleInvocation, ModuleRunner
+        from ofx.runner import RunContext, RunnerStatus
+
+        inv = ModuleInvocation(name="local.builtin.privesc.linux.suid_commands", args={})
+        runner = ModuleRunner(inv, RunContext(output_path=tmp_path))
+        result = asyncio.run(runner.run())
+        assert result.status == RunnerStatus.COMPLETED
+        assert "result" in result.outputs

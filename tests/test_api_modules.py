@@ -668,11 +668,9 @@ class TestRegistryApiResolution:
     def test_local_api_longest_prefix(self):
         spec = ModuleRegistry().resolve("local.builtin.recon.targets.split_targets")
         assert spec.kind == "api"
-        assert spec.function == "split_targets"
         assert spec.callable is not None
-        from ofx.api.recon.targets import split_targets
-
-        assert spec.callable is split_targets
+        # Library wrapper is the declared module; it delegates to the api function
+        assert spec.callable.__module__ == "ofx.modules.library.recon_targets_split_targets"
 
     def test_local_api_shorthand_reexport(self):
         spec = ModuleRegistry().resolve("local.builtin.recon.crtsh_subdomains_sync")
