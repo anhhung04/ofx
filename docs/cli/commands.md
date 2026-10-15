@@ -63,7 +63,7 @@ ofx secret set API_KEY
 - [Secret commands](commands/secret.md)
 - [API command](commands/api.md)
 - [Doctor](commands/doctor.md)
-- [Docs server](commands/docs-serve.md)
+- [api show](commands/api-show.md)
 
 ## Troubleshooting
 

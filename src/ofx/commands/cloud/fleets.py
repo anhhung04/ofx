@@ -504,7 +504,7 @@ def fleet_run(
     name: Annotated[str, typer.Option("--name", help="Fleet run name")] = "",
     inputs: Annotated[
         list[str], typer.Option("--input", "-i", help="Input key=value pairs")
-    ] = [],
+    ] = [],  # noqa: B006 — typer requires a list default for multi options
     target_var: Annotated[
         str,
         typer.Option(

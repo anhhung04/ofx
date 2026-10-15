@@ -5,6 +5,14 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+import pytest
+
+from ofx.runner import RunContext
+from ofx.runner.context import ConditionNotMetError, RunnerStatus
+from ofx.runner.executors.job import JobExecutor
+from ofx.runner.registry_keys import RunnerRegistryKeys
 
 
 def _attach_register(ns):
@@ -15,14 +23,6 @@ def _attach_register(ns):
         ns._runners[key] = runner
     ns.register_runner = _register_runner
     return ns
-from unittest.mock import AsyncMock
-
-import pytest
-
-from ofx.runner import RunContext
-from ofx.runner.context import ConditionNotMetError, RunnerStatus
-from ofx.runner.executors.job import JobExecutor
-from ofx.runner.registry_keys import RunnerRegistryKeys
 
 
 @pytest.mark.asyncio

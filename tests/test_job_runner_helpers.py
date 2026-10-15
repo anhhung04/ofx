@@ -4,6 +4,13 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+from ofx.models.job import Job
+from ofx.runner import RunContext
+from ofx.runner.job import (
+    attach_indexed_job_runner,
+    build_indexed_job_context,
+)
+
 
 def _attach_register(ns):
     """Attach a Runner.register_runner-equivalent to a SimpleNamespace fixture."""
@@ -13,13 +20,6 @@ def _attach_register(ns):
         ns._runners[key] = runner
     ns.register_runner = _register_runner
     return ns
-
-from ofx.models.job import Job
-from ofx.runner import RunContext
-from ofx.runner.job import (
-    attach_indexed_job_runner,
-    build_indexed_job_context,
-)
 
 
 def _job() -> Job:

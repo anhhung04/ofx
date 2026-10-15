@@ -10,7 +10,7 @@ Complete reference for all OFX command-line interface commands.
 - **[flow validate](validate.md)** - Validate workflow syntax
 - **[flow visualize](visualize.md)** - Visualize workflow dependencies
 - **flow tools** - Install and manage workflow tool dependencies
-- **[flow schema](schema.md)** - Inspect workflow/job/step model schemas
+- **[flow dump](schema.md)** - Inspect workflow/job/step model schemas
 - **[flow collection](collection.md)** - Install and manage workflow collections
 - **[flow modules](modules.md)** - Manage namespaced remote modules (`<owner>.<repo>.<module>`)
 
@@ -57,7 +57,7 @@ Complete reference for all OFX command-line interface commands.
 
 ## Utility Commands
 
-- **[docs](docs-serve.md)** - Display API documentation and data directories
+- **[api show](api-show.md)** - Display `ofx.lib` library documentation
 - **[doctor](doctor.md)** - Run reliability scorecards and readiness diagnostics
 
 ## Quick Start
@@ -128,7 +128,7 @@ ofx secret list
 | `ofx flow validate` | Validate workflow syntax |
 | `ofx flow visualize` | Visualize workflow dependency graph |
 | `ofx flow tools` | Install and manage workflow tool dependencies |
-| `ofx flow schema` | Inspect workflow/job/step model schemas |
+| `ofx flow dump` | Inspect workflow/job/step model schemas |
 | `ofx flow collection` | Manage workflow collections |
 | `ofx flow modules` | Manage namespaced remote modules (`<owner>.<repo>.<module>`) |
 | `ofx project init` | Initialize new project |

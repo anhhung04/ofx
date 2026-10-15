@@ -3,6 +3,12 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
+
+import pytest
+
+from ofx.cloud.runners.executor import CloudExecutor
+from ofx.runner.context import RunContext
 
 
 def _attach_register(ns):
@@ -13,12 +19,6 @@ def _attach_register(ns):
         ns._runners[key] = runner
     ns.register_runner = _register_runner
     return ns
-from unittest.mock import AsyncMock, patch
-
-import pytest
-
-from ofx.cloud.runners.executor import CloudExecutor
-from ofx.runner.context import RunContext
 
 
 class _Provider:

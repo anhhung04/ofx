@@ -166,7 +166,7 @@ nav:
                   - flow visualize: cli/commands/visualize.md
                   - flow modules: cli/commands/modules.md
                   - flow collection: cli/commands/collection.md
-                  - flow schema: cli/commands/schema.md
+                  - flow dump: cli/commands/dump.md
                   - flow history: cli/commands/history.md
                   - flow sync: cli/commands/sync.md
                   - flow ai: cli/commands/ai.md
@@ -177,7 +177,7 @@ nav:
                   - secret: cli/commands/secret.md
                   - doctor: cli/commands/doctor.md
                   - api: cli/commands/api.md
-                  - docs-serve: cli/commands/docs-serve.md
+                  - api show: cli/commands/api-show.md
             - Visualization: cli/visualization.md
         - Reference:
             - Lib Overview: reference/lib.md

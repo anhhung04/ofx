@@ -6,6 +6,7 @@ No provisioning or teardown — just wraps existing hosts for CloudJobRunner.
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from ofx.cloud.base import CloudProvider, CloudProviderRegistry
 from ofx.cloud.models import CloudInstanceInfo
