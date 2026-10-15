@@ -41,6 +41,15 @@ def _restore_workflow_dirs():
     yield
     _settings_mod.DEFAULT_WORKFLOWS_DIRS = original
 
+
+@pytest.fixture(autouse=True)
+def _clear_active_project():
+    """Prevent subprocesses from inheriting a stale active_project."""
+    original = getattr(_settings_mod.settings, "active_project", None)
+    _settings_mod.settings.active_project = None
+    yield
+    _settings_mod.settings.active_project = original
+
 class TestSessionModel:
     def test_create_minimal(self):
         s = Session(id="aabbccdd", workflow_file="scan.yml")
