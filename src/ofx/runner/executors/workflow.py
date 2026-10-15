@@ -76,17 +76,14 @@ class WorkflowExecutor(Executor):
         if output_path:
             output_path.mkdir(parents=True, exist_ok=True)
 
-        try:
-            from ofx.commands.project.project_manager import ProjectManager
-            wf_name = runner.model.name or "workflow"
-            project_run_dir = ProjectManager.get_run_dir(wf_name)
-            runner._run_dir_is_temp = project_run_dir is None
-            if project_run_dir is not None:
-                runner._run_dir = project_run_dir
-            else:
-                runner._run_dir = Path(tempfile.mkdtemp(prefix="ofx_run_"))
-        except Exception:
-            runner._run_dir_is_temp = True
+        from ofx.utils.project_paths import get_project_run_dir
+
+        wf_name = getattr(runner.model, "name", None) or "workflow"
+        project_run_dir = get_project_run_dir(wf_name)
+        runner._run_dir_is_temp = project_run_dir is None
+        if project_run_dir is not None:
+            runner._run_dir = project_run_dir
+        else:
             runner._run_dir = Path(tempfile.mkdtemp(prefix="ofx_run_"))
 
         # Create organized subdirectories

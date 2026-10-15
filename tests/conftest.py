@@ -191,3 +191,15 @@ def _install_fake_clone(
         ),
     )
     return clone_calls, checkout_calls
+
+
+def attach_register_runner(ns: types_mod.SimpleNamespace) -> types_mod.SimpleNamespace:
+    """Attach a ``Runner.register_runner``-equivalent to a namespace fixture."""
+
+    def _register_runner(key, runner):
+        if key in ns._runners:
+            raise ValueError(f"Duplicate runner key {key!r}")
+        ns._runners[key] = runner
+
+    ns.register_runner = _register_runner
+    return ns

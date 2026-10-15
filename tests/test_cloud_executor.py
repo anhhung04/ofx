@@ -6,19 +6,10 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from conftest import attach_register_runner as _attach_register
 
 from ofx.cloud.runners.executor import CloudExecutor
 from ofx.runner.context import RunContext
-
-
-def _attach_register(ns):
-    """Attach a Runner.register_runner-equivalent to a SimpleNamespace fixture."""
-    def _register_runner(key, runner):
-        if key in ns._runners:
-            raise ValueError(f"Duplicate runner key {key!r}")
-        ns._runners[key] = runner
-    ns.register_runner = _register_runner
-    return ns
 
 
 class _Provider:

@@ -1,7 +1,10 @@
-"""Public API for the OFX runner package."""
+"""Public API for the OFX runner package.
 
-from ofx.cloud.runners.executor import CloudExecutor
-from ofx.cloud.runners.fleet_executor import FleetExecutor
+Cloud executors (``ofx.cloud.runners.*``) are intentionally NOT re-exported
+here: runner is the lower layer and must not depend on cloud. Import them
+from ``ofx.cloud.runners`` directly.
+"""
+
 from ofx.runner.api import run_workflow
 from ofx.runner.context import RunContext, RunnerStatus, RunResult
 from ofx.runner.executors.base import Executor
@@ -31,13 +34,11 @@ def create_registry(*, backend: str = "memory", **config):
 
 
 __all__ = [
-    "CloudExecutor",
     "create_registry",
     "cleanup_registry",
     "EventEmitter",
     "Executor",
     "ExecutionResult",
-    "FleetExecutor",
     "JobExecutor",
     "JobRunner",
     "LifecycleManager",
