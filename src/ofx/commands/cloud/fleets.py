@@ -511,6 +511,13 @@ def fleet_run(
             "--target-var", help="Input variable name for the target chunk file"
         ),
     ] = "targets_file",
+    install_tools: Annotated[
+        bool,
+        typer.Option(
+            "--install-tools",
+            help="Auto-install missing workflow tools on each fleet instance.",
+        ),
+    ] = False,
 ):
     """Submit a workflow across multiple fleet instances with target distribution.
 
@@ -537,6 +544,8 @@ def fleet_run(
 
     parsed_inputs: dict = key_value_parser(inputs)
     parsed_env: dict = cli_env_getter()
+    if install_tools:
+        parsed_env["install_tools"] = "1"
 
     fleet_project = _resolve_fleet_project(project_getter)
 

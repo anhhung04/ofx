@@ -102,6 +102,29 @@ class CloudExecutor(JobExecutor):
                     "region": runner._instance.region,
                 },
             )
+        await self._install_remote_tools(runner)
+
+    async def _install_remote_tools(self, runner) -> None:
+        """Install workflow tools on the provisioned remote host.
+
+        Only runs when the caller opted in with --install-tools and the
+        workflow declares tools with prebuilt-binary URLs.
+        """
+        ctx_vars = getattr(getattr(runner, "ctx", None), "vars", None) or {}
+        if not ctx_vars.get("install_tools", False):
+            return
+        tools = getattr(runner.model, "tools", None) or {}
+        if not tools or runner._remote_runner is None:
+            return
+        from ofx.runner.tool_installer import ToolInstallerRunner
+
+        installer = ToolInstallerRunner(tools=tools, ctx=runner.ctx, parent=runner, show_console=False)
+        for tool_bin, tool_cfg in tools.items():
+            ok = installer.install_remotely(runner._remote_runner, tool_bin, tool_cfg)
+            if ok:
+                runner._log_info(f"Installed remote tool: {tool_bin}")
+            else:
+                runner._log_warning(f"Remote tool install skipped/failed: {tool_bin}")
 
     async def do_run(self, runner) -> None:
         runner._log_info(

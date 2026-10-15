@@ -151,15 +151,28 @@ class WorkflowExecutor(Executor):
         )
         tools = getattr(runner.model, "tools", None)
         if tools:
+            from ofx.runner.install_guide import render_install_guide
             from ofx.runner.tool_installer import ToolInstallerRunner
 
+            auto_install = runner.ctx.vars.get("install_tools", False)
             installer = ToolInstallerRunner(
                 tools=tools,
                 ctx=context_copy(runner.ctx),
                 parent=runner,
                 show_console=False,
+                plan_only=not auto_install,
             )
             await installer.run()
+
+            planned = getattr(installer, "planned_steps", None) or []
+            if planned:
+                render_install_guide(planned)
+                if installer.failed_count == 0 and not auto_install:
+                    raise RuntimeError(
+                        "Workflow requires tools that are not installed. "
+                        "Install them manually (see guide above) or re-run "
+                        "with --install-tools."
+                    )
 
     async def do_run(self, runner) -> None:
         await self.plan_jobs(runner)

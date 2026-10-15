@@ -72,6 +72,7 @@ class FlowRunHandler:
         project: str = "",
         events: bool = False,
         time_window: str = "",
+        install_tools: bool = False,
     ):
         self.workflow_name = workflow_name
         self.preprocess_input = input or []
@@ -91,6 +92,7 @@ class FlowRunHandler:
         self.project_vars: dict[str, str] = {}
         self.events = events
         self.time_window = time_window
+        self.install_tools = install_tools
 
         if project:
             self._resolve_project(project)
@@ -162,6 +164,8 @@ class FlowRunHandler:
             durable_overrides = self._durable_overrides()
 
             run_vars = dict(self.project_vars) if self.project_vars else {}
+            if self.install_tools:
+                run_vars["install_tools"] = True
             if self.profile_name:
                 run_vars["_cli_profile_name"] = self.profile_name
                 logger.info("Execution profile: %s", self.profile_name)

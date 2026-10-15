@@ -337,6 +337,13 @@ def run(
             help="Restrict execution to a time window (HH:MM-HH:MM, e.g. '09:00-17:00').",
         ),
     ] = "",
+    install_tools: Annotated[
+        bool,
+        typer.Option(
+            "--install-tools",
+            help="Auto-install missing workflow tools (default: show install guide and fail).",
+        ),
+    ] = False,
 ):
     if dry_run:
         from ofx.commands.flow.info import show_info
@@ -375,6 +382,7 @@ def run(
             project=project,
             events=events,
             time_window=time_window,
+            install_tools=install_tools,
         ).run()
     )
     if result.status.value == "failed":

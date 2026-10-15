@@ -24,6 +24,7 @@ from ofx.cloud.sessions.script_builder import (
     build_session_script,
 )
 from ofx.cloud.temp_upload import upload_temp_content
+from ofx.runner.context import RunContext
 
 logger = logging.getLogger("ofx")
 
@@ -356,6 +357,7 @@ class SubmitMixin:
         profile: Any | None = None,
         workflow_dir: Path | None,
         workflow_name: str,
+        workflow_tools: dict[str, Any] | None = None,
     ) -> Session:
         from ofx.cloud.runtime import create_remote_runner
 
@@ -383,6 +385,30 @@ class SubmitMixin:
                 remote.run(
                     f"mkdir -p {runtime.remote_work_dir} && chmod 700 {runtime.remote_work_dir}"
                 )
+
+            # Auto-install workflow tools when the caller opted in.
+            if (
+                runtime.merged_env.get("install_tools")
+                or runtime.merged_env.get("OFX_INSTALL_TOOLS")
+            ) and not target.is_windows:
+                from ofx.runner.tool_installer import ToolInstallerRunner
+
+                tools_to_install = workflow_tools or {}
+                if tools_to_install:
+                    installer = ToolInstallerRunner(
+                        tools=tools_to_install,
+                        ctx=RunContext(),
+                        show_console=False,
+                    )
+                    for tool_bin, tool_cfg in tools_to_install.items():
+                        ok = installer.install_remotely(
+                            remote, tool_bin, tool_cfg
+                        )
+                        if ok:
+                            logger.info("Installed remote tool: %s", tool_bin)
+                        else:
+                            logger.warning("Remote tool install failed: %s", tool_bin)
+
             merged_env = runtime.merged_env
             file_overrides: dict[str, str] = {}
             for key, value in session.inputs.items():
@@ -584,6 +610,8 @@ class SubmitMixin:
             "--wait-lock",
             "0",
         ]
+        if env.get("install_tools") or env.get("OFX_INSTALL_TOOLS"):
+            flow_args.append("--install-tools")
         for key, value in session.inputs.items():
             flow_args.extend(["-i", f"{key}={merged_env.get(key, value)}"])
 
@@ -641,6 +669,7 @@ class SubmitMixin:
         *,
         workflow_dir: Path | None,
         workflow_name: str,
+        workflow_tools: dict[str, Any] | None = None,
     ) -> Session:
         """Provision a VPS, upload the script, and start detached via SSH/WinRM."""
         target = await self._prepare_cloud_submit_target(session, cloud_profile)
@@ -660,6 +689,7 @@ class SubmitMixin:
             profile=profile,
             workflow_dir=workflow_dir,
             workflow_name=workflow_name,
+            workflow_tools=workflow_tools,
         )
         logger.info(
             "Cloud session %s started on %s (PID %s)",
