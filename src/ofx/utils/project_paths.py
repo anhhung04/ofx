@@ -11,12 +11,17 @@ from pathlib import Path
 
 def get_active_project_path() -> Path | None:
     """Return the active project root, or ``None``."""
-    try:
-        from ofx.profiles import get_active_project
+    from ofx.settings import DEFAULT_PROJECTS_PATH, settings
 
-        return get_active_project()
-    except Exception:
+    name = getattr(settings, "active_project", None)
+    if not name:
         return None
+    project = Path(name)
+    if not project.is_absolute():
+        project = DEFAULT_PROJECTS_PATH / project
+    if not project.exists():
+        return None
+    return project.resolve()
 
 
 def get_project_run_dir(workflow_name: str) -> Path | None:

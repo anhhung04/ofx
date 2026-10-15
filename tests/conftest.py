@@ -203,3 +203,10 @@ def attach_register_runner(ns: types_mod.SimpleNamespace) -> types_mod.SimpleNam
 
     ns.register_runner = _register_runner
     return ns
+
+
+@pytest.fixture(autouse=True)
+def _clear_active_project(monkeypatch):
+    """Ensure no test sees a stale active_project from another test's settings write."""
+    monkeypatch.setattr("ofx.settings.settings.active_project", None, raising=False)
+    yield
