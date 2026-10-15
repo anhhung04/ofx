@@ -1,4 +1,4 @@
-# Exfiltration API
+# Exfiltration
 
 The `ofx.lib.exfil` module provides helpers for covert data exfiltration: DNS tunnelling, chunked HTTP transfer, and in-memory compression + encryption pipelines.
 
@@ -112,5 +112,5 @@ jobs:
 ## See Also
 
 - [OOB Testing](#) — Capture DNS/HTTP callbacks
-- [Loot API](loot.md) — Discover artefacts to exfiltrate
-- [Bundle API](bundle.md) — Deliver scripts with embedded modules
+- [Loot](loot.md) — Discover artefacts to exfiltrate
+- [Bundle](bundle.md) — Deliver scripts with embedded modules

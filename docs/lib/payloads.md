@@ -1,4 +1,4 @@
-# Payloads API
+# Payloads
 
 Generate small delivery artifacts for phishing or staging.
 

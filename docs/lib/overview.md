@@ -1,6 +1,6 @@
-# API Overview
+# Library Overview
 
-OFX exposes a broad Python API surface under `ofx.lib.*` for automation workflows and scripts.
+OFX exposes a broad Python library under `ofx.lib.*` for automation workflows and scripts. Every public function is also callable as a workflow module (`module: local.builtin.<dotted.path>`).
 
 ## Import convention
 
@@ -60,9 +60,17 @@ jobs:
 ## Discover APIs from CLI
 
 ```bash
-ofx docs api --list
-ofx docs api --module http
-ofx docs api --module webshell
+ofx api --list
+ofx api --module http
+ofx api --module webshell
+```
+
+List callable workflow modules (including every `ofx.lib` function wrapped as a
+library module):
+
+```bash
+ofx flow modules list
+ofx flow modules info http.fetch
 ```
 
 ## Notes

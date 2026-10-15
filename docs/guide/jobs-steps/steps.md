@@ -200,6 +200,37 @@ Missing inputs are an error by default (`fail_if: all_missing`) so an empty merg
 
 **`classify_targets` module** — classify targets into `domain`/`subdomain`/`cidr`/`ip`/`url`/`unknown`, writing `targets_<type>.txt` per group under `OFX_RUN_DIR`, and publish `target_type`, `counts` (JSON) and `target_files` (JSON). With `source_type: auto` a value that is not an existing file but ends in a known file suffix (`targets.txt`) or is not a valid target itself is rejected as a mistyped path; pass `source_type: target` to force literal handling (CIDRs and URLs are always accepted as literals).
 
+### Library modules (`local.builtin.<category>.*`)
+
+Every public function in the `ofx.lib` Python library is also declared as a workflow module — 180+ modules covering recon, DNS, C2, exploitation, packers, payloads, privesc, AD, exfil, OPSEC, and more. Each library module declares an argument schema (`args_schema`) with required/default parameters; a missing required argument fails the step immediately with a message naming the missing keys.
+
+List them:
+
+```bash
+ofx flow modules list            # all modules; library rows are tagged 'library'
+ofx flow modules info packers.xor_pack
+```
+
+Example — pack and unpack data entirely from YAML:
+
+```yaml
+steps:
+  - name: pack
+    module: local.builtin.packers.xor_pack
+    with:
+      data: hello world
+      key: k
+  - name: unpack
+    module: local.builtin.packers.xor_unpack
+    with:
+      data: "{{ steps.pack.outputs.result }}"
+      key: k
+```
+
+Binary-returning helpers (packers) accept UTF-8 text (or base64 with `input_encoding: base64`) and publish base64/UTF-8 results so values flow cleanly through `{{ steps.*.outputs.* }}` interpolation.
+
+Library modules resolve in order: registered builtins → tools → declared library wrappers → dynamic `ofx.lib` fallback. A dotted `local.builtin.*` name that matches no declared module is resolved as an `ofx.lib` function path, so new library functions are callable even before a declared wrapper exists.
+
 ### Declared tool modules (`local.tool.*`)
 
 Each external scanner is declared as its own module — no generic scan runner with raw argv. Tool steps fail explicitly when the binary is missing from PATH, so a missing tool can never masquerade as a clean scan.

@@ -1,4 +1,4 @@
-# Privilege Escalation API
+# Privilege Escalation
 
 The `ofx.lib.privesc` module generates command strings for local privilege escalation checks and exploitation on Linux and Windows systems.
 
@@ -155,6 +155,6 @@ jobs:
 
 ## See Also
 
-- [AD API](ad.md) — Domain privilege escalation
-- [Persistence API](persistence.md) — Establish footholds after escalation
+- [AD](ad.md) — Domain privilege escalation
+- [Persistence](persistence.md) — Establish footholds after escalation
 - [Post Runners](#) — Remote execution

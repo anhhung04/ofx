@@ -1,4 +1,4 @@
-# Evasion API
+# Evasion
 
 The Evasion API (`ofx.lib.evasion`) provides utilities for obfuscating payloads and commands to bypass Web Application Firewalls (WAFs), Intrusion Detection Systems (IDS), and Antivirus (AV) detection.
 

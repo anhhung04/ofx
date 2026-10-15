@@ -1,4 +1,4 @@
-# HTTP Server API
+# HTTP Server
 
 OFX provides powerful HTTP server utilities for payload delivery, data exfiltration, and file hosting during red teaming operations.
 

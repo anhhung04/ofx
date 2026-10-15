@@ -1,4 +1,4 @@
-# Recon API
+# Recon
 
 The `ofx.lib.recon` module provides active and passive reconnaissance helpers: async TCP port scanning, OSINT data gathering, and web fingerprinting.
 
@@ -132,4 +132,4 @@ jobs:
 ## See Also
 
 - [Reconnaissance APIs](#) — Shodan, FOFA, ZoomEye, OOB testing
-- [AD API](ad.md) — Active Directory enumeration
+- [AD](ad.md) — Active Directory enumeration

@@ -1,4 +1,4 @@
-# Active Directory API
+# Active Directory
 
 The `ofx.lib.ad` module generates command strings for Active Directory enumeration, Kerberos attacks, and lateral movement via credential abuse.
 
@@ -140,6 +140,6 @@ jobs:
 
 ## See Also
 
-- [Recon API](recon.md) — Port scanning and OSINT
-- [Privesc API](privesc.md) — Privilege escalation
+- [Recon](recon.md) — Port scanning and OSINT
+- [Privesc](privesc.md) — Privilege escalation
 - [Post Runners](#) — Remote execution

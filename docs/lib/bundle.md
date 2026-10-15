@@ -1,4 +1,4 @@
-# Bundle API
+# Bundle
 
 The `ofx.lib.bundle` module packages the `ofx.lib.*` modules used by a script into a self-extracting Python bootstrap, optionally obfuscates it, and delivers it to a remote target for execution — with no pre-existing OFX installation required on the target.
 
@@ -337,6 +337,6 @@ jobs:
 
 ## See Also
 
-- [OPSEC API](opsec.md) — Traffic blending and cleanup
-- [Evasion API](evasion.md) — Payload obfuscation techniques
+- [OPSEC](opsec.md) — Traffic blending and cleanup
+- [Evasion](evasion.md) — Payload obfuscation techniques
 - [Post Runners](#) — SSH, WinRM, web shell runners

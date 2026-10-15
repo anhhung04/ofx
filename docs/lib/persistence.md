@@ -1,4 +1,4 @@
-# Persistence API
+# Persistence
 
 Craft persistence commands for Windows and Linux targets.  All functions return **command strings** — nothing is executed locally.
 

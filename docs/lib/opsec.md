@@ -1,4 +1,4 @@
-# OPSEC API
+# OPSEC
 
 The `ofx.lib.opsec` module provides operational security helpers: proxy configuration, log and artifact cleanup, timing controls, and traffic blending to reduce detection risk during engagements.
 
@@ -147,5 +147,5 @@ jobs:
 
 ## See Also
 
-- [Evasion API](evasion.md) — AV/EDR bypass, payload obfuscation
-- [Persistence API](persistence.md) — Establish footholds
+- [Evasion](evasion.md) — AV/EDR bypass, payload obfuscation
+- [Persistence](persistence.md) — Establish footholds

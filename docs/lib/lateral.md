@@ -1,4 +1,4 @@
-# Lateral API
+# Lateral
 
 Thin wrappers over registered post runners for copy-and-exec tasks.
 

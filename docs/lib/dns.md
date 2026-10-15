@@ -1,4 +1,4 @@
-# DNS API
+# DNS
 
 Lightweight DNS helpers for quick recon and callback prep.
 

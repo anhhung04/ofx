@@ -1,4 +1,4 @@
-# Loot API
+# Loot
 
 Discover common loot artifacts and parse simple JSONL outputs.
 

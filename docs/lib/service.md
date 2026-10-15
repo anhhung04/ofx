@@ -1,4 +1,4 @@
-# Service API
+# Service
 
 Grab lightweight banners and hint protocols during recon.
 

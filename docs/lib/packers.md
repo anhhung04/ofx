@@ -1,4 +1,4 @@
-# Packers API
+# Packers
 
 Simple packing/obfuscation helpers for transport.
 
