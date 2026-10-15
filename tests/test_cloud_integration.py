@@ -692,7 +692,7 @@ class TestWaitForLogin:
 
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr("asyncio.to_thread", mock_to_thread)
-            mp.setattr("ofx.api.post.runners.winrm.PostWinRM", _FakeWinRM)
+            mp.setattr("ofx.lib.post.runners.winrm.PostWinRM", _FakeWinRM)
             result = await wait_for_login("10.0.0.2", cfg, timeout=30)
 
         assert result is True

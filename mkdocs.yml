@@ -180,25 +180,25 @@ nav:
                   - docs-serve: cli/commands/docs-serve.md
             - Visualization: cli/visualization.md
         - Reference:
-            - API Overview: reference/api.md
+            - Lib Overview: reference/lib.md
             - Core: reference/core.md
             - CLI: reference/cli.md
-        - ofx.api Library:
-            - Overview: api/overview.md
-            - ad: api/ad.md
-            - bundle: api/bundle.md
-            - c2: api/c2.md
-            - data: api/data.md
-            - dns: api/dns.md
-            - evasion: api/evasion.md
-            - exfil: api/exfil.md
-            - httpserver: api/httpserver.md
-            - lateral: api/lateral.md
-            - loot: api/loot.md
-            - opsec: api/opsec.md
-            - packers: api/packers.md
-            - payloads: api/payloads.md
-            - persistence: api/persistence.md
-            - privesc: api/privesc.md
-            - recon: api/recon.md
-            - service: api/service.md
+        - ofx.lib Library:
+            - Overview: lib/overview.md
+            - ad: lib/ad.md
+            - bundle: lib/bundle.md
+            - c2: lib/c2.md
+            - data: lib/data.md
+            - dns: lib/dns.md
+            - evasion: lib/evasion.md
+            - exfil: lib/exfil.md
+            - httpserver: lib/httpserver.md
+            - lateral: lib/lateral.md
+            - loot: lib/loot.md
+            - opsec: lib/opsec.md
+            - packers: lib/packers.md
+            - payloads: lib/payloads.md
+            - persistence: lib/persistence.md
+            - privesc: lib/privesc.md
+            - recon: lib/recon.md
+            - service: lib/service.md

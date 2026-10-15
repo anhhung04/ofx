@@ -1,6 +1,6 @@
-"""Library modules — declared wrappers for ofx.api functions.
+"""Library modules — declared wrappers for ofx.lib functions.
 
-Each module in this package wraps one ofx.api function with a declared
+Each module in this package wraps one ofx.lib function with a declared
 name, description, args_schema, and run(ctx) entry point. They are
 registered alongside builtins and tools so users see one unified module
 catalog — no api-vs-module ambiguity.
@@ -32,7 +32,7 @@ def build_library_specs() -> dict[str, ModuleSpec]:
     specs: dict[str, ModuleSpec] = {}
     for mod in _iter_library_modules():
         spec = ModuleSpec(
-            kind="api",
+            kind="lib",
             name=mod.name,
             description=mod.description,
             args_schema=mod.args_schema,

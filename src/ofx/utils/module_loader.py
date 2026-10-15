@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
+
 def module_name_for_path(prefix: str, path: Path) -> str:
     """Build a stable, unique module name for a file path."""
     digest = hashlib.sha1(

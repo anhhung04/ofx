@@ -12,11 +12,12 @@ Tests:
 
 import pytest
 
-from ofx.api.exploitation.webshell import WebShell, generate_webshell
-from ofx.api.exploitation.webshell.shell.asp import AspShell
-from ofx.api.exploitation.webshell.shell.aspx import AspxShell
-from ofx.api.exploitation.webshell.shell.jsp import JspShell
-from ofx.api.exploitation.webshell.shell.php import PhpShell
+from ofx.lib.exploitation.webshell import WebShell, generate_webshell
+from ofx.lib.exploitation.webshell.shell.asp import AspShell
+from ofx.lib.exploitation.webshell.shell.aspx import AspxShell
+from ofx.lib.exploitation.webshell.shell.jsp import JspShell
+from ofx.lib.exploitation.webshell.shell.php import PhpShell
+
 
 class TestWebShellGeneration:
     """Test basic webshell generation"""

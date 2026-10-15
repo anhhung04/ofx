@@ -8,8 +8,9 @@ import yaml
 from ofx.models.workflow import Workflow
 from ofx.runner import RunContext, WorkflowRunner
 from ofx.runner.executors.workflow import WorkflowExecutor
-from ofx.utils.matrix import get_expanded_job_ids
 from ofx.runner.matrix_utils import generate_matrix_combinations
+from ofx.utils.matrix import get_expanded_job_ids
+
 
 @pytest.fixture
 def workflow_dir():

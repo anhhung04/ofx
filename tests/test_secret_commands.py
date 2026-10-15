@@ -1,10 +1,8 @@
-from pathlib import Path
 
 from rich.console import Console
 from typer.testing import CliRunner
 
 from ofx.commands.secret import app
-
 
 runner = CliRunner()
 

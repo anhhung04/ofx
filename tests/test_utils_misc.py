@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+
 class TestEnumEncoder:
     def test_encodes_enum_as_value(self):
         from ofx.utils.json_utils import EnumEncoder

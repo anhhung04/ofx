@@ -1,11 +1,11 @@
-"""Module wrapper for ``ofx.api.persistence.schtask_command``."""
+"""Module wrapper for ``ofx.lib.persistence.schtask_command``."""
 
 from __future__ import annotations
 
 from typing import Any
 
 name = "persistence.schtask_command"
-description = "ofx.api persistence.schtask_command"
+description = "ofx.lib persistence.schtask_command"
 args_schema: dict[str, Any] = {
         "name": {"type": "string", "required": True},
         "cmd": {"type": "string", "required": True},
@@ -15,8 +15,8 @@ args_schema: dict[str, Any] = {
 
 
 def run(ctx):
-    """Call ofx.api.persistence.schtask_command with the module's arguments."""
-    from ofx.api.persistence import schtask_command as _func
+    """Call ofx.lib.persistence.schtask_command with the module's arguments."""
+    from ofx.lib.persistence import schtask_command as _func
 
     kwargs = {}
     missing = []
@@ -28,9 +28,9 @@ def run(ctx):
             missing.append(key)
     if missing:
         received = ", ".join(sorted(ctx.args)) or "(none)"
-        from ofx.modules.api import ApiModuleError
+        from ofx.modules.libref import LibModuleError
 
-        raise ApiModuleError(
+        raise LibModuleError(
             f"Missing required argument(s): {', '.join(missing)}. "
             f"Received keys: {received}"
         )

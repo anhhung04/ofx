@@ -2,7 +2,7 @@
 
 Classifies a target input (file, literal, or ``source_type`` override) into
 ``domain``/``subdomain``/``cidr``/``ip``/``url``/``unknown`` groups using
-:func:`ofx.api.recon.targets.split_targets`, writing one ``targets_<type>.txt``
+:func:`ofx.lib.recon.targets.split_targets`, writing one ``targets_<type>.txt``
 per group under the run directory.
 
 A target that is not an existing file and still looks like a path (``./list``,
@@ -17,7 +17,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from ofx.api.recon.targets import classify_target, split_targets
+from ofx.lib.recon.targets import classify_target, split_targets
 
 NO_RUN_DIR_MESSAGE = "OFX_RUN_DIR is not set; cannot locate run artifacts"
 

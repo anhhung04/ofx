@@ -1,4 +1,4 @@
-"""Module wrapper for ``ofx.api.opsec.traffic.domain_fronting_headers``."""
+"""Module wrapper for ``ofx.lib.opsec.traffic.domain_fronting_headers``."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ args_schema: dict[str, Any] = {
 
 
 def run(ctx):
-    """Call ofx.api.opsec.traffic.domain_fronting_headers with the module's arguments."""
-    from ofx.api.opsec.traffic import domain_fronting_headers as _func
+    """Call ofx.lib.opsec.traffic.domain_fronting_headers with the module's arguments."""
+    from ofx.lib.opsec.traffic import domain_fronting_headers as _func
 
     kwargs = {}
     missing = []
@@ -26,9 +26,9 @@ def run(ctx):
             missing.append(key)
     if missing:
         received = ", ".join(sorted(ctx.args)) or "(none)"
-        from ofx.modules.api import ApiModuleError
+        from ofx.modules.libref import LibModuleError
 
-        raise ApiModuleError(
+        raise LibModuleError(
             f"Missing required argument(s): {', '.join(missing)}. "
             f"Received keys: {received}"
         )

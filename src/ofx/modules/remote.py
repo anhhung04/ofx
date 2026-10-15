@@ -36,9 +36,9 @@ class ManifestError(ValueError):
 class RemoteModuleEntry:
     """Resolved entry point for a remote module.
 
-    A manifest entry with an ``api:`` key resolves to an ``ofx.api`` function
+    A manifest entry with an ``api:`` key resolves to an ``ofx.lib`` function
     instead of a file: ``file`` is ``None`` and ``api_path`` holds the dotted
-    path under ``ofx.api`` (whose last segment names the function).
+    path under ``ofx.lib`` (whose last segment names the function).
     """
 
     file: Path | None = None
@@ -239,7 +239,7 @@ def ensure_remote_module(
 
     The manifest entry is either:
 
-    - ``api: <path under ofx.api>`` — an ``ofx.api`` function (resolved
+    - ``api: <path under ofx.lib>`` — an ``ofx.lib`` function (resolved
       immediately so a bad path fails fast; the repo may ship no ``.py``
       files at all); or
     - ``entry: <file>`` (default ``modules/<name>.py``) plus an optional
@@ -275,16 +275,16 @@ def ensure_remote_module(
             raise ManifestError(
                 f"Invalid {MANIFEST_FILENAME} in '{ref.owner}/{ref.repo}' "
                 f"({repo_dir / MANIFEST_FILENAME}): 'api' for '{ref.module}' "
-                "must be a non-empty dotted path under ofx.api, e.g. "
+                "must be a non-empty dotted path under ofx.lib, e.g. "
                 "'recon.targets.split_targets'."
             )
         _reject_api_spec_suffixes(ref, module_conf, repo_dir)
         api_path = api_path.strip()
         # Imported lazily to keep the module-cache layer free of the api
         # resolver at import time; resolution fails fast on bad paths.
-        from ofx.modules.api import resolve_api_callable
+        from ofx.modules.libref import resolve_lib_callable
 
-        resolve_api_callable(api_path)
+        resolve_lib_callable(api_path)
         return RemoteModuleEntry(
             file=None,
             function=api_path.rsplit(".", 1)[-1],

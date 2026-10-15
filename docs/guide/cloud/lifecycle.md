@@ -233,20 +233,20 @@ ofx cloud fleet destroy --prefix ofx --provider digitalocean
 For `module: python` steps, OFX:
 
 1. **Discovers Python** on the remote host (probes `python3`, `python`, and common absolute paths)
-2. **Bundles OFX API dependencies** — analyzes imports, collects required `ofx.api` module sources
+2. **Bundles OFX API dependencies** — analyzes imports, collects required `ofx.lib` module sources
 3. **Creates a self-extracting bootstrap** — base64-encoded zip of OFX modules + user script
 4. **Uploads the bootstrap** to the VPS
 5. **Executes** via the discovered Python interpreter
 6. **Cleans up** the bootstrap file
 
-This means `ofx.api` functions are available on the VPS without installing the OFX package:
+This means `ofx.lib` functions are available on the VPS without installing the OFX package:
 
 ```yaml
 steps:
   - module: python
     with:
       script: |
-        from ofx.api.recon import nmap_scan
+        from ofx.lib.recon import nmap_scan
         cmd = nmap_scan("10.0.0.0/24", ports="1-1000")
         print(cmd)
 ```

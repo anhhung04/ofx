@@ -1,4 +1,4 @@
-"""Module wrapper for ``ofx.api.evasion.chunking.chunk_string``."""
+"""Module wrapper for ``ofx.lib.evasion.chunking.chunk_string``."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ args_schema: dict[str, Any] = {
 
 
 def run(ctx):
-    """Call ofx.api.evasion.chunking.chunk_string with the module's arguments."""
-    from ofx.api.evasion.chunking import chunk_string as _func
+    """Call ofx.lib.evasion.chunking.chunk_string with the module's arguments."""
+    from ofx.lib.evasion.chunking import chunk_string as _func
 
     kwargs = {}
     missing = []
@@ -26,9 +26,9 @@ def run(ctx):
             missing.append(key)
     if missing:
         received = ", ".join(sorted(ctx.args)) or "(none)"
-        from ofx.modules.api import ApiModuleError
+        from ofx.modules.libref import LibModuleError
 
-        raise ApiModuleError(
+        raise LibModuleError(
             f"Missing required argument(s): {', '.join(missing)}. "
             f"Received keys: {received}"
         )

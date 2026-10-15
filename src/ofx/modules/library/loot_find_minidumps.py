@@ -1,19 +1,19 @@
-"""Module wrapper for ``ofx.api.loot.find_minidumps``."""
+"""Module wrapper for ``ofx.lib.loot.find_minidumps``."""
 
 from __future__ import annotations
 
 from typing import Any
 
 name = "loot.find_minidumps"
-description = "ofx.api loot.find_minidumps"
+description = "ofx.lib loot.find_minidumps"
 args_schema: dict[str, Any] = {
         "root": {"type": "string", "required": True},
 }
 
 
 def run(ctx):
-    """Call ofx.api.loot.find_minidumps with the module's arguments."""
-    from ofx.api.loot import find_minidumps as _func
+    """Call ofx.lib.loot.find_minidumps with the module's arguments."""
+    from ofx.lib.loot import find_minidumps as _func
 
     kwargs = {}
     missing = []
@@ -25,9 +25,9 @@ def run(ctx):
             missing.append(key)
     if missing:
         received = ", ".join(sorted(ctx.args)) or "(none)"
-        from ofx.modules.api import ApiModuleError
+        from ofx.modules.libref import LibModuleError
 
-        raise ApiModuleError(
+        raise LibModuleError(
             f"Missing required argument(s): {', '.join(missing)}. "
             f"Received keys: {received}"
         )

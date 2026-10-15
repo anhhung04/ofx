@@ -8,9 +8,6 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from ofx.api.bundle import build_bundle
-from ofx.api.bundle.analyzer import detect_ofx_imports
-from ofx.api.bundle.obfuscator import obfuscate_bootstrap
 from ofx.cloud.module_kind import is_python_module_step, is_udf_module_step
 from ofx.cloud.module_source import (
     resolve_api_step_target,
@@ -18,6 +15,9 @@ from ofx.cloud.module_source import (
     resolve_udf_source,
 )
 from ofx.cloud.udf_wrapper import build_udf_step_source
+from ofx.lib.bundle import build_bundle
+from ofx.lib.bundle.analyzer import detect_ofx_imports
+from ofx.lib.bundle.obfuscator import obfuscate_bootstrap
 from ofx.models.step import Step
 
 MODULE_OUTPUTS_SENTINEL = "__OFX_MODULE_OUTPUTS__"
@@ -67,9 +67,9 @@ def build_python_payload(
 ) -> str:
     """Return bundled payload (optionally obfuscated) for remote execution.
 
-    *extra_modules* is a hashable tuple of ``ofx.api`` module names to
+    *extra_modules* is a hashable tuple of ``ofx.lib`` module names to
     force-include in the bundle. UDF wrappers use it because their
-    ``ofx.api`` imports live inside an embedded string literal that the
+    ``ofx.lib`` imports live inside an embedded string literal that the
     bundle's AST analyzer cannot see.
     """
     result = build_bundle(
@@ -111,11 +111,11 @@ def build_module_step_payload(
 
     Python steps bundle their resolved source directly; UDF steps are
     rendered into a wrapper source (see :func:`build_udf_step_source`) and
-    run through the same payload path. A UDF file's ``ofx.api`` imports are
+    run through the same payload path. A UDF file's ``ofx.lib`` imports are
     invisible to the bundle analyzer (embedded as a string literal), so they
     are detected on the raw UDF source and force-included via
-    ``extra_modules``. ``ofx.api``-backed steps need no such hint: their
-    wrapper carries a real ``from ofx.api.<path> import <func>`` statement,
+    ``extra_modules``. ``ofx.lib``-backed steps need no such hint: their
+    wrapper carries a real ``from ofx.lib.<path> import <func>`` statement,
     which the analyzer detects in the generated source.
     """
     if is_python_module_step(step):

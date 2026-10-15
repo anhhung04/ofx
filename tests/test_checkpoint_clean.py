@@ -13,6 +13,12 @@ import typer
 from ofx.models.config import DurableRunConfig
 from ofx.runner import durable as durable_store
 from ofx.runner import durable_git as durable_git_module
+from ofx.runner.durable_git import (
+    auto_commit,
+    auto_push,
+    commit_and_push,
+    is_git_repo,
+)
 from ofx.runner.services.checkpoint import (
     clean_all_checkpoints,
     clean_checkpoints,
@@ -20,12 +26,7 @@ from ofx.runner.services.checkpoint import (
     list_checkpoints,
     write_checkpoint,
 )
-from ofx.runner.durable_git import (
-    auto_commit,
-    auto_push,
-    commit_and_push,
-    is_git_repo,
-)
+
 
 @pytest.mark.asyncio
 async def test_clean_checkpoints_by_status(tmp_path: Path) -> None:

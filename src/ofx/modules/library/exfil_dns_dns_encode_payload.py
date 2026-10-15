@@ -1,4 +1,4 @@
-"""Module wrapper for ``ofx.api.exfil.dns.dns_encode_payload``."""
+"""Module wrapper for ``ofx.lib.exfil.dns.dns_encode_payload``."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ args_schema: dict[str, Any] = {
 
 
 def run(ctx):
-    """Call ofx.api.exfil.dns.dns_encode_payload with the module's arguments."""
-    from ofx.api.exfil.dns import dns_encode_payload as _func
+    """Call ofx.lib.exfil.dns.dns_encode_payload with the module's arguments."""
+    from ofx.lib.exfil.dns import dns_encode_payload as _func
 
     kwargs = {}
     missing = []
@@ -26,9 +26,9 @@ def run(ctx):
             missing.append(key)
     if missing:
         received = ", ".join(sorted(ctx.args)) or "(none)"
-        from ofx.modules.api import ApiModuleError
+        from ofx.modules.libref import LibModuleError
 
-        raise ApiModuleError(
+        raise LibModuleError(
             f"Missing required argument(s): {', '.join(missing)}. "
             f"Received keys: {received}"
         )

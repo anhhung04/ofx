@@ -1,4 +1,4 @@
-"""Module wrapper for ``ofx.api.exfil.pipeline.decompress_decrypt``."""
+"""Module wrapper for ``ofx.lib.exfil.pipeline.decompress_decrypt``."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ args_schema: dict[str, Any] = {
 
 
 def run(ctx):
-    """Call ofx.api.exfil.pipeline.decompress_decrypt with the module's arguments."""
-    from ofx.api.exfil.pipeline import decompress_decrypt as _func
+    """Call ofx.lib.exfil.pipeline.decompress_decrypt with the module's arguments."""
+    from ofx.lib.exfil.pipeline import decompress_decrypt as _func
 
     kwargs = {}
     missing = []
@@ -26,9 +26,9 @@ def run(ctx):
             missing.append(key)
     if missing:
         received = ", ".join(sorted(ctx.args)) or "(none)"
-        from ofx.modules.api import ApiModuleError
+        from ofx.modules.libref import LibModuleError
 
-        raise ApiModuleError(
+        raise LibModuleError(
             f"Missing required argument(s): {', '.join(missing)}. "
             f"Received keys: {received}"
         )

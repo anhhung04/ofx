@@ -2,7 +2,7 @@
 
 A remote step is either a builtin ``python`` module step, a builtin ``shell``
 module step, or a UDF-like step (file UDF, workflow-local named module,
-``ofx.api`` function, or remote GitHub module) whose source is bundled.
+``ofx.lib`` function, or remote GitHub module) whose source is bundled.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ def is_udf_module_step(step: Step) -> bool:
     """Return whether a step invokes a user-defined module (UDF).
 
     UDF specs use ``<file>.py`` or ``<file>.py::<function>`` form; local
-    named modules (``local.<name>``), ``ofx.api`` functions
+    named modules (``local.<name>``), ``ofx.lib`` functions
     (``local.builtin.<path>``) and remote GitHub modules
     (``<owner>.<repo>.<module>[@<ref>][::<func>]``) are UDF-like too —
     their source is bundled for remote execution. Pure-Python builtins
@@ -56,8 +56,8 @@ def is_udf_module_step(step: Step) -> bool:
     # Imported lazily: ofx.modules transitively pulls in ofx.runner, which
     # imports this module — an eager import would cycle.
     from ofx.modules.refs import (
-        API_KIND,
         BUILTIN_KIND,
+        LIB_KIND,
         LOCAL_NAMED_KIND,
         REMOTE_KIND,
         TOOL_KIND,
@@ -68,7 +68,7 @@ def is_udf_module_step(step: Step) -> bool:
         kind = parse_module_ref(base).kind
     except ValueError:
         kind = None
-    if kind in (LOCAL_NAMED_KIND, REMOTE_KIND, API_KIND, BUILTIN_KIND, TOOL_KIND):
+    if kind in (LOCAL_NAMED_KIND, REMOTE_KIND, LIB_KIND, BUILTIN_KIND, TOOL_KIND):
         return True
     return "::" in module or module.endswith(".py")
 

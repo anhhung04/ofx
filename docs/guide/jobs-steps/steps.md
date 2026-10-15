@@ -161,12 +161,12 @@ Every accepted `module:` form:
 | `<file>.py`, `<file>.py::<func>` | Workflow-local UDF file (relative to the workflow directory, then the cwd); `<func>` defaults to `run` |
 | `local.<name>` | Workflow-local module at `<workflow_dir>/modules/<name>.py` (function defaults to `run`) |
 | `local.tool.<name>` | Declared tool module (external binary wrapper: `dalfox`, `dirsearch`, `ffuf`, `sqlmap`, `tplmap`) |
-| `local.builtin.<path>.<func>` | Call an `ofx.api` function: imports `ofx.api.<path>` and calls `<func>` with the step's `with:` args as keyword arguments (no UDF file needed) |
+| `local.builtin.<path>.<func>` | Call an `ofx.lib` function: imports `ofx.lib.<path>` and calls `<func>` with the step's `with:` args as keyword arguments (no UDF file needed) |
 | `<owner>.<repo>.<module>` | Remote GitHub module: repo `github.com/<owner>/<repo>`, manifest entry `modules/<module>.py` (or an `api:` entry), default branch |
 | `<owner>.<repo>.<module>@<ref>` | Same, pinned to git tag/branch/commit `<ref>` |
 | any namespaced form + `::<func>` | Non-default entry function |
 
-Parsing order: `::` splits the function first, then `@` splits the ref; `.py`-suffixed specs are UDF files; `local.builtin.*`/`builtin.*`/bare names are builtins — a dotted builtin name that isn't a registered builtin is resolved as an `ofx.api` function (`local.builtin.<path>.<func>`); `local.tool.*` is a declared tool module; `local.*` is a workflow-local module; three-or-more dotted segments are remote.
+Parsing order: `::` splits the function first, then `@` splits the ref; `.py`-suffixed specs are UDF files; `local.builtin.*`/`builtin.*`/bare names are builtins — a dotted builtin name that isn't a registered builtin is resolved as an `ofx.lib` function (`local.builtin.<path>.<func>`); `local.tool.*` is a declared tool module; `local.*` is a workflow-local module; three-or-more dotted segments are remote.
 
 ### Built-in modules
 
@@ -331,7 +331,7 @@ The function returns `None` or a `dict` — a returned dict is merged into the s
     target: "username"
 ```
 
-### `ofx.api` modules
+### `ofx.lib` modules
 
 Reference a function shipped with OFX directly — no UDF file, no wrapper:
 
@@ -346,7 +346,7 @@ steps:
         - "https://app.example.com:8443"
 ```
 
-- The path after `local.builtin.` is resolved against `ofx.api` with **longest-prefix** matching: `ofx.api.<full.path>` is tried first as a module, then progressively shorter module paths with the remaining segments looked up as attributes. So both `recon.targets.split_targets` (module `ofx.api.recon.targets`) and package re-exports such as `recon.crtsh_subdomains` (module `ofx.api.recon`) work. The last segment names the function.
+- The path after `local.builtin.` is resolved against `ofx.lib` with **longest-prefix** matching: `ofx.lib.<full.path>` is tried first as a module, then progressively shorter module paths with the remaining segments looked up as attributes. So both `recon.targets.split_targets` (module `ofx.lib.recon.targets`) and package re-exports such as `recon.crtsh_subdomains` (module `ofx.lib.recon`) work. The last segment names the function.
 - Invalid paths fail at resolve time with the list of attempted imports.
 
 **Arguments** — the step's `with:` args are passed as **keyword arguments**, filtered to the function's signature:
@@ -362,7 +362,7 @@ steps:
 **Return value** — a returned `dict` is merged into the step outputs; any other value lands under `result`:
 
 ```python
-# ofx.api.recon.targets.split_targets
+# ofx.lib.recon.targets.split_targets
 def split_targets(values: list[str]) -> dict[str, list[str]]:
     ...
 ```
@@ -376,8 +376,8 @@ def split_targets(values: list[str]) -> dict[str, list[str]]:
 
 !!! tip "Prefer UDFs for multi-step logic"
     `local.builtin.*` steps are one function call each. If you need several
-    `ofx.api` calls plus control flow, wrap them in a UDF
-    (`modules/my_scan.py`) and import `ofx.api` there.
+    `ofx.lib` calls plus control flow, wrap them in a UDF
+    (`modules/my_scan.py`) and import `ofx.lib` there.
 
 ### Remote modules
 
@@ -405,14 +405,14 @@ A publisher's repo layout:
 ```
 
 A repo may also ship **no `.py` files at all** and act as a curated alias
-collection over `ofx.api` — a manifest entry with `api:` names a path under
-`ofx.api` whose last segment is the function:
+collection over `ofx.lib` — a manifest entry with `api:` names a path under
+`ofx.lib` whose last segment is the function:
 
 ```yaml
 modules:
   classify:                              # key = module name used in the spec
     description: Classify targets into typed lists
-    api: recon.targets.split_targets     # path under ofx.api; no entry file
+    api: recon.targets.split_targets     # path under ofx.lib; no entry file
 ```
 
 ```yaml
@@ -441,7 +441,7 @@ modules:
     function: run                    # optional; default run
   classify:                          # api-backed entry: no file required
     description: Classify targets into typed lists
-    api: recon.targets.split_targets # path under ofx.api (last segment = function)
+    api: recon.targets.split_targets # path under ofx.lib (last segment = function)
 ```
 
 Repos are cloned on first use into the local module cache

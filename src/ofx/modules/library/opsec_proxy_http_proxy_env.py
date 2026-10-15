@@ -1,4 +1,4 @@
-"""Module wrapper for ``ofx.api.opsec.proxy.http_proxy_env``."""
+"""Module wrapper for ``ofx.lib.opsec.proxy.http_proxy_env``."""
 
 from __future__ import annotations
 
@@ -16,8 +16,8 @@ args_schema: dict[str, Any] = {
 
 
 def run(ctx):
-    """Call ofx.api.opsec.proxy.http_proxy_env with the module's arguments."""
-    from ofx.api.opsec.proxy import http_proxy_env as _func
+    """Call ofx.lib.opsec.proxy.http_proxy_env with the module's arguments."""
+    from ofx.lib.opsec.proxy import http_proxy_env as _func
 
     kwargs = {}
     missing = []
@@ -29,9 +29,9 @@ def run(ctx):
             missing.append(key)
     if missing:
         received = ", ".join(sorted(ctx.args)) or "(none)"
-        from ofx.modules.api import ApiModuleError
+        from ofx.modules.libref import LibModuleError
 
-        raise ApiModuleError(
+        raise LibModuleError(
             f"Missing required argument(s): {', '.join(missing)}. "
             f"Received keys: {received}"
         )

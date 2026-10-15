@@ -13,12 +13,12 @@ from typing import Any
 from pydantic import Field
 
 from ofx.models.base import OFXBaseModel
-from ofx.modules.api import invoke_api_callable, is_ctx_style
 from ofx.modules.base import (
     ModuleContext,
     ModuleResult,
     ModuleSpec,
 )
+from ofx.modules.libref import invoke_lib_callable, is_ctx_style
 from ofx.modules.registry import ModuleRegistry
 from ofx.runner.channels import ChannelStore
 from ofx.runner.context import RunContext
@@ -112,9 +112,9 @@ class ModuleRunner(Runner[ModuleInvocation]):
         return (workflow_model, job_model, step_model)
 
     def _invoke_udf(self, spec: ModuleSpec) -> ModuleResult:
-        """Execute a UDF, ``ofx.api`` module, or builtin synchronously.
+        """Execute a UDF, ``ofx.lib`` module, or builtin synchronously.
 
-        UDFs always receive the :class:`ModuleContext`. ``ofx.api`` functions
+        UDFs always receive the :class:`ModuleContext`. ``ofx.lib`` functions
         are kwargs-style: the invocation args (merged workflow inputs plus the
         step's ``with:`` args) are filtered to their signature, so unrelated
         keys are ignored. A function that declares a ``ctx`` parameter is
@@ -156,11 +156,11 @@ class ModuleRunner(Runner[ModuleInvocation]):
         )
 
         def _call() -> Any:
-            if spec.kind != "api":
+            if spec.kind != "lib":
                 return callable_obj(module_ctx)
             if is_ctx_style(callable_obj):
                 return callable_obj(module_ctx)
-            return invoke_api_callable(callable_obj, dict(self.model.args))
+            return invoke_lib_callable(callable_obj, dict(self.model.args))
 
         returned: Any = None
         try:

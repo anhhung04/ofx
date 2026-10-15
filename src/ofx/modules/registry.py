@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ofx.modules.api import resolve_api_callable
 from ofx.modules.base import DEFAULT_MODULE_FUNCTION, ModuleSpec
 from ofx.modules.builtins import BUILTIN_MODULES
 from ofx.modules.library import build_library_specs
+from ofx.modules.libref import resolve_lib_callable
 from ofx.modules.refs import (
-    API_KIND,
     BUILTIN_KIND,
     BUILTIN_PREFIX,
+    LIB_KIND,
     LOCAL_FILE_KIND,
     LOCAL_MODULES_SUBDIR,
     LOCAL_NAMED_KIND,
@@ -37,10 +37,10 @@ class ModuleRegistry:
     - ``shell`` / ``builtin.shell`` / ``local.builtin.shell`` — builtin module
     - ``<path>.py[::<func>]`` — workflow-local UDF file
     - ``local.<name>[::<func>]`` — workflow-local ``modules/<name>.py``
-    - ``local.builtin.<path>.<func>`` — ``ofx.api`` function (kwargs-style; the
+    - ``local.builtin.<path>.<func>`` — ``ofx.lib`` function (kwargs-style; the
       last path segment names the function)
     - ``<owner>.<repo>.<module>[@<ref>][::<func>]`` — remote GitHub module
-      (UDF or, for manifest ``api:`` entries, an ``ofx.api`` function)
+      (UDF or, for manifest ``api:`` entries, an ``ofx.lib`` function)
 
     Relative UDF paths resolve against the registry's ``workflow_dir`` (if
     given) and then the current working directory.
@@ -117,9 +117,9 @@ class ModuleRegistry:
                 if lib_spec is not None:
                     return lib_spec
                 return ModuleSpec(
-                    kind=API_KIND,
+                    kind=LIB_KIND,
                     name=ref.raw,
-                    callable=resolve_api_callable(name),
+                    callable=resolve_lib_callable(name),
                     function=name.rsplit(".", 1)[-1],
                 )
             available = ", ".join(self.builtin_names)
@@ -128,11 +128,11 @@ class ModuleRegistry:
                 f"{available}. {REMOTE_SCHEME_HINT}"
             )
 
-        if ref.kind == API_KIND:
+        if ref.kind == LIB_KIND:
             return ModuleSpec(
-                kind=API_KIND,
+                kind=LIB_KIND,
                 name=ref.raw,
-                callable=resolve_api_callable(ref.api_path or ""),
+                callable=resolve_lib_callable(ref.api_path or ""),
                 function=ref.function,
             )
 
@@ -166,9 +166,9 @@ class ModuleRegistry:
             entry = ensure_remote_module(ref, workflow_dir=workflow_dir)
             if entry.api_path is not None:
                 return ModuleSpec(
-                    kind=API_KIND,
+                    kind=LIB_KIND,
                     name=ref.raw,
-                    callable=resolve_api_callable(entry.api_path),
+                    callable=resolve_lib_callable(entry.api_path),
                     function=entry.function,
                 )
             if entry.file is None:  # defensive: non-api entries always have a file

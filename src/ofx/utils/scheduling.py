@@ -2,6 +2,7 @@
 
 from collections import deque
 
+
 def find_parallel_schedule(
     jobs: list[str], dependencies: list[tuple[str, str]]
 ) -> list[list[str]]:

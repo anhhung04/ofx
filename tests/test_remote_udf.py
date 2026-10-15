@@ -227,7 +227,7 @@ class TestBuildModuleStepPayload:
     def test_udf_extra_modules_collected_from_embedded_source(self, tmp_path):
         udf_file = tmp_path / "api_udf.py"
         udf_file.write_text(
-            "import ofx.api.opsec\n\n"
+            "import ofx.lib.opsec\n\n"
             "def run(ctx):\n"
             "    return {'used_opsec': True}\n"
         )
@@ -243,14 +243,14 @@ class TestBuildModuleStepPayload:
             obfuscate_sources=False,
         )
         assert "ofx remote UDF wrapper" in payload
-        assert "import ofx.api.opsec" in payload  # embedded UDF source
+        assert "import ofx.lib.opsec" in payload  # embedded UDF source
 
-        # The bundled zip must contain the ofx.api.opsec module files.
+        # The bundled zip must contain the ofx.lib.opsec module files.
         match = re.search(r"_b64\.b64decode\('([^']+)'\)", payload)
         assert match, "bootstrap should embed the base64 zip archive"
         with zipfile.ZipFile(BytesIO(base64.b64decode(match.group(1)))) as zf:
             members = zf.namelist()
-        assert any(name.startswith("ofx/api/opsec") for name in members)
+        assert any(name.startswith("ofx/lib/opsec") for name in members)
 
     def test_udf_obfuscated_payload_hides_wrapper(self, tmp_path):
         step = _udf_step(tmp_path)

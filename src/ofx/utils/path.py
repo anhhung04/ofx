@@ -8,6 +8,7 @@ from git import Git
 
 from ofx.settings import ALLOWED_WORKFLOW_FILE_EXTENSIONS
 
+
 @lru_cache(maxsize=128)
 def is_remote_path(path: str) -> bool:
     """Check if the given path is a remote URL (http or https).

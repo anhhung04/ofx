@@ -1,4 +1,4 @@
-"""Module wrapper for ``ofx.api.exfil.http.chunk_b64``."""
+"""Module wrapper for ``ofx.lib.exfil.http.chunk_b64``."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ args_schema: dict[str, Any] = {
 
 
 def run(ctx):
-    """Call ofx.api.exfil.http.chunk_b64 with the module's arguments."""
-    from ofx.api.exfil.http import chunk_b64 as _func
+    """Call ofx.lib.exfil.http.chunk_b64 with the module's arguments."""
+    from ofx.lib.exfil.http import chunk_b64 as _func
 
     kwargs = {}
     missing = []
@@ -26,9 +26,9 @@ def run(ctx):
             missing.append(key)
     if missing:
         received = ", ".join(sorted(ctx.args)) or "(none)"
-        from ofx.modules.api import ApiModuleError
+        from ofx.modules.libref import LibModuleError
 
-        raise ApiModuleError(
+        raise LibModuleError(
             f"Missing required argument(s): {', '.join(missing)}. "
             f"Received keys: {received}"
         )

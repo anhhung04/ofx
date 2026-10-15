@@ -1,4 +1,4 @@
-"""Module wrapper for ``ofx.api.httpserver.utils.start_server``."""
+"""Module wrapper for ``ofx.lib.httpserver.utils.start_server``."""
 
 from __future__ import annotations
 
@@ -14,8 +14,8 @@ args_schema: dict[str, Any] = {
 
 
 def run(ctx):
-    """Call ofx.api.httpserver.utils.start_server with the module's arguments."""
-    from ofx.api.httpserver.utils import start_server as _func
+    """Call ofx.lib.httpserver.utils.start_server with the module's arguments."""
+    from ofx.lib.httpserver.utils import start_server as _func
 
     kwargs = {}
     missing = []
@@ -27,9 +27,9 @@ def run(ctx):
             missing.append(key)
     if missing:
         received = ", ".join(sorted(ctx.args)) or "(none)"
-        from ofx.modules.api import ApiModuleError
+        from ofx.modules.libref import LibModuleError
 
-        raise ApiModuleError(
+        raise LibModuleError(
             f"Missing required argument(s): {', '.join(missing)}. "
             f"Received keys: {received}"
         )

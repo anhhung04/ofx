@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+
 def _make_runner(*, vars_: dict | None = None, time_guard=None, is_reused=False):
     """Build a minimal mock that quacks like WorkflowRunner."""
     runner = MagicMock()

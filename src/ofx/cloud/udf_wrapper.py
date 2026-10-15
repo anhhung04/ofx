@@ -1,4 +1,4 @@
-"""Wrapper source generation for remote UDF and ``ofx.api`` module steps.
+"""Wrapper source generation for remote UDF and ``ofx.lib`` module steps.
 
 The wrapper is a self-contained Python program that is bundled (see
 :mod:`ofx.cloud.payload`) and executed on the remote host: it rebuilds the
@@ -19,18 +19,18 @@ from ofx.cloud.module_source import (
 )
 from ofx.models.step import Step
 
-# Canonical kwargs shim embedded in the ``ofx.api`` wrapper.
+# Canonical kwargs shim embedded in the ``ofx.lib`` wrapper.
 #
-# The wrapper cannot import ``ofx.modules.api.invoke_api_callable``: module
-# bundles only ever collect ``ofx.api.*`` sources (``KNOWN_API_MODULES`` in
-# ofx/api/bundle/analyzer.py; collector.collect_modules resolves paths under
-# ``ofx/api/``), and ``ofx.modules`` transitively imports ``ofx.runner`` — far
+# The wrapper cannot import ``ofx.modules.libref.invoke_lib_callable``: module
+# bundles only ever collect ``ofx.lib.*`` sources (``KNOWN_API_MODULES`` in
+# ofx/lib/bundle/analyzer.py; collector.collect_modules resolves paths under
+# ``ofx/lib/``), and ``ofx.modules`` transitively imports ``ofx.runner`` — far
 # too much to ship to a remote host. The shim is therefore extracted from this
 # single constant (no hand-copied duplicates) and covered by a parity test
-# against ``invoke_api_callable`` (see tests/test_udf_wrapper_shim.py).
+# against ``invoke_lib_callable`` (see tests/test_udf_wrapper_shim.py).
 INVOKE_KWARGS_SHIM = '''\
 def _invoke_kwargs(_func, _args):
-    # Mirrors ofx.modules.api.invoke_api_callable: filter the step args to the
+    # Mirrors ofx.modules.libref.invoke_lib_callable: filter the step args to the
     # function signature so unrelated workflow inputs are ignored.
     _params = _inspect.signature(_func).parameters
     if any(_p.kind is _inspect.Parameter.VAR_KEYWORD for _p in _params.values()):
@@ -102,7 +102,7 @@ _API_UDF_WRAPPER_TEMPLATE = '''\
 # ofx remote UDF wrapper (generated)
 import base64 as _b64, inspect as _inspect, json as _json, os as _os, sys as _sys, traceback as _tb
 
-from ofx.api.{api_module} import {api_attr} as _func
+from ofx.lib.{api_module} import {api_attr} as _func
 
 _UDF_INPUTS = _json.loads({inputs_json!r})
 _UDF_SECRETS = _json.loads({secrets_json!r})
@@ -150,12 +150,12 @@ def build_udf_step_source(
 ) -> str:
     """Render the remote wrapper source for a ``module:`` UDF step.
 
-    UDF targets embed the module file source. ``ofx.api`` targets (a
+    UDF targets embed the module file source. ``ofx.lib`` targets (a
     ``local.builtin.<path>`` step or a remote manifest entry declared with
     ``api:``) instead import the function by path — real source text, so the
-    bundle analyzer picks up its ``ofx.api`` imports automatically — and carry
+    bundle analyzer picks up its ``ofx.lib`` imports automatically — and carry
     an inline kwargs shim mirroring
-    :func:`ofx.modules.api.invoke_api_callable`.
+    :func:`ofx.modules.libref.invoke_lib_callable`.
 
     Either way the wrapper resolves *inputs*/*secrets* (JSON-serialized with
     ``default=str``) into a minimal ``ModuleContext``, invokes the target
@@ -184,15 +184,19 @@ def build_udf_step_source(
 def _build_api_udf_step_source(
     api_path: str, *, inputs_json: str, secrets_json: str
 ) -> str:
-    """Render the remote wrapper source for an ``ofx.api``-backed step."""
+    """Render the remote wrapper source for an ``ofx.lib``-backed step."""
     # Imported lazily to avoid the ofx.modules/ofx.runner import cycle.
-    from ofx.modules.api import is_ctx_style, resolve_api_callable, resolve_api_import
+    from ofx.modules.libref import (
+        is_ctx_style,
+        resolve_api_import,
+        resolve_lib_callable,
+    )
 
     api_module, api_attr = resolve_api_import(api_path)
     return _API_UDF_WRAPPER_TEMPLATE.format(
-        api_module=api_module.removeprefix("ofx.api."),
+        api_module=api_module.removeprefix("ofx.lib."),
         api_attr=api_attr,
-        ctx_style=is_ctx_style(resolve_api_callable(api_path)),
+        ctx_style=is_ctx_style(resolve_lib_callable(api_path)),
         inputs_json=inputs_json,
         secrets_json=secrets_json,
         shim=INVOKE_KWARGS_SHIM,

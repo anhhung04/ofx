@@ -1,6 +1,5 @@
 """Redis-based registry adapter for distributed storage"""
 
-from typing import Any
 
 from ofx.runner.registry_adapter import SerializedPrefixedRegistryAdapter
 

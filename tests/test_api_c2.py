@@ -1,10 +1,10 @@
-"""Tests for the C2 payload builders in :mod:`ofx.api.c2`."""
+"""Tests for the C2 payload builders in :mod:`ofx.lib.c2`."""
 
 from __future__ import annotations
 
 import pytest
 
-from ofx.api.c2 import (
+from ofx.lib.c2 import (
     bash_reverse_shell,
     java_reverse_shell,
     perl_reverse_shell,

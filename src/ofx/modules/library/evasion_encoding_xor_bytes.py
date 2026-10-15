@@ -1,4 +1,4 @@
-"""Module wrapper for ``ofx.api.evasion.encoding.xor_bytes``."""
+"""Module wrapper for ``ofx.lib.evasion.encoding.xor_bytes``."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ args_schema: dict[str, Any] = {
 
 
 def run(ctx):
-    """Call ofx.api.evasion.encoding.xor_bytes with the module's arguments."""
-    from ofx.api.evasion.encoding import xor_bytes as _func
+    """Call ofx.lib.evasion.encoding.xor_bytes with the module's arguments."""
+    from ofx.lib.evasion.encoding import xor_bytes as _func
 
     kwargs = {}
     missing = []
@@ -26,9 +26,9 @@ def run(ctx):
             missing.append(key)
     if missing:
         received = ", ".join(sorted(ctx.args)) or "(none)"
-        from ofx.modules.api import ApiModuleError
+        from ofx.modules.libref import LibModuleError
 
-        raise ApiModuleError(
+        raise LibModuleError(
             f"Missing required argument(s): {', '.join(missing)}. "
             f"Received keys: {received}"
         )

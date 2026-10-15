@@ -1,4 +1,4 @@
-"""Module wrapper for ``ofx.api.persistence.bashrc_persistence``."""
+"""Module wrapper for ``ofx.lib.persistence.bashrc_persistence``."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ args_schema: dict[str, Any] = {
 
 
 def run(ctx):
-    """Call ofx.api.persistence.bashrc_persistence with the module's arguments."""
-    from ofx.api.persistence import bashrc_persistence as _func
+    """Call ofx.lib.persistence.bashrc_persistence with the module's arguments."""
+    from ofx.lib.persistence import bashrc_persistence as _func
 
     kwargs = {}
     missing = []
@@ -26,9 +26,9 @@ def run(ctx):
             missing.append(key)
     if missing:
         received = ", ".join(sorted(ctx.args)) or "(none)"
-        from ofx.modules.api import ApiModuleError
+        from ofx.modules.libref import LibModuleError
 
-        raise ApiModuleError(
+        raise LibModuleError(
             f"Missing required argument(s): {', '.join(missing)}. "
             f"Received keys: {received}"
         )

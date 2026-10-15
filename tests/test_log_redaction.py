@@ -8,6 +8,7 @@ import pytest
 
 from ofx.utils.log import SecretRedactFilter, register_secrets, register_sensitive_env
 
+
 @pytest.fixture(autouse=True)
 def _clean_redact_filter():
     """Reset the singleton between tests."""

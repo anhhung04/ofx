@@ -1,4 +1,4 @@
-"""Module wrapper for ``ofx.api.httpserver.exfil.build_exfil_handler``."""
+"""Module wrapper for ``ofx.lib.httpserver.exfil.build_exfil_handler``."""
 
 from __future__ import annotations
 
@@ -12,8 +12,8 @@ args_schema: dict[str, Any] = {
 
 
 def run(ctx):
-    """Call ofx.api.httpserver.exfil.build_exfil_handler with the module's arguments."""
-    from ofx.api.httpserver.exfil import build_exfil_handler as _func
+    """Call ofx.lib.httpserver.exfil.build_exfil_handler with the module's arguments."""
+    from ofx.lib.httpserver.exfil import build_exfil_handler as _func
 
     kwargs = {}
     missing = []
@@ -25,9 +25,9 @@ def run(ctx):
             missing.append(key)
     if missing:
         received = ", ".join(sorted(ctx.args)) or "(none)"
-        from ofx.modules.api import ApiModuleError
+        from ofx.modules.libref import LibModuleError
 
-        raise ApiModuleError(
+        raise LibModuleError(
             f"Missing required argument(s): {', '.join(missing)}. "
             f"Received keys: {received}"
         )

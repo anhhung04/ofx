@@ -170,7 +170,7 @@ def list_modules(
         table.add_row("tool", name, "built-in")
 
     for name in ModuleRegistry().library_names:
-        table.add_row("library", name, "ofx.api")
+        table.add_row("library", name, "ofx.lib")
 
     for label, target in _iter_cached_clones():
         name = label.replace("/", ".")
@@ -248,7 +248,7 @@ def info(
         raise typer.BadParameter(str(exc)) from exc
     console.print(f"[bold]Module:[/bold] {ref.raw}")
     if entry.api_path:
-        console.print(f"[bold]API function:[/bold] ofx.api.{entry.api_path}")
+        console.print(f"[bold]Lib function:[/bold] ofx.lib.{entry.api_path}")
     else:
         console.print(f"[bold]File:[/bold] {entry.file}")
         console.print(f"[bold]Function:[/bold] {entry.function}")

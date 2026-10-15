@@ -1,4 +1,4 @@
-"""Module wrapper for ``ofx.api.utils.str_to_dict``."""
+"""Module wrapper for ``ofx.lib.utils.str_to_dict``."""
 
 from __future__ import annotations
 
@@ -12,8 +12,8 @@ args_schema: dict[str, Any] = {
 
 
 def run(ctx):
-    """Call ofx.api.utils.str_to_dict with the module's arguments."""
-    from ofx.api.utils import str_to_dict as _func
+    """Call ofx.lib.utils.str_to_dict with the module's arguments."""
+    from ofx.lib.utils import str_to_dict as _func
 
     kwargs = {}
     missing = []
@@ -25,9 +25,9 @@ def run(ctx):
             missing.append(key)
     if missing:
         received = ", ".join(sorted(ctx.args)) or "(none)"
-        from ofx.modules.api import ApiModuleError
+        from ofx.modules.libref import LibModuleError
 
-        raise ApiModuleError(
+        raise LibModuleError(
             f"Missing required argument(s): {', '.join(missing)}. "
             f"Received keys: {received}"
         )

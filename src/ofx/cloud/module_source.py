@@ -1,7 +1,7 @@
 """Source resolution for remote module steps.
 
 Resolves a step's ``module:`` reference to the Python source (or to the
-``ofx.api`` dotted path) that has to be bundled for remote execution.
+``ofx.lib`` dotted path) that has to be bundled for remote execution.
 """
 
 from __future__ import annotations
@@ -57,18 +57,18 @@ def resolve_python_step_source(
 def resolve_api_step_target(
     step: Step, *, workflow_dir: Path | None = None
 ) -> str | None:
-    """Return the ``ofx.api`` dotted path for an api-backed step, else None.
+    """Return the ``ofx.lib`` dotted path for an api-backed step, else None.
 
     Covers dotted ``local.builtin.<path>.<func>`` specs that do not name a
     registered builtin, and remote manifest entries declared with an ``api:``
     key (which may ship no ``.py`` files at all).
     """
-    from ofx.modules.refs import API_KIND, BUILTIN_KIND, REMOTE_KIND, parse_module_ref
+    from ofx.modules.refs import BUILTIN_KIND, LIB_KIND, REMOTE_KIND, parse_module_ref
     from ofx.modules.remote import ensure_remote_module
 
     module = getattr(step, "module", None) or ""
     ref = parse_module_ref(module_base_name(module))
-    if ref.kind == API_KIND:
+    if ref.kind == LIB_KIND:
         return ref.api_path
     if ref.kind == BUILTIN_KIND:
         name = ref.name or ""
@@ -78,7 +78,7 @@ def resolve_api_step_target(
 
         if name in {m.name for m in BUILTIN_MODULES}:
             return None
-        return name  # unregistered dotted builtin spec == ofx.api path
+        return name  # unregistered dotted builtin spec == ofx.lib path
     if ref.kind == REMOTE_KIND:
         entry = ensure_remote_module(ref, workflow_dir=workflow_dir)
         return entry.api_path
@@ -96,7 +96,7 @@ def resolve_udf_target(
     the local module cache on first use.
 
     Raises:
-        ValueError: If the step is an ``ofx.api`` module (``local.builtin.<path>.<func>`` or a
+        ValueError: If the step is an ``ofx.lib`` module (``local.builtin.<path>.<func>`` or a
             remote ``api:`` manifest entry), which has no UDF file.
     """
     # Imported lazily: ofx.modules.udf transitively pulls in ofx.runner,
@@ -124,7 +124,7 @@ def resolve_udf_target(
         if entry.api_path is not None:
             raise ValueError(
                 f"Step '{step.name}' resolves to an 'api:' module "
-                f"('ofx.api.{entry.api_path}') and has no UDF file "
+                f"('ofx.lib.{entry.api_path}') and has no UDF file "
                 f"(spec {module!r})"
             )
         if entry.file is None:  # defensive: non-api entries always have a file

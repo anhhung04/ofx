@@ -361,4 +361,4 @@ jobs:
 - [**Workflows**](../guide/workflows.md) — Complete workflow reference
 - [**Jobs & Steps**](../guide/jobs-steps.md) — Detailed configuration
 - [**Templates**](../guide/templates.md) — Jinja2 templating & helpers
-- [**API Overview**](../api/overview.md) — Python API
+- [**API Overview**](../lib/overview.md) — Python API

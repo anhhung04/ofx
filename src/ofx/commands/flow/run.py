@@ -1,5 +1,5 @@
-import fcntl
 import difflib
+import fcntl
 import json
 import logging
 import os
@@ -12,7 +12,6 @@ import typer
 
 from ofx.commands.ui_helpers import inputs_table
 from ofx.models.config import DurableRunConfig
-from ofx.utils.file_cleanup import remove_file
 from ofx.runner import run_workflow
 from ofx.settings import (
     TEMP_DIR,
@@ -20,6 +19,7 @@ from ofx.settings import (
     get_workflow_search_dirs,
     settings,
 )
+from ofx.utils.file_cleanup import remove_file
 
 logger = logging.getLogger(f"{settings.app_branding}.console")
 

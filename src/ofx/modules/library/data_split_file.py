@@ -1,11 +1,11 @@
-"""Module wrapper for ``ofx.api.data.split_file``."""
+"""Module wrapper for ``ofx.lib.data.split_file``."""
 
 from __future__ import annotations
 
 from typing import Any
 
 name = "data.split_file"
-description = "ofx.api data.split_file"
+description = "ofx.lib data.split_file"
 args_schema: dict[str, Any] = {
         "path": {"type": "string", "required": True},
         "chunk_mb": {"type": "string", "required": True},
@@ -14,8 +14,8 @@ args_schema: dict[str, Any] = {
 
 
 def run(ctx):
-    """Call ofx.api.data.split_file with the module's arguments."""
-    from ofx.api.data import split_file as _func
+    """Call ofx.lib.data.split_file with the module's arguments."""
+    from ofx.lib.data import split_file as _func
 
     kwargs = {}
     missing = []
@@ -27,9 +27,9 @@ def run(ctx):
             missing.append(key)
     if missing:
         received = ", ".join(sorted(ctx.args)) or "(none)"
-        from ofx.modules.api import ApiModuleError
+        from ofx.modules.libref import LibModuleError
 
-        raise ApiModuleError(
+        raise LibModuleError(
             f"Missing required argument(s): {', '.join(missing)}. "
             f"Received keys: {received}"
         )

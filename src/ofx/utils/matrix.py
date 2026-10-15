@@ -1,6 +1,7 @@
 """Matrix utilities for OFX framework."""
 
-from ofx.models.job import Job, MatrixStrategy
+from ofx.models.job import Job
+
 
 def expand_jobs(jobs: dict[str, Job]) -> dict[str, Job]:
     """Process jobs, keeping matrix jobs as single units for MatrixJobRunner to handle."""

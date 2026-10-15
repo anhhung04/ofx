@@ -1,7 +1,6 @@
 """Tests for shared runner utilities: matrix_utils, credential_store, step_output."""
 
 from types import SimpleNamespace
-from unittest.mock import patch
 
 import pytest
 

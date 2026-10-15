@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+
 @dataclass(frozen=True)
 class ModelContext:
     """Structured metadata extracted from a runner model."""

@@ -1,4 +1,4 @@
-"""Module wrapper for ``ofx.api.recon.targets.split_targets``."""
+"""Module wrapper for ``ofx.lib.recon.targets.split_targets``."""
 
 from __future__ import annotations
 
@@ -12,8 +12,8 @@ args_schema: dict[str, Any] = {
 
 
 def run(ctx):
-    """Call ofx.api.recon.targets.split_targets with the module's arguments."""
-    from ofx.api.recon.targets import split_targets as _func
+    """Call ofx.lib.recon.targets.split_targets with the module's arguments."""
+    from ofx.lib.recon.targets import split_targets as _func
 
     kwargs = {}
     missing = []
@@ -25,9 +25,9 @@ def run(ctx):
             missing.append(key)
     if missing:
         received = ", ".join(sorted(ctx.args)) or "(none)"
-        from ofx.modules.api import ApiModuleError
+        from ofx.modules.libref import LibModuleError
 
-        raise ApiModuleError(
+        raise LibModuleError(
             f"Missing required argument(s): {', '.join(missing)}. "
             f"Received keys: {received}"
         )

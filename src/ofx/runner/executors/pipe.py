@@ -10,9 +10,9 @@ import logging
 from contextlib import suppress
 from typing import Any
 
-from ofx.runner.registry_keys import RunnerRegistryKeys
 from ofx.models.pipe import PipeConfig
 from ofx.runner.executors.base import Executor
+from ofx.runner.registry_keys import RunnerRegistryKeys
 from ofx.utils.file_cleanup import remove_file
 
 logger = logging.getLogger("ofx.pipe")

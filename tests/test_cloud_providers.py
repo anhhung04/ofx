@@ -12,6 +12,7 @@ import pytest
 
 from ofx.models.cloud import CloudConfig
 
+
 def _make_aws_provider():
     """Create an AWSProvider with mocked boto3 session."""
     mock_session = MagicMock()

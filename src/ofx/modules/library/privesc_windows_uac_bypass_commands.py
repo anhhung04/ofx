@@ -1,4 +1,4 @@
-"""Module wrapper for ``ofx.api.privesc.windows.uac_bypass_commands``."""
+"""Module wrapper for ``ofx.lib.privesc.windows.uac_bypass_commands``."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ args_schema: dict[str, Any] = {
 
 
 def run(ctx):
-    """Call ofx.api.privesc.windows.uac_bypass_commands with the module's arguments."""
-    from ofx.api.privesc.windows import uac_bypass_commands as _func
+    """Call ofx.lib.privesc.windows.uac_bypass_commands with the module's arguments."""
+    from ofx.lib.privesc.windows import uac_bypass_commands as _func
 
     kwargs = {}
     missing = []
@@ -26,9 +26,9 @@ def run(ctx):
             missing.append(key)
     if missing:
         received = ", ".join(sorted(ctx.args)) or "(none)"
-        from ofx.modules.api import ApiModuleError
+        from ofx.modules.libref import LibModuleError
 
-        raise ApiModuleError(
+        raise LibModuleError(
             f"Missing required argument(s): {', '.join(missing)}. "
             f"Received keys: {received}"
         )

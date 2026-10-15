@@ -5,8 +5,8 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from ofx.utils.file_cleanup import remove_file
 from ofx.settings import BASE_DATA_DIR, ensure_dir, settings
+from ofx.utils.file_cleanup import remove_file
 
 logger = logging.getLogger(f"{settings.app_branding}.history")
 

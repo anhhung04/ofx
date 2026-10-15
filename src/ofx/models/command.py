@@ -7,6 +7,7 @@ from pydantic import Field
 from ofx.models.base import OFXBaseModel
 from ofx.settings import DEFAULT_SHELL
 
+
 class Command(OFXBaseModel):
     """Model for shell command execution."""
 

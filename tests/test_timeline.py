@@ -6,7 +6,12 @@ import json
 from pathlib import Path
 
 import ofx.runner.timeline as tmod
-from ofx.runner.timeline import _format_duration, _resolve_command_log_path, detect_target, log_step
+from ofx.runner.timeline import (
+    _format_duration,
+    _resolve_command_log_path,
+    detect_target,
+    log_step,
+)
 
 
 def test_detect_target_flag_h():

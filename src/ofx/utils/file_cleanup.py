@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import shutil
+from collections.abc import Callable, Sequence
 from contextlib import suppress
 from pathlib import Path
-from typing import Callable, Sequence
+
 
 def _clear_sequence(values: list[Path] | list[str] | None) -> None:
     if values is not None:

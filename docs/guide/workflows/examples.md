@@ -230,7 +230,7 @@ jobs:
         module: python
         with:
           script: |
-            from ofx.api.search import FofaClient
+            from ofx.lib.search import FofaClient
             import os
 
             fofa = FofaClient(
@@ -255,7 +255,7 @@ jobs:
         module: python
         with:
           script: |
-            from ofx.api.exploitation.exploit.utils import check_port
+            from ofx.lib.exploitation.exploit.utils import check_port
             import os
 
             subdomains = "{{ jobs.discover_subdomains.outputs.subdomains }}".split(',')
@@ -279,8 +279,8 @@ jobs:
         module: python
         with:
           script: |
-            from ofx.api.http import fetch
-            from ofx.api.file import write_file
+            from ofx.lib.http import fetch
+            from ofx.lib.file import write_file
             import re
 
             live_hosts = "{{ jobs.check_web_ports.outputs.live_hosts }}".split(',')

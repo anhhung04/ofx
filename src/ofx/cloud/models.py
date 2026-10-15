@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 
+
 @dataclass
 class CloudInstanceInfo:
     """Runtime information about a cloud VPS instance."""

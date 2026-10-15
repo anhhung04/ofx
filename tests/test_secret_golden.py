@@ -9,6 +9,7 @@ import pytest
 from ofx.runner.templates.resolver import TemplateResolver
 from ofx.utils.log import SecretRedactFilter
 
+
 @pytest.fixture(autouse=True)
 def _clean_redact_filter():
     """Reset the singleton between tests."""

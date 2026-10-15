@@ -17,6 +17,7 @@ from ofx.runner.pipe import (
     _safe_eval,
 )
 
+
 class TestPipeConfig:
     def test_minimal(self):
         cfg = PipeConfig(input="{{ steps.0.outputs.data }}")

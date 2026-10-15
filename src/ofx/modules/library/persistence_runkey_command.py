@@ -1,11 +1,11 @@
-"""Module wrapper for ``ofx.api.persistence.runkey_command``."""
+"""Module wrapper for ``ofx.lib.persistence.runkey_command``."""
 
 from __future__ import annotations
 
 from typing import Any
 
 name = "persistence.runkey_command"
-description = "ofx.api persistence.runkey_command"
+description = "ofx.lib persistence.runkey_command"
 args_schema: dict[str, Any] = {
         "name": {"type": "string", "required": True},
         "value": {"type": "string", "required": True},
@@ -14,8 +14,8 @@ args_schema: dict[str, Any] = {
 
 
 def run(ctx):
-    """Call ofx.api.persistence.runkey_command with the module's arguments."""
-    from ofx.api.persistence import runkey_command as _func
+    """Call ofx.lib.persistence.runkey_command with the module's arguments."""
+    from ofx.lib.persistence import runkey_command as _func
 
     kwargs = {}
     missing = []
@@ -27,9 +27,9 @@ def run(ctx):
             missing.append(key)
     if missing:
         received = ", ".join(sorted(ctx.args)) or "(none)"
-        from ofx.modules.api import ApiModuleError
+        from ofx.modules.libref import LibModuleError
 
-        raise ApiModuleError(
+        raise LibModuleError(
             f"Missing required argument(s): {', '.join(missing)}. "
             f"Received keys: {received}"
         )

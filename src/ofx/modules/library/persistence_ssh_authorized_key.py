@@ -1,4 +1,4 @@
-"""Module wrapper for ``ofx.api.persistence.ssh_authorized_key``."""
+"""Module wrapper for ``ofx.lib.persistence.ssh_authorized_key``."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ args_schema: dict[str, Any] = {
 
 
 def run(ctx):
-    """Call ofx.api.persistence.ssh_authorized_key with the module's arguments."""
-    from ofx.api.persistence import ssh_authorized_key as _func
+    """Call ofx.lib.persistence.ssh_authorized_key with the module's arguments."""
+    from ofx.lib.persistence import ssh_authorized_key as _func
 
     kwargs = {}
     missing = []
@@ -26,9 +26,9 @@ def run(ctx):
             missing.append(key)
     if missing:
         received = ", ".join(sorted(ctx.args)) or "(none)"
-        from ofx.modules.api import ApiModuleError
+        from ofx.modules.libref import LibModuleError
 
-        raise ApiModuleError(
+        raise LibModuleError(
             f"Missing required argument(s): {', '.join(missing)}. "
             f"Received keys: {received}"
         )

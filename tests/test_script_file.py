@@ -7,6 +7,7 @@ import pytest
 from ofx.runner import RunContext, RunnerStatus, WorkflowRunner
 from ofx.utils.workflow_utils import find_workflow
 
+
 @pytest.mark.asyncio
 async def test_script_file_relative_and_absolute(caplog):
     with caplog.at_level("INFO"):

@@ -13,6 +13,7 @@ import typer
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
 from ofx.utils.file_cleanup import remove_file
 
 logger = logging.getLogger("ofx")

@@ -11,6 +11,7 @@ from ofx.utils.workflow_utils import (
     workflow_dirs_with_path,
 )
 
+
 class _ReusableWorkflowParentStub:
     """Minimal parent surface for reused workflow runner tests."""
 

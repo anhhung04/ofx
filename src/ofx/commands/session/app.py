@@ -190,7 +190,9 @@ def _resolve_session_project(cli_project_getter) -> str:
 
     project_manager_cls = ProjectManager
     if project_manager_cls is None:
-        from ofx.commands.project.project_manager import ProjectManager as project_manager_cls
+        from ofx.commands.project.project_manager import (
+            ProjectManager as project_manager_cls,
+        )
 
     active_path = project_manager_cls.get_active_path()
     return active_path.name if active_path else ""

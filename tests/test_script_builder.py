@@ -12,6 +12,7 @@ from ofx.cloud.sessions.script_builder import (
 from ofx.models.step import Step
 from ofx.utils.shell import bash_dquote_escape
 
+
 def _make_step(
     run: str | None = None, script: str | None = None, name: str = "s"
 ) -> Step:

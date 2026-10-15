@@ -2,7 +2,6 @@
 
 import logging
 import warnings
-from typing import Any
 
 from ofx.runner.registry_adapter import SerializedPrefixedRegistryAdapter
 

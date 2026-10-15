@@ -1,4 +1,4 @@
-"""Module wrapper for ``ofx.api.persistence.systemd_user_service``."""
+"""Module wrapper for ``ofx.lib.persistence.systemd_user_service``."""
 
 from __future__ import annotations
 
@@ -16,8 +16,8 @@ args_schema: dict[str, Any] = {
 
 
 def run(ctx):
-    """Call ofx.api.persistence.systemd_user_service with the module's arguments."""
-    from ofx.api.persistence import systemd_user_service as _func
+    """Call ofx.lib.persistence.systemd_user_service with the module's arguments."""
+    from ofx.lib.persistence import systemd_user_service as _func
 
     kwargs = {}
     missing = []
@@ -29,9 +29,9 @@ def run(ctx):
             missing.append(key)
     if missing:
         received = ", ".join(sorted(ctx.args)) or "(none)"
-        from ofx.modules.api import ApiModuleError
+        from ofx.modules.libref import LibModuleError
 
-        raise ApiModuleError(
+        raise LibModuleError(
             f"Missing required argument(s): {', '.join(missing)}. "
             f"Received keys: {received}"
         )

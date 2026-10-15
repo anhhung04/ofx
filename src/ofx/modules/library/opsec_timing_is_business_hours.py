@@ -1,4 +1,4 @@
-"""Module wrapper for ``ofx.api.opsec.timing.is_business_hours``."""
+"""Module wrapper for ``ofx.lib.opsec.timing.is_business_hours``."""
 
 from __future__ import annotations
 
@@ -15,8 +15,8 @@ args_schema: dict[str, Any] = {
 
 
 def run(ctx):
-    """Call ofx.api.opsec.timing.is_business_hours with the module's arguments."""
-    from ofx.api.opsec.timing import is_business_hours as _func
+    """Call ofx.lib.opsec.timing.is_business_hours with the module's arguments."""
+    from ofx.lib.opsec.timing import is_business_hours as _func
 
     kwargs = {}
     missing = []
@@ -28,9 +28,9 @@ def run(ctx):
             missing.append(key)
     if missing:
         received = ", ".join(sorted(ctx.args)) or "(none)"
-        from ofx.modules.api import ApiModuleError
+        from ofx.modules.libref import LibModuleError
 
-        raise ApiModuleError(
+        raise LibModuleError(
             f"Missing required argument(s): {', '.join(missing)}. "
             f"Received keys: {received}"
         )

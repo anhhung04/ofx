@@ -6,9 +6,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from ofx.models.step import RunType
 from ofx.runner import RunContext
 from ofx.runner.executors.step import _create_step_child_runner as _create
-from ofx.models.step import RunType
 
 
 def test_create_workflow_runner_uses_parent_dirs_for_search_and_child_context() -> None:

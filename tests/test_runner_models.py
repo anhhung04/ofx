@@ -8,7 +8,6 @@ from pydantic import BaseModel
 
 from ofx.models.step import RunType
 from ofx.runner.context import RunContext, RunnerStatus, RunResult
-from ofx.runner.metadata import ModelContext
 from ofx.runner.runner import Runner
 
 

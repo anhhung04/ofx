@@ -17,6 +17,7 @@ from ofx.runner.executors.matrix import MatrixExecutor
 from ofx.runner.logging import bubble_context_log
 from ofx.runner.runner import Runner
 
+
 def build_indexed_job_context(
     runner,
     *,

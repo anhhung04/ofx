@@ -1,4 +1,4 @@
-"""Module wrapper for ``ofx.api.bundle.deliverer.deliver_and_run``."""
+"""Module wrapper for ``ofx.lib.bundle.deliverer.deliver_and_run``."""
 
 from __future__ import annotations
 
@@ -21,8 +21,8 @@ args_schema: dict[str, Any] = {
 
 
 def run(ctx):
-    """Call ofx.api.bundle.deliverer.deliver_and_run with the module's arguments."""
-    from ofx.api.bundle.deliverer import deliver_and_run as _func
+    """Call ofx.lib.bundle.deliverer.deliver_and_run with the module's arguments."""
+    from ofx.lib.bundle.deliverer import deliver_and_run as _func
 
     kwargs = {}
     missing = []
@@ -34,9 +34,9 @@ def run(ctx):
             missing.append(key)
     if missing:
         received = ", ".join(sorted(ctx.args)) or "(none)"
-        from ofx.modules.api import ApiModuleError
+        from ofx.modules.libref import LibModuleError
 
-        raise ApiModuleError(
+        raise LibModuleError(
             f"Missing required argument(s): {', '.join(missing)}. "
             f"Received keys: {received}"
         )

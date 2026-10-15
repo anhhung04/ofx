@@ -9,6 +9,7 @@ from ofx.models.step import Step
 from ofx.models.strategy import MatrixStrategy
 from ofx.models.workflow import Workflow
 
+
 class TestMatrixStrategyValidation:
     """Matrix key identifiers and field constraints."""
 

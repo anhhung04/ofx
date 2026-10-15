@@ -708,7 +708,7 @@ class TestBuiltinHelperSync:
     """Builtin inline helpers must match the canonical _common.py logic.
 
     Builtins are self-contained for remote streaming (the bundler only packs
-    ofx.api modules), so each inlines its own _arg/_text_arg/_run_dir. This
+    ofx.lib modules), so each inlines its own _arg/_text_arg/_run_dir. This
     test catches drift: if _common.py changes, the inline copies must too.
     """
 
@@ -760,7 +760,7 @@ class TestBuiltinHelperSync:
 
 
 class TestLibraryModules:
-    """Auto-generated library wrappers for ofx.api functions."""
+    """Auto-generated library wrappers for ofx.lib functions."""
 
     def test_library_registered(self):
         registry = ModuleRegistry()
@@ -770,14 +770,14 @@ class TestLibraryModules:
     def test_library_resolves_via_prefix(self):
         registry = ModuleRegistry()
         spec = registry.resolve("local.builtin.recon.targets.split_targets")
-        assert spec.kind == "api"
+        assert spec.kind == "lib"
         assert "values" in spec.args_schema
         assert spec.args_schema["values"].get("required") is True
 
     def test_library_resolves_c2(self):
         registry = ModuleRegistry()
         spec = registry.resolve("local.builtin.c2.bash_reverse_shell")
-        assert spec.kind == "api"
+        assert spec.kind == "lib"
         assert "lhost" in spec.args_schema
         assert "lport" in spec.args_schema
 

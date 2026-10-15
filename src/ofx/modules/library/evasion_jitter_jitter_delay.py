@@ -1,4 +1,4 @@
-"""Module wrapper for ``ofx.api.evasion.jitter.jitter_delay``."""
+"""Module wrapper for ``ofx.lib.evasion.jitter.jitter_delay``."""
 
 from __future__ import annotations
 
@@ -14,8 +14,8 @@ args_schema: dict[str, Any] = {
 
 
 def run(ctx):
-    """Call ofx.api.evasion.jitter.jitter_delay with the module's arguments."""
-    from ofx.api.evasion.jitter import jitter_delay as _func
+    """Call ofx.lib.evasion.jitter.jitter_delay with the module's arguments."""
+    from ofx.lib.evasion.jitter import jitter_delay as _func
 
     kwargs = {}
     missing = []
@@ -27,9 +27,9 @@ def run(ctx):
             missing.append(key)
     if missing:
         received = ", ".join(sorted(ctx.args)) or "(none)"
-        from ofx.modules.api import ApiModuleError
+        from ofx.modules.libref import LibModuleError
 
-        raise ApiModuleError(
+        raise LibModuleError(
             f"Missing required argument(s): {', '.join(missing)}. "
             f"Received keys: {received}"
         )

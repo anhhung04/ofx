@@ -87,7 +87,7 @@ jobs:
 | Type | Use when |
 |------|----------|
 | `module: shell` + `with: {cmd: ...}` | Shell commands, tool invocations |
-| `module: python` + `with: {script: ...}` | Inline Python with ofx.api imports (auto-bundled for cloud) |
+| `module: python` + `with: {script: ...}` | Inline Python with ofx.lib imports (auto-bundled for cloud) |
 | `module: <file.py>::<func>` | User-defined function with structured output parsing |
 | `uses: workflow-name` | Reuse another workflow |
 | `pipe: ...` | Declarative ETL data transformation |
@@ -132,7 +132,7 @@ steps:
     module: python
     with:
       script: |
-        # ofx.api.* imports are auto-bundled for cloud runs
+        # ofx.lib.* imports are auto-bundled for cloud runs
         add_outputs(hosts=[])
 ```
 
@@ -371,7 +371,7 @@ steps:
 **Return types matter**: `str` functions → inline in a `module: shell` cmd via Jinja2; `list[str]` functions → iterate in a `module: python` script.
 
 ```python
-from ofx.api.c2 import (
+from ofx.lib.c2 import (
     bash_reverse_shell, powershell_reverse_shell, python_reverse_shell,
     perl_reverse_shell, ruby_reverse_shell, php_reverse_shell,
     socat_reverse_shell, java_reverse_shell,
@@ -383,7 +383,7 @@ meterpreter_command(lhost, lport, *, payload="linux/x64/meterpreter/reverse_tcp"
 ```
 
 ```python
-from ofx.api.persistence import (
+from ofx.lib.persistence import (
     crontab_command, systemd_user_service, bashrc_persistence,
     ssh_authorized_key, motd_persistence,
     schtask_command, service_command, runkey_command,
@@ -394,34 +394,34 @@ for cmd in crontab_command("/tmp/.bd", schedule="@reboot"):
 ```
 
 ```python
-from ofx.api.ad.enum import (
+from ofx.lib.ad.enum import (
     bloodhound_collection_command, ldap_query_command,
     powerview_command, enumerate_dc_command, enumerate_shares_command,
 )
-from ofx.api.ad.kerberos import (
+from ofx.lib.ad.kerberos import (
     kerberoast_command, asreproast_command,
     pass_the_ticket_command, golden_ticket_command,
 )
-from ofx.api.ad.execution import (
+from ofx.lib.ad.execution import (
     pass_the_hash_command, smb_exec_command,
     secretsdump_command, dcsync_command, spray_command,
 )
 ```
 
 ```python
-from ofx.api.privesc.linux import (
+from ofx.lib.privesc.linux import (
     suid_commands, capabilities_command, sudo_check_command,
     docker_escape_commands, writable_systemd_command,
 )
 
-from ofx.api.privesc.windows import (
+from ofx.lib.privesc.windows import (
     uac_bypass_commands, token_privileges_commands,
     alwaysinstallelevated_commands, printspoofer_command,
 )
 ```
 
 ```python
-from ofx.api.evasion.bypass import (
+from ofx.lib.evasion.bypass import (
     amsi_bypass, etw_bypass, defender_exclusion_command,
     disable_defender_realtime, scriptblock_logging_disable,
 )
@@ -430,21 +430,21 @@ scriptblock_logging_disable() -> list[str]
 ```
 
 ```python
-from ofx.api.opsec.cleanup import (
+from ofx.lib.opsec.cleanup import (
     clean_history_commands, clean_linux_logs, clean_windows_artifacts,
     timestomp_command, secure_delete_command,
 )
 
-from ofx.api.opsec.proxy import build_proxychains_conf, http_proxy_env
+from ofx.lib.opsec.proxy import build_proxychains_conf, http_proxy_env
 ```
 
 ```python
-from ofx.api.exfil.dns import dns_exfil_commands
-from ofx.api.exfil.http import chunk_b64, icmp_exfil_command
+from ofx.lib.exfil.dns import dns_exfil_commands
+from ofx.lib.exfil.http import chunk_b64, icmp_exfil_command
 ```
 
 ```python
-from ofx.api.oob import Interactsh
+from ofx.lib.oob import Interactsh
 client = Interactsh()
 client.register()
 url, flag = client.build_request(length=10, method="http")
@@ -452,7 +452,7 @@ verified, interactions = client.verify(flag, get_result=True)
 ```
 
 ```python
-from ofx.api.creds import ExegolHistoryDB
+from ofx.lib.creds import ExegolHistoryDB
 db = ExegolHistoryDB()
 db.add_credential(username="svc_sql", password="Summer2024!", domain="corp.local")
 db.add_host(ip="10.0.0.1", hostname="dc01", role="Domain Controller")
@@ -464,12 +464,12 @@ Precedence: step > defaults > global `auto_store_creds` setting.
 Tasks producing UserAccount: hydra, netexec, kerbrute, h8mail, enum4linux, brutespray, brutus, holehe, maigret, theharvester.
 
 ```python
-from ofx.api.lateral import copy_and_exec, exec_command
+from ofx.lib.lateral import copy_and_exec, exec_command
 exec_command(target, command, *, method="ssh") -> str
 ```
 
 ```python
-from ofx.api.post.runners.ssh import PostSSH
+from ofx.lib.post.runners.ssh import PostSSH
 runner = PostSSH(host="10.0.0.1", user="root", key="~/.ssh/id_ed25519")
 result = await runner.run("id && whoami")
 await runner.upload("/local/file", "/remote/path")
@@ -485,14 +485,14 @@ await runner.upload("/local/file", "/remote/path")
 | Cloud recon | `cloud:` + `auto_destroy: true`, `opsec_mode: true` |
 | Multi-tool comparison | `strategy.matrix` with tool list |
 | Distributed targets | `strategy.fleet` + `$FLEET_INPUT_FILE` |
-| AD attacks | `module: shell` netexec/kerbrute + `module: python` with `ofx.api.ad.*` |
-| Password spraying | `module: shell` hydra or `module: python` with `ofx.api.ad.execution.spray_command` |
-| Webshell ops | `module: python` with `ofx.api.exploitation.webshell` |
-| Persistence | `module: python` iterating `list[str]` from `ofx.api.persistence.*` |
-| Proxychains pivot | `module: shell` SSH `-D 1080`, `ofx.api.opsec.proxy` |
-| AMSI/ETW bypass | `module: python` with `ofx.api.evasion.bypass.*` |
-| DNS/HTTP exfil | `module: python` with `ofx.api.exfil.dns/http.*` |
-| Cred storage | `module: python` with `ofx.api.creds.ExegolHistoryDB` |
+| AD attacks | `module: shell` netexec/kerbrute + `module: python` with `ofx.lib.ad.*` |
+| Password spraying | `module: shell` hydra or `module: python` with `ofx.lib.ad.execution.spray_command` |
+| Webshell ops | `module: python` with `ofx.lib.exploitation.webshell` |
+| Persistence | `module: python` iterating `list[str]` from `ofx.lib.persistence.*` |
+| Proxychains pivot | `module: shell` SSH `-D 1080`, `ofx.lib.opsec.proxy` |
+| AMSI/ETW bypass | `module: python` with `ofx.lib.evasion.bypass.*` |
+| DNS/HTTP exfil | `module: python` with `ofx.lib.exfil.dns/http.*` |
+| Cred storage | `module: python` with `ofx.lib.creds.ExegolHistoryDB` |
 | Resumable long ops | `defaults.durable.enabled: true` |
 | Rate-limited ops | `defaults.profile: stealth` with profile settings |
 | Reuse workflow | `uses: subdomain-recon` with `with:` inputs |
@@ -506,7 +506,7 @@ await runner.upload("/local/file", "/remote/path")
 5. Step fields: `continue_on_error`, `retry_delay`, `working_directory` (underscores)
 6. Cast template values to int with `| int` when API functions need integers
 7. Iterate `list[str]` API returns; never print them directly
-8. Prefer the `shell` module with a direct tool invocation; use `python` when you need ofx.api helpers or structured parsing
+8. Prefer the `shell` module with a direct tool invocation; use `python` when you need ofx.lib helpers or structured parsing
 9. Use `with:` to pass module args (`cmd` for shell, `script`/`script_file` for python, custom keys for UDFs)
 10. If user intent is ambiguous, choose conservative defaults and encode assumptions in `description:`
 """
@@ -674,7 +674,7 @@ You are a reconnaissance specialist. When analyzing output:
 You are an exploitation specialist. When analyzing output:
 - Map discovered services/versions to known exploits (CVEs, Metasploit modules)
 - Identify misconfigurations (open shares, default creds, exposed admin panels)
-- Recommend specific exploitation techniques with ofx.api examples
+- Recommend specific exploitation techniques with ofx.lib examples
 - Suggest steps running these tools: nuclei (with severity filter), dalfox (XSS), sqlmap (SQLi), commix (command injection)
 - Reference built-in workflows: url-vuln, sqli-scan, command-injection, nikto-scan
 - Suggest OFX workflow steps using: c2, exploitation, evasion, payloads modules
@@ -690,7 +690,7 @@ raw output. When analyzing output:
 - Surface patterns across multiple results (e.g. common passwords, naming conventions)
 - Suggest steps running these tools: gitleaks, trufflehog (secret scanning), h8mail (breach data)
 - Reference built-in workflows: url-secrets-hunt, code-scan
-- Suggest ofx.api creds / loot / search module usage for follow-up
+- Suggest ofx.lib creds / loot / search module usage for follow-up
 - Recommend using name-that-hash or hashid to identify hash types
 - Present findings as a structured table where possible
 """,
@@ -763,7 +763,7 @@ You are an OPSEC analyst reviewing red team activity for detection risk. When an
 - Flag noisy commands (mass scanning, loud bruteforce, plaintext credentials)
 - Identify artifacts left on targets (files, log entries, new accounts)
 - Assess detection probability for each technique used
-- Recommend quieter alternatives using ofx.api opsec/evasion modules
+- Recommend quieter alternatives using ofx.lib opsec/evasion modules
 - Suggest cleanup steps using the `opsec.cleanup` module
 - Recommend using execution profiles with rate_limit, delay, jitter, and proxy settings
 - Suggest time_window constraints for operations that should only run during business hours

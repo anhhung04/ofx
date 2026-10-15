@@ -16,7 +16,7 @@ TOOL_KIND = "tool"
 LOCAL_FILE_KIND = "local_file"
 LOCAL_NAMED_KIND = "local_named"
 REMOTE_KIND = "remote"
-API_KIND = "api"
+LIB_KIND = "lib"
 
 BUILTIN_PREFIX = "builtin."
 LOCAL_PREFIX = "local."
@@ -44,7 +44,7 @@ class ModuleRef:
         ref: Optional git tag/branch/commit for ``remote`` refs.
         function: Optional entry function name (``::<func>`` suffix).
         file: File path portion of a ``local_file`` UDF spec.
-        api_path: Dotted path under ``ofx.api`` for ``api`` refs (the function
+        api_path: Dotted path under ``ofx.lib`` for ``api`` refs (the function
             is the last segment of the path).
     """
 
@@ -152,7 +152,7 @@ def parse_module_ref(spec: str) -> ModuleRef:
     2. ``@`` splits off a remote git ref.
     3. ``.py``-suffixed specs are workflow-local UDF files.
     4. ``local.builtin.*`` / ``builtin.*`` / bare names are builtins;
-       an unregistered dotted builtin name is an ``ofx.api`` function path
+       an unregistered dotted builtin name is an ``ofx.lib`` function path
        (resolved by the registry, not here).
     5. ``local.api.*`` is rejected (removed — use ``local.builtin.<path>.<func>``).
     6. ``local.<name>`` is a workflow-local named module.
@@ -192,7 +192,7 @@ def parse_module_ref(spec: str) -> ModuleRef:
     if base == "local.api" or base.startswith("local.api."):
         raise ValueError(
             f"Invalid module reference '{raw}': 'local.api.*' was removed — "
-            "ofx.api functions now resolve under the builtin namespace: "
+            "ofx.lib functions now resolve under the builtin namespace: "
             "'local.builtin.<path>.<func>' (e.g. "
             "'local.builtin.recon.targets.split_targets')"
         )
@@ -281,7 +281,7 @@ def parse_remote_repo(spec: str) -> ModuleRef:
 
 
 __all__ = [
-    "API_KIND",
+    "LIB_KIND",
     "BUILTIN_KIND",
     "BUILTIN_PREFIX",
     "LOCAL_FILE_KIND",

@@ -1,19 +1,19 @@
-"""Module wrapper for ``ofx.api.loot.load_json_lines``."""
+"""Module wrapper for ``ofx.lib.loot.load_json_lines``."""
 
 from __future__ import annotations
 
 from typing import Any
 
 name = "loot.load_json_lines"
-description = "ofx.api loot.load_json_lines"
+description = "ofx.lib loot.load_json_lines"
 args_schema: dict[str, Any] = {
         "path": {"type": "string", "required": True},
 }
 
 
 def run(ctx):
-    """Call ofx.api.loot.load_json_lines with the module's arguments."""
-    from ofx.api.loot import load_json_lines as _func
+    """Call ofx.lib.loot.load_json_lines with the module's arguments."""
+    from ofx.lib.loot import load_json_lines as _func
 
     kwargs = {}
     missing = []
@@ -25,9 +25,9 @@ def run(ctx):
             missing.append(key)
     if missing:
         received = ", ".join(sorted(ctx.args)) or "(none)"
-        from ofx.modules.api import ApiModuleError
+        from ofx.modules.libref import LibModuleError
 
-        raise ApiModuleError(
+        raise LibModuleError(
             f"Missing required argument(s): {', '.join(missing)}. "
             f"Received keys: {received}"
         )

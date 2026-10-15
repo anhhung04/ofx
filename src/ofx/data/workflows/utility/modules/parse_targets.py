@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import pathlib
 
-from ofx.api.recon.targets import split_targets
+from ofx.lib.recon.targets import split_targets
 
 
 def run(ctx):
