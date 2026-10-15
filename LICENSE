@@ -1,21 +1,80 @@
-MIT License
+OFX Source Available License
 
 Copyright (c) 2025 Offensive Flow Executor
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+1. DEFINITIONS
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+"Software" means the OFX workflow engine and all associated source code,
+documentation, and files in this repository.
+
+"Commercial Use" means any use of the Software that is primarily intended
+for or directed toward commercial advantage or monetary compensation,
+including but not limited to: (a) selling, licensing, or distributing the
+Software or derivative works for a fee; (b) using the Software to provide
+a paid service to third parties; (c) incorporating the Software into a
+product or service that is sold or offered for a fee; (d) using the
+Software internally within a for-profit organization in a manner that
+generates revenue or reduces costs that would otherwise require purchasing
+a commercial license.
+
+"Fork" means creating a public fork of this repository on the same
+hosting platform (e.g., GitHub) using the platform's fork mechanism,
+maintaining a visible link back to the original repository.
+
+2. GRANT OF RIGHTS
+
+Subject to the conditions below, you are granted a non-exclusive,
+worldwide, royalty-free license to:
+
+  a) Use the Software for any non-commercial purpose, including personal,
+     educational, research, and non-profit use.
+
+  b) Modify the Software and create derivative works.
+
+  c) Distribute copies of the Software, in original or modified form,
+     subject to Section 3.
+
+3. CONDITIONS
+
+  a) NO COMMERCIAL USE: You may not use the Software for any Commercial
+     Use without obtaining a separate commercial license from the copyright
+     holder.
+
+  b) MODIFICATIONS VIA FORK ONLY: If you modify the Software and distribute
+     your modified version (or make it available to third parties in any
+     form), you MUST do so exclusively through a public Fork of this
+     repository. You may not distribute modified versions through any other
+     channel (e.g., private repositories, tarballs, package registries,
+     embedded copies in other products) without a separate commercial
+     license.
+
+  c) ATTRIBUTION: You must retain the copyright notice above and this
+     license in all copies or substantial portions of the Software. You
+     must clearly indicate in your Fork that it is a modified version and
+     provide a link to the original repository.
+
+  d) NO SUBLICENSING: You may not sublicense the Software under different
+     terms. All copies and derivative works must be distributed under this
+     same license.
+
+4. COMMERCIAL LICENSING
+
+For commercial licensing inquiries, contact the copyright holder through
+the repository's issue tracker or the contact information provided in the
+repository.
+
+5. TERMINATION
+
+This license terminates automatically if you violate any of its terms.
+Upon termination, you must cease all use and distribution of the Software
+and destroy all copies in your possession.
+
+6. DISCLAIMER
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.

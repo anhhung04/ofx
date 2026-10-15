@@ -1,6 +1,6 @@
 # Offensive Flow Executor (OFX)
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: Source Available](https://img.shields.io/badge/License-Source%20Available-orange.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-blue)](https://www.python.org/)
 ![Build](https://img.shields.io/badge/build-passing-brightgreen)
 
@@ -67,4 +67,4 @@ uv run --extra test pytest
 
 ## License
 
-MIT — see [LICENSE](LICENSE)
+Source Available — no commercial use; modifications must be distributed via public fork. See [LICENSE](LICENSE). For commercial licensing, open an issue.
