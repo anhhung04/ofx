@@ -43,17 +43,8 @@ def _restore_workflow_dirs():
 
 
 @pytest.fixture(autouse=True)
-def _clear_active_project():
-    """Prevent subprocesses from inheriting a stale active_project."""
-    original = getattr(_settings_mod.settings, "active_project", None)
-    _settings_mod.settings.active_project = None
-    yield
-    _settings_mod.settings.active_project = original
-
-
-@pytest.fixture(autouse=True)
-def _isolate_projects_env(monkeypatch, tmp_path):
-    """Isolate projects path, config, and HOME so session subprocesses don't see stale state."""
+def _isolate_session_env(monkeypatch, tmp_path):
+    """Isolate all session-relevant env vars and settings so subprocesses don't see stale state."""
     home = tmp_path / "home"
     home.mkdir()
     ofx_dir = home / ".ofx"
@@ -63,7 +54,12 @@ def _isolate_projects_env(monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("OFX_PROJECTS_PATH", str(projects_dir))
     monkeypatch.setattr(_settings_mod, "CONFIG_YAML", config_path)
-    # Clear active_project from the in-memory settings for the subprocess
+    # Point Settings to a fresh config so subprocesses don't see a stale active_project
+    monkeypatch.setattr(
+        _settings_mod.Settings,
+        "model_config",
+        {**_settings_mod.Settings.model_config, "yaml_file": config_path},
+    )
     original = getattr(_settings_mod.settings, "active_project", None)
     _settings_mod.settings.active_project = None
     yield
