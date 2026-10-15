@@ -53,11 +53,14 @@ def _clear_active_project():
 
 @pytest.fixture(autouse=True)
 def _isolate_projects_env(monkeypatch, tmp_path):
-    """Isolate projects path and config so session subprocesses don't see stale state."""
-    ofx_dir = tmp_path / ".ofx"
+    """Isolate projects path, config, and HOME so session subprocesses don't see stale state."""
+    home = tmp_path / "home"
+    home.mkdir()
+    ofx_dir = home / ".ofx"
     projects_dir = ofx_dir / "projects"
     projects_dir.mkdir(parents=True, exist_ok=True)
     config_path = ofx_dir / "config.yml"
+    monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("OFX_PROJECTS_PATH", str(projects_dir))
     monkeypatch.setattr(_settings_mod, "CONFIG_YAML", config_path)
     # Clear active_project from the in-memory settings for the subprocess
