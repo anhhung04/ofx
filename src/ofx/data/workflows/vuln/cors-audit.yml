@@ -1,0 +1,110 @@
+name: cors-audit
+description: CORS misconfiguration detection — test for overly permissive origins,
+  credential exposure, and preflight bypasses.
+tags:
+- vuln
+- cors
+- web
+- misconfig
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target URL
+      alias: t
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+
+jobs:
+  cors-test:
+    name: CORS Misconfiguration Tests
+    steps:
+    - name: reflect-origin
+      module: python
+      with:
+        script: |
+          import urllib.request, urllib.error, json
+          base = "{{ inputs.target }}".rstrip("/")
+          test_origins = [
+              "https://evil.com",
+              "null",
+              "https://attacker.example.com",
+              f"https://{base.split('//')[1]}.evil.com",
+          ]
+          findings = []
+          for origin in test_origins:
+              try:
+                  req = urllib.request.Request(base, headers={"Origin": origin})
+                  with urllib.request.urlopen(req, timeout=10) as r:
+                      acao = r.headers.get("Access-Control-Allow-Origin", "")
+                      acac = r.headers.get("Access-Control-Allow-Credentials", "")
+                      if acao == origin or acao == "*":
+                          severity = "CRITICAL" if acac.lower() == "true" else "HIGH"
+                          findings.append(f"{severity}: {origin} reflected (ACAO={acao}, ACAC={acac})")
+              except Exception:
+                  pass
+          add_outputs(reflect_findings=findings, reflect_count=len(findings))
+
+    - name: preflight-bypass
+      module: python
+      with:
+        script: |
+          import urllib.request, urllib.error, json
+          base = "{{ inputs.target }}".rstrip("/")
+          findings = []
+          try:
+              req = urllib.request.Request(base, method="OPTIONS",
+                  headers={"Origin": "https://evil.com", "Access-Control-Request-Method": "POST"})
+              with urllib.request.urlopen(req, timeout=10) as r:
+                  acao = r.headers.get("Access-Control-Allow-Origin", "")
+                  acam = r.headers.get("Access-Control-Allow-Methods", "")
+                  if acao == "*" or "evil.com" in acao:
+                      findings.append(f"Preflight allows evil.com (ACAO={acao}, methods={acam})")
+          except urllib.error.HTTPError as e:
+              if e.code == 200:
+                  pass
+          except Exception:
+              pass
+          add_outputs(preflight_findings=findings, preflight_count=len(findings))
+
+    - name: subdomain-trust
+      module: python
+      with:
+        script: |
+          import urllib.request, json
+          base = "{{ inputs.target }}".rstrip("/")
+          domain = base.split("//")[1].split("/")[0]
+          subdomain_origins = [
+              f"https://sub.{domain}",
+              f"https://api.{domain}",
+              f"https://{domain}.evil.com",
+          ]
+          findings = []
+          for origin in subdomain_origins:
+              try:
+                  req = urllib.request.Request(base, headers={"Origin": origin})
+                  with urllib.request.urlopen(req, timeout=10) as r:
+                      acao = r.headers.get("Access-Control-Allow-Origin", "")
+                      if acao == origin:
+                          findings.append(f"Subdomain trusted: {origin}")
+              except Exception:
+                  pass
+          add_outputs(subdomain_findings=findings, subdomain_count=len(findings))
+
+    - name: summary
+      module: python
+      with:
+        script: |
+          import json
+          reflect = {{ steps['reflect-origin'].outputs.reflect_findings | tojson }}
+          preflight = {{ steps['preflight-bypass'].outputs.preflight_findings | tojson }}
+          subdomain = {{ steps['subdomain-trust'].outputs.subdomain_findings | tojson }}
+          all_findings = reflect + preflight + subdomain
+          print(f"CORS Audit: {len(all_findings)} finding(s)")
+          for f in all_findings:
+              print(f"  - {f}")
+          add_outputs(total_findings=len(all_findings), findings=all_findings)
+      log-stdout: true

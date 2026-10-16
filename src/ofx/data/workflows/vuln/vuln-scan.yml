@@ -29,6 +29,32 @@ dispatch:
       type: string
       default: 'true'
       description: Enable command logging
+call:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target URL, IP, or host file
+      alias: t
+    severity:
+      type: string
+      default: critical,high,medium
+      description: Minimum severity filter
+    tags:
+      type: string
+      default: ''
+      description: Nuclei template tags
+    rate_limit:
+      type: number
+      default: 150
+      description: Max requests per second
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+  outputs:
+    total: '{{ steps.summarize.outputs.total }}'
+    severity_count: '{{ steps.summarize.outputs.severity_count }}'
 jobs:
   nuclei-scan:
     name: Nuclei Vulnerability Scan

@@ -13,8 +13,14 @@ tags:
 - container
 dependencies: []
 workflows:
+- api-scan.yml
+- bug-bounty-pipeline.yml
 - code-scan.yml
 - container-scan.yml
+- cors-audit.yml
+- graphql-audit.yml
+- jwt-attack.yml
 - secret-scan.yml
+- ssrf-scan.yml
 - vuln-scan.yml
 - web-scan.yml

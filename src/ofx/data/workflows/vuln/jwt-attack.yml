@@ -1,0 +1,147 @@
+name: jwt-attack
+description: JWT security testing — decode, analyze algorithm confusion, test weak
+  secrets, and check for common JWT vulnerabilities.
+tags:
+- vuln
+- jwt
+- auth
+- token
+dispatch:
+  inputs:
+    token:
+      required: true
+      type: string
+      description: JWT token to analyze
+      alias: t
+    target:
+      type: string
+      default: ''
+      description: Target URL for verification tests (optional)
+    wordlist:
+      type: string
+      default: /usr/share/wordlists/rockyou.txt
+      description: Wordlist for secret brute force
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+
+jobs:
+  analyze:
+    name: JWT Analysis
+    steps:
+    - name: decode
+      module: python
+      with:
+        script: |
+          import base64, json
+          token = "{{ inputs.token }}".strip()
+          parts = token.split(".")
+          if len(parts) != 3:
+              raise ValueError(f"Invalid JWT format: {len(parts)} parts (expected 3)")
+
+          def b64url_decode(s):
+              s += "=" * (4 - len(s) % 4)
+              return base64.urlsafe_b64decode(s)
+
+          header = json.loads(b64url_decode(parts[0]))
+          payload = json.loads(b64url_decode(parts[1]))
+          add_outputs(
+              header=header,
+              payload=payload,
+              alg=header.get("alg", "unknown"),
+              kid=header.get("kid", ""),
+          )
+
+    - name: alg-confusion-check
+      module: python
+      with:
+        script: |
+          import json
+          header_str = '{{ steps.decode.outputs.header }}'
+          header = json.loads(header_str)
+          alg = header.get("alg", "")
+          findings = []
+          if alg.lower() == "none":
+              findings.append("CRITICAL: alg=none accepted — token can be forged without signature")
+          if alg.startswith("HS") and header.get("kid"):
+              findings.append(f"INFO: HS256 with kid={header['kid']} — check for kid injection/path traversal")
+          if alg.startswith("RS"):
+              findings.append("INFO: RS256 — try algorithm confusion (RS256 -> HS256 with public key)")
+          add_outputs(alg_findings=findings, alg_vulnerable=bool(findings))
+
+    - name: weak-secret-check
+      module: python
+      with:
+        script: |
+          import hmac, hashlib, base64, json
+          token = "{{ inputs.token }}".strip()
+          parts = token.split(".")
+
+          def b64url_decode(s):
+              s += "=" * (4 - len(s) % 4)
+              return base64.urlsafe_b64decode(s)
+
+          header = json.loads(b64url_decode(parts[0]))
+          alg = header.get("alg", "")
+
+          weak_secrets = [
+              "secret", "password", "123456", "key", "jwt", "token",
+              "changeme", "admin", "test", "dev", "development",
+              "supersecret", "jwt-secret", "your-256-bit-secret",
+          ]
+
+          if alg.startswith("HS"):
+              cracked = ""
+              signing_input = f"{parts[0]}.{parts[1]}".encode()
+              expected_sig = b64url_decode(parts[2])
+              for secret in weak_secrets:
+                  sig = hmac.new(secret.encode(), signing_input, hashlib.sha256).digest()
+                  if sig == expected_sig:
+                      cracked = secret
+                      break
+              add_outputs(
+                  cracked_secret=cracked,
+                  secret_cracked=bool(cracked),
+                  secret_strength="weak" if cracked else "unknown",
+              )
+          else:
+              add_outputs(cracked_secret="", secret_cracked=False, secret_strength="n/a")
+
+    - name: expiry-check
+      module: python
+      with:
+        script: |
+          import json, time
+          payload_str = '{{ steps.decode.outputs.payload }}'
+          payload = json.loads(payload_str)
+          now = time.time()
+          exp = payload.get("exp")
+          iat = payload.get("iat")
+          nbf = payload.get("nbf")
+          findings = []
+          if exp is None:
+              findings.append("WARNING: no 'exp' claim — token never expires")
+          elif exp < now:
+              findings.append(f"INFO: token expired at {exp} ({int(now - exp)}s ago)")
+          if nbf is not None and nbf > now:
+              findings.append(f"INFO: token not valid before {nbf}")
+          if iat is not None and exp is not None and (exp - iat) > 86400 * 365:
+              findings.append("WARNING: token lifetime > 1 year")
+          add_outputs(expiry_findings=findings)
+
+    - name: summary
+      module: python
+      with:
+        script: |
+          import json
+          findings = {
+              "alg": "{{ steps.decode.outputs.alg }}",
+              "alg_findings": {{ steps['alg-confusion-check'].outputs.alg_findings | tojson }},
+              "secret_cracked": "{{ steps['weak-secret-check'].outputs.secret_cracked }}",
+              "cracked_secret": "{{ steps['weak-secret-check'].outputs.cracked_secret }}",
+              "expiry_findings": {{ steps['expiry-check'].outputs.expiry_findings | tojson }},
+          }
+          print(json.dumps(findings, indent=2))
+          add_outputs(report=json.dumps(findings, indent=2))
+      log-stdout: true

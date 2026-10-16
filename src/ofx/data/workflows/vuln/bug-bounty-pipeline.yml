@@ -1,0 +1,92 @@
+name: bug-bounty-pipeline
+description: Full bug bounty pipeline — recon, subdomain enumeration, live host
+  probing, vulnerability scanning, and report generation.
+tags:
+- bug-bounty
+- pipeline
+- recon
+- vuln
+- automation
+dispatch:
+  inputs:
+    domain:
+      required: true
+      type: string
+      description: Target domain for bug bounty
+      alias: d
+    severity:
+      type: string
+      default: critical,high,medium
+      description: Minimum severity for vulnerability scan
+    rate_limit:
+      type: number
+      default: 150
+      description: Max requests per second for scanning
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+
+jobs:
+  recon:
+    name: Reconnaissance
+    steps:
+    - name: subdomain-enum
+      uses: recon/subdomain-enum-full
+      with:
+        domain: '{{ inputs.domain }}'
+        log_command: '{{ inputs.log_command }}'
+
+  probe:
+    name: Live Host Probing
+    needs: [recon]
+    steps:
+    - name: web-probe
+      uses: scan/web-probe
+      with:
+        target: '{{ steps.recon.outputs.live_hosts }}'
+        log_command: '{{ inputs.log_command }}'
+
+  vuln-scan:
+    name: Vulnerability Scanning
+    needs: [probe]
+    steps:
+    - name: nuclei
+      uses: vuln/vuln-scan
+      with:
+        target: '{{ steps.probe.outputs.live_hosts }}'
+        severity: '{{ inputs.severity }}'
+        rate_limit: '{{ inputs.rate_limit }}'
+        log_command: '{{ inputs.log_command }}'
+
+    - name: web-vulns
+      uses: vuln/web-scan
+      with:
+        target: '{{ steps.probe.outputs.live_hosts }}'
+        scan_type: all
+        log_command: '{{ inputs.log_command }}'
+      continue-on-error: true
+
+  report:
+    name: Bug Bounty Report
+    needs: [vuln-scan]
+    steps:
+    - name: summarize
+      module: python
+      with:
+        script: |
+          import json, os
+          from pathlib import Path
+          report = {
+              "target": "{{ inputs.domain }}",
+              "subdomains_found": {{ steps.recon.outputs.total_count | default(0) }},
+              "live_hosts": {{ steps.probe.outputs.live_count | default(0) }},
+              "vulnerabilities": {{ steps['vuln-scan'].outputs.total | default(0) }},
+              "severity_breakdown": {{ steps['vuln-scan'].outputs.severity_count | default('{}') }},
+          }
+          out = Path(os.environ.get("OFX_RUN_DIR", ".")) / "bug-bounty-report.json"
+          out.parent.mkdir(parents=True, exist_ok=True)
+          out.write_text(json.dumps(report, indent=2))
+          print(json.dumps(report, indent=2))
+          add_outputs(report_path=str(out), report=json.dumps(report, indent=2))
+      log-stdout: true

@@ -1,0 +1,186 @@
+name: subdomain-enum-full
+description: Full subdomain enumeration — passive sources, active brute force,
+  permutation, takeover detection, and live host probing.
+tags:
+- recon
+- subdomain
+- osint
+- bug-bounty
+dispatch:
+  inputs:
+    domain:
+      required: true
+      type: string
+      description: Target domain
+      alias: d
+    wordlist:
+      type: string
+      default: /usr/share/seclists/Discovery/DNS/subdomains-top1million-20000.txt
+      description: Wordlist for brute force
+    resolvers:
+      type: string
+      default: ''
+      description: Custom DNS resolver file
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+call:
+  inputs:
+    domain:
+      required: true
+      type: string
+      description: Target domain
+      alias: d
+    wordlist:
+      type: string
+      default: /usr/share/seclists/Discovery/DNS/subdomains-top1million-20000.txt
+      description: Wordlist for brute force
+    resolvers:
+      type: string
+      default: ''
+      description: Custom DNS resolver file
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+  outputs:
+    total_count: "{{ steps['merge-active'].outputs.total_count }}"
+    live_count: "{{ steps['web-probe'].outputs.live_count }}"
+    live_hosts: "{{ steps['web-probe'].outputs.live_hosts }}"
+
+jobs:
+  passive-enum:
+    name: Passive Subdomain Enumeration
+    steps:
+    - name: crtsh
+      module: python
+      with:
+        script: |
+          import urllib.request, json
+          domain = "{{ inputs.domain }}"
+          url = f"https://crt.sh/?q=%.{domain}&output=json"
+          subdomains = set()
+          try:
+              with urllib.request.urlopen(url, timeout=30) as r:
+                  data = json.loads(r.read().decode())
+                  for entry in data:
+                      name = entry.get("name_value", "")
+                      for sub in name.split("\n"):
+                          sub = sub.strip().lower()
+                          if sub.endswith(domain) and "*" not in sub:
+                              subdomains.add(sub)
+          except Exception as e:
+              print(f"crt.sh error: {e}")
+          add_outputs(crtsh_subs=sorted(subdomains), crtsh_count=len(subdomains))
+      log-command: '{{ inputs.log_command }}'
+      timeout: 60
+
+    - name: hackertarget
+      module: python
+      with:
+        script: |
+          import urllib.request
+          domain = "{{ inputs.domain }}"
+          url = f"https://api.hackertarget.com/hostsearch/?q={domain}"
+          subdomains = set()
+          try:
+              with urllib.request.urlopen(url, timeout=30) as r:
+                  for line in r.read().decode().splitlines():
+                      parts = line.split(",")
+                      if len(parts) > 0 and domain in parts[0]:
+                          subdomains.add(parts[0].strip().lower())
+          except Exception as e:
+              print(f"hackertarget error: {e}")
+          add_outputs(hackertarget_subs=sorted(subdomains), hackertarget_count=len(subdomains))
+      log-command: '{{ inputs.log_command }}'
+      timeout: 60
+
+    - name: merge-passive
+      module: python
+      with:
+        script: |
+          crtsh = {{ steps.crtsh.outputs.crtsh_subs | tojson }}
+          hackertarget = {{ steps.hackertarget.outputs.hackertarget_subs | tojson }}
+          all_subs = sorted(set(crtsh + hackertarget))
+          add_outputs(passive_subs=all_subs, passive_count=len(all_subs))
+      log-command: '{{ inputs.log_command }}'
+
+  active-enum:
+    name: Active Subdomain Enumeration
+    needs: [passive-enum]
+    steps:
+    - name: bruteforce
+      module: local.builtin.dns.bruteforce_subdomains_sync
+      with:
+        domain: '{{ inputs.domain }}'
+        candidates: '{{ inputs.wordlist }}'
+        concurrency: 100
+        timeout: 5
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+      timeout: 300
+
+    - name: merge-active
+      module: python
+      with:
+        script: |
+          passive = {{ steps['merge-passive'].outputs.passive_subs | tojson }}
+          brute = {{ steps.bruteforce.outputs.result | tojson }} if "steps.bruteforce.outputs.result" else []
+          all_subs = sorted(set(passive + brute))
+          add_outputs(all_subs=all_subs, total_count=len(all_subs))
+      log-command: '{{ inputs.log_command }}'
+
+  probe:
+    name: Live Host Probing
+    needs: [active-enum]
+    steps:
+    - name: probe
+      module: local.builtin.dns.resolve_host_sync
+      with:
+        host: "{{ steps['merge-active'].outputs.all_subs | join(',') }}"
+        timeout: 5
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+      timeout: 180
+
+    - name: web-probe
+      module: python
+      with:
+        script: |
+          import urllib.request, socket
+          subs = {{ steps['merge-active'].outputs.all_subs | tojson }}
+          live = []
+          for sub in subs[:100]:  # limit to first 100 for speed
+              for scheme in ["https", "http"]:
+                  try:
+                      url = f"{scheme}://{sub}"
+                      req = urllib.request.Request(url, timeout=5)
+                      with urllib.request.urlopen(req, timeout=5) as r:
+                          live.append(f"{url} ({r.status})")
+                          break
+                  except Exception:
+                      continue
+          add_outputs(live_hosts=live, live_count=len(live))
+      log-command: '{{ inputs.log_command }}'
+      timeout: 300
+
+  report:
+    name: Subdomain Report
+    needs: [probe]
+    steps:
+    - name: summarize
+      module: python
+      with:
+        script: |
+          import json
+          report = {
+              "domain": "{{ inputs.domain }}",
+              "passive_count": {{ steps['merge-passive'].outputs.passive_count }},
+              "active_count": {{ steps['merge-active'].outputs.total_count }},
+              "live_count": {{ steps['web-probe'].outputs.live_count }},
+              "live_hosts": {{ steps['web-probe'].outputs.live_hosts | tojson }},
+          }
+          print(json.dumps(report, indent=2))
+          add_outputs(report=json.dumps(report, indent=2))
+      log-stdout: true

@@ -1,0 +1,142 @@
+name: graphql-audit
+description: GraphQL security testing — introspection, field suggestions, batching
+  abuse, and depth limiting tests.
+tags:
+- vuln
+- graphql
+- api
+dispatch:
+  inputs:
+    endpoint:
+      required: true
+      type: string
+      description: GraphQL endpoint URL (e.g. https://example.com/graphql)
+      alias: e
+    auth_token:
+      type: string
+      default: ''
+      description: Authorization header value (e.g. 'Bearer token123')
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+
+jobs:
+  graphql-recon:
+    name: GraphQL Recon
+    steps:
+    - name: introspection
+      module: python
+      with:
+        script: |
+          import urllib.request, json
+          endpoint = "{{ inputs.endpoint }}"
+          query = '{"query":"{__schema{queryType{name}mutationType{name}subscriptionType{name}}}"}'
+          headers = {"Content-Type": "application/json"}
+          auth = "{{ inputs.auth_token }}".strip()
+          if auth:
+              headers["Authorization"] = auth
+          req = urllib.request.Request(endpoint, data=query.encode(), headers=headers)
+          try:
+              with urllib.request.urlopen(req, timeout=15) as r:
+                  data = json.loads(r.read().decode())
+                  schema = data.get("data", {}).get("__schema", {})
+                  has_introspection = bool(schema)
+                  types = []
+                  if schema:
+                      types = [t for t in [schema.get("queryType"), schema.get("mutationType"), schema.get("subscriptionType")] if t]
+                  add_outputs(
+                      introspection_enabled=has_introspection,
+                      types=[t.get("name") for t in types],
+                  )
+          except Exception as e:
+              add_outputs(introspection_enabled=False, types=[])
+
+    - name: field-suggestion
+      module: python
+      with:
+        script: |
+          import urllib.request, json
+          endpoint = "{{ inputs.endpoint }}"
+          headers = {"Content-Type": "application/json"}
+          auth = "{{ inputs.auth_token }}".strip()
+          if auth:
+              headers["Authorization"] = auth
+          # Probe common field names for typo-suggestions
+          probes = ["user", "users", "admin", "account", "order", "payment"]
+          suggestions = []
+          for field in probes:
+              # Build GraphQL query with intentional typo for field suggestion probing
+              query = '{"query":"{ ' + field[:-1] + ' }"}'
+              req = urllib.request.Request(endpoint, data=query.encode(), headers=headers)
+              try:
+                  with urllib.request.urlopen(req, timeout=10) as r:
+                      body = r.read().decode()
+                      if "did you mean" in body.lower() or "suggestion" in body.lower():
+                          suggestions.append(f"Field suggestion leak for: {field}")
+              except Exception:
+                  pass
+          add_outputs(suggestions=suggestions, suggestion_count=len(suggestions))
+
+    - name: batch-abuse
+      module: python
+      with:
+        script: |
+          import urllib.request, json
+          endpoint = "{{ inputs.endpoint }}"
+          headers = {"Content-Type": "application/json"}
+          auth = "{{ inputs.auth_token }}".strip()
+          if auth:
+              headers["Authorization"] = auth
+          # Send batch of 10 identical queries
+          batch = [{"query": "{__typename}"}] * 10
+          req = urllib.request.Request(endpoint, data=json.dumps(batch).encode(), headers=headers)
+          try:
+              with urllib.request.urlopen(req, timeout=10) as r:
+                  data = r.read().decode()
+                  if isinstance(json.loads(data), list):
+                      add_outputs(batch_allowed=True, batch_size=10)
+                  else:
+                      add_outputs(batch_allowed=False, batch_size=0)
+          except Exception:
+              add_outputs(batch_allowed=False, batch_size=0)
+
+    - name: depth-limit
+      module: python
+      with:
+        script: |
+          import urllib.request, json
+          endpoint = "{{ inputs.endpoint }}"
+          headers = {"Content-Type": "application/json"}
+          auth = "{{ inputs.auth_token }}".strip()
+          if auth:
+              headers["Authorization"] = auth
+          # Build deeply nested query (depth 10)
+          depth_query = "{__schema{types{name" + "{fields{name" * 8 + "}" * 8 + "}}}"
+          query = json.dumps({"query": depth_query})
+          req = urllib.request.Request(endpoint, data=query.encode(), headers=headers)
+          try:
+              with urllib.request.urlopen(req, timeout=10) as r:
+                  data = r.read().decode()
+                  add_outputs(depth_limit_bypassed="errors" not in data.lower())
+          except Exception:
+              add_outputs(depth_limit_bypassed=False)
+
+    - name: summary
+      module: python
+      with:
+        script: |
+          findings = []
+          if "{{ steps.introspection.outputs.introspection_enabled }}" == "True":
+              findings.append("Introspection enabled — schema is exposed")
+          if "{{ steps['batch-abuse'].outputs.batch_allowed }}" == "True":
+              findings.append("Batch queries allowed — potential DoS/brute force")
+          if "{{ steps['depth-limit'].outputs.depth_limit_bypassed }}" == "True":
+              findings.append("No depth limit — deep nesting possible")
+          if "{{ steps['field-suggestion'].outputs.suggestion_count }}" != "0":
+              findings.append(f"Field suggestions leak: {{ steps['field-suggestion'].outputs.suggestion_count }} found")
+          print(f"GraphQL Audit: {len(findings)} finding(s)")
+          for f in findings:
+              print(f"  - {f}")
+          add_outputs(findings=findings, total_findings=len(findings))
+      log-stdout: true

@@ -18,6 +18,7 @@ workflows:
 - full-recon.yml
 - js-analysis.yml
 - subdomain-brute.yml
+- subdomain-enum-full.yml
 - subdomain-permute.yml
 - subdomain-takeover.yml
 - url-archive.yml

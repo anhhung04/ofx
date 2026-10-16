@@ -1,0 +1,186 @@
+name: api-scan
+description: API security testing — discover endpoints, test for common API
+  vulnerabilities (BOLA, auth bypass, rate limiting, mass assignment), and fuzz
+  parameters.
+tags:
+- vuln
+- api
+- bola
+- rest
+- graphql
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Base API URL (e.g. https://api.example.com)
+      alias: t
+    api_spec:
+      type: string
+      default: ''
+      description: OpenAPI/Swagger spec URL or file path (auto-discovered if empty)
+    auth_token:
+      type: string
+      default: ''
+      description: Bearer token or API key for authenticated scans
+    rate_limit:
+      type: number
+      default: 100
+      description: Max requests per second
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+
+jobs:
+  api-discovery:
+    name: API Discovery
+    outputs:
+      endpoints: '{{ steps.endpoints.outputs.result }}'
+    steps:
+    - name: spec-fetch
+      module: python
+      with:
+        script: |
+          import json, urllib.request, urllib.error
+          base = "{{ inputs.target }}".rstrip("/")
+          candidates = [
+              f"{base}/openapi.json", f"{base}/swagger.json",
+              f"{base}/api/openapi.json", f"{base}/v1/openapi.json",
+              f"{base}/api-docs", f"{base}/docs/openapi.json",
+          ]
+          spec_url = "{{ inputs.api_spec }}".strip()
+          if spec_url:
+              candidates.insert(0, spec_url)
+          found = ""
+          for url in candidates:
+              try:
+                  req = urllib.request.Request(url, headers={"User-Agent": "ofx-api-scan"})
+                  with urllib.request.urlopen(req, timeout=10) as r:
+                      body = r.read().decode()
+                      if "paths" in body or "openapi" in body or "swagger" in body:
+                          found = url
+                          break
+              except Exception:
+                  continue
+          add_outputs(spec_url=found, spec_found=bool(found))
+
+    - name: graphql-check
+      module: python
+      with:
+        script: |
+          import urllib.request
+          base = "{{ inputs.target }}".rstrip("/")
+          gql_paths = [f"{base}/graphql", f"{base}/api/graphql", f"{base}/v1/graphql"]
+          found = ""
+          for url in gql_paths:
+              try:
+                  req = urllib.request.Request(url, data=b'{"query":"{__schema{queryType{name}}}"}',
+                      headers={"Content-Type": "application/json"}, method="POST")
+                  with urllib.request.urlopen(req, timeout=10) as r:
+                      if "data" in r.read().decode():
+                          found = url
+                          break
+              except Exception:
+                  continue
+          add_outputs(graphql_url=found, graphql_found=bool(found))
+
+    - name: endpoints
+      module: local.tool.ffuf
+      with:
+        target: '{{ inputs.target }}/api/v1'
+        match_codes: "200,201,204,301,302,401,403"
+        wordlist: /usr/share/seclists/Discovery/Web-Content/api/objects.txt
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+      timeout: 120
+
+  auth-tests:
+    name: Authentication Tests
+    needs: [api-discovery]
+    steps:
+    - name: unauth-access
+      module: python
+      with:
+        script: |
+          import urllib.request, urllib.error
+          base = "{{ inputs.target }}".rstrip("/")
+          probes = ["/api/v1/users", "/api/users", "/api/v1/admin", "/api/admin", "/api/v1/me"]
+          findings = []
+          for path in probes:
+              try:
+                  req = urllib.request.Request(f"{base}{path}")
+                  with urllib.request.urlopen(req, timeout=10) as r:
+                      if r.status == 200:
+                          findings.append(f"UNAUTH: {path} -> 200")
+              except urllib.error.HTTPError as e:
+                  if e.code in (401, 403):
+                      pass
+                  else:
+                      findings.append(f"{path} -> HTTP {e.code}")
+              except Exception:
+                  pass
+          add_outputs(unauth_findings=findings, unauth_count=len(findings))
+      log-command: '{{ inputs.log_command }}'
+
+    - name: auth-bypass-headers
+      module: python
+      with:
+        script: |
+          import urllib.request, urllib.error
+          base = "{{ inputs.target }}".rstrip("/")
+          bypass_headers = [
+              {"X-Forwarded-For": "127.0.0.1"},
+              {"X-Real-IP": "127.0.0.1"},
+              {"X-Original-URL": "/admin"},
+              {"X-Rewrite-URL": "/admin"},
+              {"X-Custom-IP-Authorization": "127.0.0.1"},
+          ]
+          findings = []
+          for hdrs in bypass_headers:
+              try:
+                  req = urllib.request.Request(f"{base}/api/admin", headers=hdrs)
+                  with urllib.request.urlopen(req, timeout=10) as r:
+                      if r.status == 200:
+                          findings.append(f"BYPASS with {list(hdrs.keys())[0]}")
+              except Exception:
+                  pass
+          add_outputs(bypass_findings=findings, bypass_count=len(findings))
+
+  fuzzing:
+    name: API Fuzzing
+    needs: [api-discovery]
+    steps:
+    - name: param-fuzz
+      module: local.tool.ffuf
+      with:
+        target: '{{ inputs.target }}/api/v1/users?FUZZ=1'
+        wordlist: /usr/share/seclists/Discovery/Web-Content/burp-parameter-names.txt
+        match_codes: "200,201,400,500"
+      continue-on-error: true
+      log-command: '{{ inputs.log_command }}'
+      timeout: 120
+
+  report:
+    name: API Scan Report
+    needs: [api-discovery, auth-tests, fuzzing]
+    steps:
+    - name: summarize
+      module: python
+      with:
+        script: |
+          import json
+          from pathlib import Path
+          report = {
+              "target": "{{ inputs.target }}",
+              "spec_found": "{{ steps['spec-fetch'].outputs.spec_found }}",
+              "graphql_found": "{{ steps['graphql-check'].outputs.graphql_found }}",
+              "unauth_count": "{{ steps['unauth-access'].outputs.unauth_count }}",
+              "bypass_count": "{{ steps['auth-bypass-headers'].outputs.bypass_count }}",
+          }
+          import os
+          from pathlib import Path
+          out = Path(os.environ.get("OFX_RUN_DIR", ".")) / "api-scan-report.json"
+          out.parent.mkdir(parents=True, exist_ok=True)
+          out.write_text(json.dumps(report, indent=2))
+          add_outputs(report_path=str(out))

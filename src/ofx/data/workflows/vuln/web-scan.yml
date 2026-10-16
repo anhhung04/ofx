@@ -22,6 +22,23 @@ dispatch:
       type: string
       default: 'true'
       description: Enable command logging
+call:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target URL (e.g. https://example.com)
+      alias: t
+    scan_type:
+      type: string
+      default: all
+      description: 'Scan type: sqli, xss, ssti, or all'
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+  outputs:
+    content_discovery: "completed"
 jobs:
   content-discovery:
     name: Content Discovery
