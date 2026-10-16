@@ -1,6 +1,7 @@
 name: dir-fuzz
 description: Directory fuzzing — brute force web directories and files. WAF/CDN-protected
-  targets are detected up front and skipped to avoid noise and bans.
+  targets are detected up front and skipped; fuzzing is refused when that detection
+  is unavailable (pass force=true to override).
 tags:
 - scan
 - fuzz
@@ -24,7 +25,7 @@ dispatch:
     force:
       type: string
       default: 'false'
-      description: Fuzz even WAF/CDN-protected targets
+      description: Fuzz even WAF/CDN-protected targets (and skip detection results)
     log_command:
       type: string
       default: 'true'
@@ -38,36 +39,21 @@ jobs:
       with:
         target: '{{ inputs.target }}'
         log_command: '{{ inputs.log_command }}'
-      continue-on-error: true
+        output_dir: '{{ env.OFX_RUN_DIR }}'
     - name: pick_targets
-      script: |
-        import os, shutil
-        rd = os.environ["OFX_RUN_DIR"]
-        clean = "{{ steps.protection_check.outputs.clean_targets }}"
-        force = str(__inputs__.get("force", "false")).lower() == "true"
-        src = str(__inputs__.get("target", ""))
-        out = os.path.join(rd, "fuzz_targets.txt")
-        if force or not clean or not os.path.isfile(clean):
-            if os.path.isfile(src):
-                shutil.copy(src, out)
-            else:
-                open(out, "w").write(src.strip() + "\n")
-            if not force and not clean:
-                print("no WAF/CDN filter available — fuzzing all targets")
-        else:
-            shutil.copy(clean, out)
-            skipped = open(src).read().splitlines() if os.path.isfile(src) else [src]
-            skipped = [s for s in skipped if s.strip() and s not in open(out).read()]
-            for s in skipped:
-                print(f"skipped (WAF/CDN): {s}")
-        count = len([line for line in open(out).read().splitlines() if line.strip()])
-        print(f"fuzz list: {count} targets")
-        add_outputs(fuzz_targets=out)
+      module: local.pick_targets
+      with:
+        target: '{{ inputs.target }}'
+        clean_targets: '{{ steps.protection_check.outputs.clean_targets }}'
+        detection_available: '{{ steps.protection_check.outputs.detection_available }}'
+        force: '{{ inputs.force }}'
     - name: ffuf
-      run: while read -r u; do [ -z "$u" ] && continue; ffuf -u "${u%/}/FUZZ" -w {{ inputs.wordlist
-        }} -e {{ inputs.extensions }} -ac -of csv -o "{{ env.OFX_RUN_DIR }}/ffuf_$(echo
-        "$u" | md5sum | cut -c1-8).csv"; done < {{ env.OFX_RUN_DIR }}/fuzz_targets.txt
-      run_if: "{{ steps.pick_targets.outputs.fuzz_targets != '' }}"
+      module: local.builtin.shell
+      with:
+        cmd: while read -r u; do [ -z "$u" ] && continue; ffuf -u "${u%/}/FUZZ" -w {{ inputs.wordlist
+          }} -e {{ inputs.extensions }} -ac -of csv -o "{{ env.OFX_RUN_DIR }}/ffuf_$(echo
+          "$u" | md5sum | cut -c1-8).csv"; done < {{ env.OFX_RUN_DIR }}/fuzz_targets.txt
+      run_if: "{{ steps['pick_targets'].outputs.target_count | int > 0 }}"
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
       timeout: 360

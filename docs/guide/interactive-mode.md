@@ -14,7 +14,9 @@ Interactive steps wire stdin/stdout/stderr to your terminal. They only work when
 jobs:
   shell:
     steps:
-      - run: bash
+      - module: shell
+        with:
+          cmd: bash
         interactive: true   # works (single-job stage)
         timeout: 15
 ```
@@ -24,11 +26,13 @@ jobs:
 ```yaml
 jobs:
   prepare:
-    steps: [{ run: ./prepare.sh }]
+    steps: [{ module: shell, with: {cmd: ./prepare.sh} }]
   session:
     needs: prepare
     steps:
-      - run: mysql -h {{ inputs.db_host }} -u {{ inputs.db_user }} -p{{ secrets.db_pass }}
+      - module: shell
+        with:
+          cmd: mysql -h {{ inputs.db_host }} -u {{ inputs.db_user }} -p{{ secrets.db_pass }}
         interactive: true
 ```
 

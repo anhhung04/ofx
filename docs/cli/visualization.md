@@ -12,7 +12,7 @@ All table outputs now intelligently adapt to your terminal width for optimal rea
 - **`ofx secret list`** - Full-width secret tables  
 - **`ofx secret search`** - Full-width search results
 - **`ofx flow collection list`** - Full-width collection tables
-- **`ofx docs api`** - Full-width API documentation tables
+- **`ofx api`** - Full-width API documentation tables
 - **`ofx doctor fleet`** - Full-width reliability scorecard tables
 
 ### Progress Indicators

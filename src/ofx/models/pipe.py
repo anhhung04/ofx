@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import Field, model_validator
 
 from ofx.models.base import OFXBaseModel
+
 
 class PipeConfig(OFXBaseModel):
     """Declarative ETL pipeline executed as a step.

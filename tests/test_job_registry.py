@@ -12,6 +12,7 @@ from ofx.runner.registry import (
     RegistryAdapter,
 )
 
+
 @pytest.fixture
 async def memory_registry():
     """Fixture for memory-based registry"""

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ofx.api.post.runners.winrm import PostWinRM
+from ofx.lib.post.runners.winrm import PostWinRM
 
 
 def test_remove_remote_temp_file_logs_and_does_not_raise(monkeypatch):

@@ -17,7 +17,9 @@ jobs:
     env:
       LOG_LEVEL: INFO          # Job-wide environment
     steps:
-      - run: nmap {{ inputs.target }}
+      - module: shell
+        with:
+          cmd: nmap {{ inputs.target }}
 ```
 
 | Property         | Type      | Description                                      |
@@ -43,11 +45,10 @@ Each step executes exactly **one** action:
 
 | Action | Description |
 |--------|-------------|
-| `run` | Shell command |
-| `script` | Inline Python code |
-| `script_file` | Python file path |
+| `module: shell` | Shell command (`with.cmd`) |
+| `module: python` | Inline Python (`with.script`) or Python file (`with.script_file`) |
+| `module: <file>::<func>` | User-defined function module (defaults to `run`) |
 | `uses` | Reusable workflow reference |
-| `task` | Pre-built security tool wrapper (see ) |
 | `pipe` | Declarative ETL pipeline (see [Pipe Steps](jobs-steps/steps.md#pipe-steps)) |
 
 
@@ -56,29 +57,32 @@ Each step executes exactly **one** action:
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `name` | str | - | Descriptive name |
-| `run` / `script` / `script_file` / `uses` / `task` / `pipe` | str/dict | - | **Required.** Exactly one action |
+| `module` / `uses` / `pipe` | str/dict | - | **Required.** Exactly one action |
 | `timeout` | int/str | 1440 | Max duration in minutes (supports Jinja2 expressions) |
 | `retry` | int | 0 | Retry attempts on failure |
 | `retry-delay` | int | 5 | Seconds between retries |
 | `continue-on-error` | bool | false | Continue on failure |
-| `if` | bool\|str | true | Conditional execution |
+| `if` | bool\|str | true | Conditional execution (`success()`/`failure()`/`canceled()`/`always()`) |
 | `env` | dict | {} | Step environment variables |
-| `shell` | str | /bin/bash | Shell for `run`/`script` |
+| `shell` | str | /bin/bash | Shell used by `module: shell` steps |
 | `working-directory` | str | cwd | Execution directory |
-| `log-stdout` | bool\|str | false | Save stdout to output logs |
+| `log-stdout` | bool\|str | false | Save full stdout to `stdout_<job>_<step>.log` |
+| `log-command` | bool\|str | false | Log the resolved command/script |
 | `interactive` | bool | false | Interactive mode (single-job stages only) |
-| `with` | dict | {} | Inputs for `uses` / options+target for `task` |
+| `with` | dict | {} | Module arguments / inputs for `uses` |
 | `secrets` | dict\|"inherit" | {} | Secrets for `uses` |
-| `store-creds` | bool | null | Auto-store `UserAccount` credentials from task outputs |
+| `store-creds` | bool | null | Auto-store `user_account` credentials from module outputs |
 
 ---
 
-## 🖥️ Shell Commands (`run`)
+## 🖥️ Shell Modules (`module: shell`)
 
 ```yaml
 steps:
   - name: Port scan
-    run: nmap -p {{ inputs.ports }} {{ inputs.target }}
+    module: shell
+    with:
+      cmd: nmap -p {{ inputs.ports }} {{ inputs.target }}
     timeout: 30
     retry: 1
     retry-delay: 5
@@ -90,35 +94,41 @@ steps:
 ### Multi-line Commands
 ```yaml
 - name: Complex scan
-  run: |
-    echo "Starting scan..."
-    nmap -sS {{ inputs.target }} -oX scan.xml
-    mv scan.xml {{ ctx.output_path }}/
+  module: shell
+  with:
+    cmd: |
+      echo "Starting scan..."
+      nmap -sS {{ inputs.target }} -oX scan.xml
+      mv scan.xml {{ ctx.output_path }}/
 ```
 
 ---
 
-## 🐍 Python Scripts (`script`)
+## 🐍 Python Modules (`module: python`)
 
 ```yaml
 steps:
   - name: Process data
-    script: |
-      import json
-      
-      data = {"target": "{{ inputs.target }}"}
-      with open("{{ ctx.output_path }}/data.json", "w") as f:
-        json.dump(data, f)
+    module: python
+    with:
+      script: |
+        import json
+
+        data = {"target": "{{ inputs.target }}"}
+        with open("{{ ctx.output_path }}/data.json", "w") as f:
+          json.dump(data, f)
 ```
 
-### Python Script Files (`script_file`)
+### Python Script Files (`with.script_file`)
 
 Execute an external Python script file. Paths are resolved relative to the workflow directory unless absolute.
 
 ```yaml
 steps:
   - name: Run complex analysis
-    script_file: scripts/analyze_results.py
+    module: python
+    with:
+      script_file: scripts/analyze_results.py
     env:
       THRESHOLD: "0.95"
 ```
@@ -126,46 +136,50 @@ steps:
 ### Inter-Step Communication
 ```yaml
 - name: Publish status
-  script: |
-    publish('status', {'state': 'running', 'progress': 50})
-    
+  module: python
+  with:
+    script: |
+      publish('status', {'state': 'running', 'progress': 50})
+
 - name: Wait for config
-  script: |
-    config = wait_for('config', lambda d: d.get('ready'))
-    print(f"Got config: {config}")
+  module: python
+  with:
+    script: |
+      config = wait_for('config', lambda d: d.get('ready'))
+      print(f"Got config: {config}")
 ```
 
 ---
 
-## 🔧 Task Steps (`task`)
+## 🔧 User-defined Modules (`module: <file>::<func>`)
 
-Task steps run pre-built security tool wrappers with structured output parsing. The `with:` block provides the target and tool-specific options.
+Point `module:` at your own Python file (optionally with `::func`, default `run`) to run custom logic — scanners, exploit attempts, parsers. The function receives `ctx` with `ctx.inputs` (the `with:` arguments), `ctx.secrets`, `ctx.env`, `ctx.working_directory`, `ctx.add_outputs(**kwargs)`, and `ctx.log(msg)`, and may return a dict merged into the step outputs:
 
 ```yaml
 steps:
-  - task: nmap
+  - module: modules/port_scan.py
     name: port-scan
     with:
       target: "{{ inputs.target }}"
       ports: "80,443,8080"
-      version_detection: true
 
-  - task: nuclei
+  - module: modules/vuln_scan.py
     name: vuln-scan
     with:
       target: "{{ inputs.target }}"
-      severity: "critical,high"
 ```
 
-Task outputs are parsed into **typed objects** (Port, Url, Vulnerability, etc.) accessible via template helpers:
+Modules that emit `typed_outputs` (Port, Url, Vulnerability, etc.) via `add_outputs(typed_outputs=[...])` can be chained with template helpers:
 
 ```yaml
-  - run: |
+- module: shell
+  with:
+    cmd: |
       echo "Open ports: {{ ports(steps['port-scan'].outputs.typed_outputs) | length }}"
       echo "Vulns found: {{ vulns(steps['vuln-scan'].outputs.typed_outputs) | length }}"
 ```
 
-See the  for the full list of available tools and options.
+See [Steps → Modules](jobs-steps/steps.md#modules) for the full module contract and path resolution rules.
 
 ---
 
@@ -175,7 +189,7 @@ Pipe steps provide declarative ETL (Extract-Transform-Load) pipelines for transf
 
 ```yaml
 steps:
-  - task: nmap
+  - module: modules/port_scan.py
     name: scan
     with:
       target: "{{ inputs.target }}"
@@ -203,33 +217,41 @@ See the [Pipe Steps reference](jobs-steps/steps.md#pipe-steps) for full configur
 ### Save to Output Directory
 ```yaml
 - name: Save scan results
-  run: nmap {{ inputs.target }} > {{ ctx.output_path }}/scan.txt
+  module: shell
+  with:
+    cmd: nmap {{ inputs.target }} > {{ ctx.output_path }}/scan.txt
 ```
 
 ### Share Data Between Steps
 ```yaml
 steps:
   - name: Generate data
-    script: |
-      import json
-      data = {"ports": [80, 443, 8080]}
-      with open("{{ ctx.output_path }}/data.json", "w") as f:
-        json.dump(data, f)
+    module: python
+    with:
+      script: |
+        import json
+        data = {"ports": [80, 443, 8080]}
+        with open("{{ ctx.output_path }}/data.json", "w") as f:
+          json.dump(data, f)
 
   - name: Use data
-    script: |
-      import json
-      with open("{{ ctx.output_path }}/data.json") as f:
-        data = json.load(f)
-      print(f"Ports: {data['ports']}")
+    module: python
+    with:
+      script: |
+        import json
+        with open("{{ ctx.output_path }}/data.json") as f:
+          data = json.load(f)
+        print(f"Ports: {data['ports']}")
 ```
 
 ### Output Variables with OFX_OUTPUTS
 ```yaml
 - name: Export variables
-  run: |
-    echo "PORT=8080" >> $OFX_OUTPUTS
-    echo "STATUS=ready" >> $OFX_OUTPUTS
+  module: shell
+  with:
+    cmd: |
+      echo "PORT=8080" >> $OFX_OUTPUTS
+      echo "STATUS=ready" >> $OFX_OUTPUTS
 ```
 
 ---
@@ -239,33 +261,77 @@ steps:
 ### Exit Codes
 ```yaml
 - name: Check service
-  script: |
-    import sys
-    import socket
-    
-    try:
-        s = socket.socket()
-        s.connect(("{{ inputs.target }}", 80))
-        print("Service is up")
-        sys.exit(0)
-    except:
-        print("Service is down")
-        sys.exit(1)
+  module: python
+  with:
+    script: |
+      import sys
+      import socket
+
+      try:
+          s = socket.socket()
+          s.connect(("{{ inputs.target }}", 80))
+          print("Service is up")
+          sys.exit(0)
+      except:
+          print("Service is down")
+          sys.exit(1)
 ```
 
 ### Continue on Error
 ```yaml
 - name: Optional notification
-  run: python notify.py
+  module: shell
+  with:
+    cmd: python notify.py
   continue-on-error: true  # Won't fail the workflow
 ```
 
-### Retry Logic
+### Retry Logic with Backoff
+
+`retry` retries a failing step; delays use **exponential backoff with jitter** (`base * 2^attempt`, capped at 5 minutes):
+
 ```yaml
 - name: Flaky API call
-  run: curl https://api.example.com
+  module: shell
+  with:
+    cmd: curl https://api.example.com
   retry: 3
   retry-delay: 5
+```
+
+Step failures report the **exit code**, the **stderr tail**, and a **per-attempt error list**:
+
+```text
+Step 'Flaky API call' failed after 4 attempt(s).
+Last error: exit code 28 (stderr tail): Operation timed out
+  Attempts: attempt 1: exit code 28: Operation timed out; attempt 2: exit code 28: Operation timed out; ...
+If transient, increase 'retry' count. If permanent, fix the root cause before retrying.
+```
+
+### Branching on Outcome
+
+Use `if:` to branch after a step: `success()`, `failure()`, `canceled()`, or `always()`. Combine with `retry` for an exploit attempt that retries, then loots on success or falls back on failure:
+
+```yaml
+steps:
+  - name: exploit-attempt
+    module: modules/exploit.py
+    with:
+      target: "{{ inputs.target }}"
+    retry: 2
+    retry-delay: 5
+
+  - name: collect-loot
+    module: shell
+    if: success()
+    with:
+      cmd: ./loot.sh
+
+  - name: fallback-exploit
+    module: modules/fallback_exploit.py
+    if: failure()
+    with:
+      target: "{{ inputs.target }}"
 ```
 
 ---
@@ -276,41 +342,57 @@ steps:
 ```yaml
 # ✅ Good
 - name: Scan target for open HTTP/HTTPS ports
-  run: nmap -p 80,443,8080 {{ inputs.target }}
+  module: shell
+  with:
+    cmd: nmap -p 80,443,8080 {{ inputs.target }}
 
 # ❌ Bad
 - name: scan
-  run: nmap {{ inputs.target }}
+  module: shell
+  with:
+    cmd: nmap {{ inputs.target }}
 ```
 
 ### 2. Use Dynamic Paths
 ```yaml
 # ✅ Good
-- run: cp scan.txt {{ ctx.output_path }}/scan_{{ ctx.run_id }}.txt
+- module: shell
+  with:
+    cmd: cp scan.txt {{ ctx.output_path }}/scan_{{ ctx.run_id }}.txt
 
 # ❌ Bad
-- run: cp scan.txt /tmp/scan.txt
+- module: shell
+  with:
+    cmd: cp scan.txt /tmp/scan.txt
 ```
 
 ### 3. Appropriate Timeouts
 ```yaml
 - name: Quick ping
-  run: ping -c 1 {{ inputs.target }}
+  module: shell
+  with:
+    cmd: ping -c 1 {{ inputs.target }}
   timeout: 1
 
 - name: Full port scan
-  run: nmap -p- {{ inputs.target }}
+  module: shell
+  with:
+    cmd: nmap -p- {{ inputs.target }}
   timeout: 60
 ```
 
 ### 4. Separate Critical and Optional Steps
 ```yaml
 - name: Critical validation
-  run: python validate.py
+  module: shell
+  with:
+    cmd: python validate.py
   # Fails workflow if validation fails
 
 - name: Optional notification
-  run: python notify.py
+  module: shell
+  with:
+    cmd: python notify.py
   continue-on-error: true
 ```
 
@@ -324,17 +406,23 @@ jobs:
   process:
     steps:
       - name: Install tools
-        run: uv_install python-nmap
+        module: shell
+        with:
+          cmd: uv_install python-nmap
       
       - name: Run scan
-        script: |
-          import nmap
-          nm = nmap.PortScanner()
-          nm.scan("{{ inputs.target }}", "22-443")
-          print(nm.csv())
-      
+        module: python
+        with:
+          script: |
+            import nmap
+            nm = nmap.PortScanner()
+            nm.scan("{{ inputs.target }}", "22-443")
+            print(nm.csv())
+
       - name: Save status
-        run: echo "Complete" > {{ ctx.output_path }}/status.txt
+        module: shell
+        with:
+          cmd: echo "Complete" > {{ ctx.output_path }}/status.txt
 ```
 
 ### Parallel Jobs with Dependencies
@@ -342,16 +430,22 @@ jobs:
 jobs:
   scan_tcp:
     steps:
-      - run: nmap -sS {{ inputs.target }} -oX tcp.xml
+      - module: shell
+        with:
+          cmd: nmap -sS {{ inputs.target }} -oX tcp.xml
   
   scan_udp:
     steps:
-      - run: nmap -sU {{ inputs.target }} -oX udp.xml
+      - module: shell
+        with:
+          cmd: nmap -sU {{ inputs.target }} -oX udp.xml
   
   analyze:
     needs: [scan_tcp, scan_udp]  # Waits for both
     steps:
-      - run: python analyze.py tcp.xml udp.xml
+      - module: shell
+        with:
+          cmd: python analyze.py tcp.xml udp.xml
 ```
 
 ### Conditional Flow
@@ -360,12 +454,16 @@ jobs:
   check:
     steps:
       - name: Verify target is reachable
-        run: ping -c 1 {{ inputs.target }}
+        module: shell
+        with:
+          cmd: ping -c 1 {{ inputs.target }}
   
   exploit:
     needs: [check]  # Only runs if check succeeds
     steps:
-      - run: python exploit.py {{ inputs.target }}
+      - module: shell
+        with:
+          cmd: python exploit.py {{ inputs.target }}
 ```
 
 ---

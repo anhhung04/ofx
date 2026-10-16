@@ -7,6 +7,7 @@ import pytest
 from ofx.runner import cleanup_registry
 from ofx.runner.registry import MemoryJobRegistry
 
+
 @pytest.fixture
 async def registry():
     reg = MemoryJobRegistry()

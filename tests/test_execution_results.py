@@ -8,9 +8,9 @@ import yaml
 from ofx.models.workflow import Workflow
 from ofx.runner import RunContext, RunnerStatus
 from ofx.runner.execution_results import (
-    build_step_execution_result_for_runner,
     build_job_execution_result,
     build_run_if_context,
+    build_step_execution_result_for_runner,
 )
 from ofx.runner.workflow import WorkflowRunner
 
@@ -27,8 +27,12 @@ name: Exec Results
 jobs:
   test_job:
     steps:
-      - run: echo "ok"
-      - run: echo "ok2"
+      - module: shell
+        with:
+          cmd: echo "ok"
+      - module: shell
+        with:
+          cmd: echo "ok2"
 """
     workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
     runner = WorkflowRunner(workflow, RunContext())
@@ -59,7 +63,7 @@ def test_build_job_execution_result_skips_runners_without_step_model():
         duration_ms=lambda: 500,
     )
     step_runner = SimpleNamespace(
-        model=SimpleNamespace(step_index=1, name="step-1", get_run_type=lambda: _RunType("command")),
+        model=SimpleNamespace(step_index=1, name="step-1", get_run_type=lambda: _RunType("module")),
         _run_type=None,
         status=RunnerStatus.FAILED,
         _error="boom",
@@ -78,7 +82,7 @@ def test_build_job_execution_result_skips_runners_without_step_model():
         {
             "step_index": 1,
             "name": "step-1",
-            "run_type": "command",
+            "run_type": "module",
             "status": RunnerStatus.FAILED.value,
             "error": "boom",
             "outputs": {},
@@ -95,8 +99,8 @@ def test_build_job_execution_result_prefers_cached_run_type():
         duration_ms=lambda: 500,
     )
     step_runner = SimpleNamespace(
-        model=SimpleNamespace(step_index=0, name="step-0", get_run_type=lambda: _RunType("command")),
-        _run_type=_RunType("task"),
+        model=SimpleNamespace(step_index=0, name="step-0", get_run_type=lambda: _RunType("module")),
+        _run_type=_RunType("workflow"),
         status=RunnerStatus.FINISHED,
         _error=None,
         duration_ms=lambda: 100,
@@ -104,7 +108,7 @@ def test_build_job_execution_result_prefers_cached_run_type():
 
     result = build_job_execution_result(runner, {"0": step_runner})
 
-    assert result.steps[0]["run_type"] == "task"
+    assert result.steps[0]["run_type"] == "workflow"
     assert result.steps[0]["status"] == RunnerStatus.COMPLETED.value
 
 
@@ -134,7 +138,7 @@ def test_build_job_execution_result_builds_serializable_step_results():
         model=SimpleNamespace(
             step_index=3,
             name="step-3",
-            get_run_type=lambda: _RunType("command"),
+            get_run_type=lambda: _RunType("module"),
         ),
         _run_type=None,
         status=RunnerStatus.FINISHED,
@@ -148,7 +152,7 @@ def test_build_job_execution_result_builds_serializable_step_results():
         {
             "step_index": 3,
             "name": "step-3",
-            "run_type": "command",
+            "run_type": "module",
             "status": RunnerStatus.COMPLETED.value,
             "error": None,
             "outputs": {},
@@ -162,9 +166,9 @@ def test_build_step_execution_result_for_runner_uses_runner_metadata_and_outputs
         model=SimpleNamespace(
             step_index=4,
             name="step-4",
-            get_run_type=lambda: _RunType("script"),
+            get_run_type=lambda: _RunType("pipe"),
         ),
-        _run_type=_RunType("task"),
+        _run_type=_RunType("workflow"),
         duration_ms=lambda: 84,
     )
 
@@ -178,7 +182,7 @@ def test_build_step_execution_result_for_runner_uses_runner_metadata_and_outputs
     assert result.to_dict() == {
         "step_index": 4,
         "name": "step-4",
-        "run_type": "task",
+        "run_type": "workflow",
         "status": RunnerStatus.FAILED.value,
         "error": "boom",
         "outputs": {"stdout": "nope"},
@@ -194,14 +198,14 @@ def test_build_job_execution_result_skips_invalid_runners_and_tracks_failed_inde
         duration_ms=lambda: 500,
     )
     valid_failed = SimpleNamespace(
-        model=SimpleNamespace(step_index=2, name="step-2", get_run_type=lambda: _RunType("command")),
+        model=SimpleNamespace(step_index=2, name="step-2", get_run_type=lambda: _RunType("module")),
         _run_type=None,
         status=RunnerStatus.FAILED,
         _error="boom",
         duration_ms=lambda: 10,
     )
     valid_ok = SimpleNamespace(
-        model=SimpleNamespace(step_index=3, name="step-3", get_run_type=lambda: _RunType("script")),
+        model=SimpleNamespace(step_index=3, name="step-3", get_run_type=lambda: _RunType("pipe")),
         _run_type=None,
         status=RunnerStatus.COMPLETED,
         _error=None,
@@ -227,14 +231,14 @@ def test_build_job_execution_result_failed_steps_ignore_non_failed_or_missing_mo
     )
     missing_model = SimpleNamespace(status=RunnerStatus.FAILED)
     completed = SimpleNamespace(
-        model=SimpleNamespace(step_index=1, name="step-1", get_run_type=lambda: _RunType("command")),
+        model=SimpleNamespace(step_index=1, name="step-1", get_run_type=lambda: _RunType("module")),
         _run_type=None,
         status=RunnerStatus.COMPLETED,
         _error=None,
         duration_ms=lambda: 10,
     )
     failed = SimpleNamespace(
-        model=SimpleNamespace(step_index=2, name="step-2", get_run_type=lambda: _RunType("command")),
+        model=SimpleNamespace(step_index=2, name="step-2", get_run_type=lambda: _RunType("module")),
         _run_type=None,
         status=RunnerStatus.FAILED,
         _error="boom",

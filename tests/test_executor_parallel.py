@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from ofx.runner import RunResult, RunnerStatus
+from ofx.runner import RunnerStatus, RunResult
 from ofx.runner.executors.parallel import (
     collect_parallel_run_errors,
     parallel_run_settings,

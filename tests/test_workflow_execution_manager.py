@@ -10,7 +10,7 @@ from unittest.mock import patch
 import pytest
 
 from ofx.runner import RunContext
-from ofx.runner.workflow_execution import ExecutionResult, WorkflowExecutionManager
+from ofx.runner.workflow_execution import WorkflowExecutionManager
 
 
 def _manager() -> WorkflowExecutionManager:
@@ -21,6 +21,12 @@ def _manager() -> WorkflowExecutionManager:
         _runners={},
         _time_guard=None,
     )
+    # register_runner mirrors Runner.register_runner: guard + store.
+    def _register_runner(key, runner):
+        if key in parent._runners:
+            raise ValueError(f"Duplicate runner key {key!r}")
+        parent._runners[key] = runner
+    parent.register_runner = _register_runner
     return WorkflowExecutionManager(parent)
 
 
@@ -30,7 +36,7 @@ async def test_run_records_failed_stage_indices_and_job_ids(monkeypatch) -> None
     created: list[tuple[object, bool, object]] = []
 
     monkeypatch.setattr(
-        "ofx.runner.workflow_execution.job_runner_class",
+        "ofx.runner.workflow_execution._job_runner_class",
         lambda _job: lambda job, ctx, *, parent: created.append(
             (job, ctx.allow_interactive, parent)
         ) or "runner:job-a",
@@ -56,7 +62,7 @@ async def test_run_records_failed_stage_indices_and_job_ids(monkeypatch) -> None
 async def test_run_skips_failure_recording_when_stage_succeeds(monkeypatch) -> None:
     manager = _manager()
     monkeypatch.setattr(
-        "ofx.runner.workflow_execution.job_runner_class",
+        "ofx.runner.workflow_execution._job_runner_class",
         lambda _job: lambda job, ctx, *, parent: "runner",
     )
 
@@ -77,7 +83,7 @@ async def test_run_registers_stage_children(monkeypatch) -> None:
     created: list[tuple[object, bool, object]] = []
 
     monkeypatch.setattr(
-        "ofx.runner.workflow_execution.job_runner_class",
+        "ofx.runner.workflow_execution._job_runner_class",
         lambda _job: lambda job, ctx, *, parent: created.append(
             (job, ctx.allow_interactive, parent)
         ) or f"runner:{job}",
@@ -189,7 +195,7 @@ async def test_run_builds_stage_runners_and_delegates(monkeypatch) -> None:
     stage_runners = {"job-a": "runner:job-a"}
 
     monkeypatch.setattr(
-        "ofx.runner.workflow_execution.job_runner_class",
+        "ofx.runner.workflow_execution._job_runner_class",
         lambda _job: lambda job, ctx, *, parent: "runner:job-a",
     )
 
@@ -212,7 +218,7 @@ async def test_run_aborts_remaining_stages_when_time_guard_requests_abort(monkey
     manager._parent._time_guard = SimpleNamespace(should_abort=True)
 
     monkeypatch.setattr(
-        "ofx.runner.workflow_execution.job_runner_class",
+        "ofx.runner.workflow_execution._job_runner_class",
         lambda _job: (
             lambda *_args, **_kwargs: (_ for _ in ()).throw(
                 AssertionError("should not build any stage")

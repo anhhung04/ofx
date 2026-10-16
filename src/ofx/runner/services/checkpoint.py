@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from ofx.runner.context import RunnerStatus
 from ofx.runner.durable import (
     clean_all_checkpoints,
     clean_checkpoints,
@@ -12,7 +13,6 @@ from ofx.runner.durable import (
     list_checkpoints,
     write_checkpoint,
 )
-from ofx.runner.context import RunnerStatus
 from ofx.runner.durable_git import commit_and_push
 from ofx.runner.metadata import ModelContext
 from ofx.runner.registry_keys import RunnerRegistryKeys

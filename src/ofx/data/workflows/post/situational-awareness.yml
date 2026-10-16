@@ -1,6 +1,7 @@
 name: situational-awareness
-description: 'Situational awareness — quick host enumeration after initial access:
-  users, network, processes, defenses, and privileges.'
+description: 'Situational awareness — quick host enumeration (users, network, processes,
+  defenses, privileges) that runs LOCALLY on the host executing OFX and writes a
+  run-scoped report file. Requires explicit authorization (approved input).'
 tags:
 - post
 - situational-awareness
@@ -12,6 +13,10 @@ dispatch:
       type: string
       default: linux
       description: 'Target OS: linux, windows'
+    approved:
+      required: true
+      type: boolean
+      description: Explicit authorization for this action (required)
     log_command:
       type: string
       default: 'true'
@@ -19,30 +24,54 @@ dispatch:
 jobs:
   linux-recon:
     name: Linux Host Recon
-    run_if: '{{ inputs.os_type == ''linux'' }}'
+    run_if: '{{ inputs.approved and inputs.os_type == ''linux'' }}'
     steps:
     - name: system-info
-      run: echo "[+] System Info" && uname -a && cat /etc/os-release 2>/dev/null &&
-        echo "" && echo "[+] Current User" && id && echo "" && echo "[+] Network"
-        && ip a 2>/dev/null || ifconfig && echo "" && echo "[+] Routes" && ip route
-        2>/dev/null || route -n && echo "" && echo "[+] Listening Ports" && ss -tlnp
-        2>/dev/null || netstat -tlnp && echo "" && echo "[+] Processes" && ps aux
-        --sort=-%mem | head -20 && echo "" && echo "[+] Sudo" && sudo -l 2>/dev/null
-        && echo "" && echo "[+] SUID" && find / -perm -4000 -type f 2>/dev/null |
-        head -20
-      continue-on-error: true
+      module: local.builtin.shell
+      with:
+        cmd: echo "[+] System Info"; uname -a; cat /etc/os-release 2>/dev/null; echo
+          ""; echo "[+] Current User"; id; echo ""; echo "[+] Network"; (ip a 2>/dev/null
+          || ifconfig); echo ""; echo "[+] Routes"; (ip route 2>/dev/null || route
+          -n); echo ""; echo "[+] Listening Ports"; (ss -tlnp 2>/dev/null || netstat
+          -tlnp); echo ""; echo "[+] Processes"; ps aux --sort=-%mem | head -20; echo
+          ""; echo "[+] Sudo"; sudo -l 2>/dev/null || true; echo ""; echo "[+] SUID";
+          find / -perm -4000 -type f 2>/dev/null | head -20; true
+      continue-on-error: false
       log-command: '{{ inputs.log_command }}'
+      timeout: 60
+    - name: report
+      module: local.system_report
+      with:
+        os_type: linux
+        section_name: system-info
+        capture: "{{ steps['system-info'].outputs.stdout }}"
+      continue-on-error: false
+      log-command: '{{ inputs.log_command }}'
+      timeout: 5
   windows-recon:
     name: Windows Host Recon
-    run_if: '{{ inputs.os_type == ''windows'' }}'
+    run_if: '{{ inputs.approved and inputs.os_type == ''windows'' }}'
     steps:
     - name: system-info
-      run: echo "[+] System Info" && systeminfo && echo "" && echo "[+] Current User"
-        && whoami /all && echo "" && echo "[+] Network" && ipconfig /all && echo ""
-        && echo "[+] Routes" && route print && echo "" && echo "[+] Listening Ports"
-        && netstat -ano && echo "" && echo "[+] Processes" && tasklist && echo ""
-        && echo "[+] AV/EDR" && wmic /namespace:\\root\securitycenter2 path antivirusproduct
-        get displayname,productstate && echo "" && echo "[+] Firewall" && netsh advfirewall
-        show allprofiles
-      continue-on-error: true
+      module: local.builtin.shell
+      with:
+        cmd: Write-Output '[+] System Info'; systeminfo; Write-Output '[+] Current
+          User'; whoami /all; Write-Output '[+] Network'; ipconfig /all; Write-Output
+          '[+] Routes'; route print; Write-Output '[+] Listening Ports'; netstat -ano;
+          Write-Output '[+] Processes'; tasklist; Write-Output '[+] AV/EDR'; try {
+          Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntiVirusProduct
+          | Select-Object displayName,productState | Format-Table -AutoSize } catch
+          { Write-Output 'AV query unavailable' }; Write-Output '[+] Firewall'; netsh
+          advfirewall show allprofiles; Write-Output '[+] done'
+      continue-on-error: false
       log-command: '{{ inputs.log_command }}'
+      timeout: 60
+    - name: report
+      module: local.system_report
+      with:
+        os_type: windows
+        section_name: system-info
+        capture: "{{ steps['system-info'].outputs.stdout }}"
+      continue-on-error: false
+      log-command: '{{ inputs.log_command }}'
+      timeout: 5

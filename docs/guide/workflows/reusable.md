@@ -44,7 +44,9 @@ call:
 jobs:
   check:
     steps:
-      - run: nmap -p {{ inputs.ports }} {{ inputs.target }}
+      - module: shell
+        with:
+          cmd: nmap -p {{ inputs.ports }} {{ inputs.target }}
 ```
 
 ---
@@ -95,8 +97,10 @@ jobs:
       live_hosts: "{{ steps['probe'].outputs.hosts }}"
     steps:
       - name: probe
-        run: |
-          echo "hosts=10.0.0.1,10.0.0.2" >> $OFX_OUTPUTS
+        module: shell
+        with:
+          cmd: |
+            echo "hosts=10.0.0.1,10.0.0.2" >> $OFX_OUTPUTS
 ```
 
 The parent workflow accesses the output through the step:
@@ -108,7 +112,9 @@ steps:
     with:
       target: "{{ inputs.target }}"
 
-  - run: echo "Found hosts: {{ steps['run-recon'].outputs.hosts }}"
+  - module: shell
+    with:
+      cmd: 'echo "Found hosts: {{ steps[\'run-recon\'].outputs.hosts }}"'
 ```
 
 ---

@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Any, Literal
 
 from ofx.models.config import DurableRunConfig
-from ofx.models.workflow import Workflow
 from ofx.runner.context import RunContext, RunResult, context_with_env
 from ofx.runner.executors.workflow import WorkflowExecutor
 from ofx.runner.registry import RegistryFactory

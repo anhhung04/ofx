@@ -1,6 +1,6 @@
 ---
 name: ofx-workflow-generator
-description: Guide for agents generating OFX (Offensive Flow Executor) workflow YAML files. Covers syntax, schema validation, step types, job dependencies, matrix/fleet strategies, cloud execution, remote targets (SSH/WinRM), API modules, templating, sessions, and collections. Use when asked to create, edit, or review OFX workflow files.
+description: Guide for agents generating OFX (Offensive Flow Executor) workflow YAML files. Covers syntax, schema validation, step types, job dependencies, matrix/fleet strategies, cloud execution, Lib modules, templating, sessions, and collections. Use when asked to create, edit, or review OFX workflow files.
 allowed-tools: read_file, grep_search, run_in_terminal, file_search, list_dir
 ---
 
@@ -13,8 +13,7 @@ allowed-tools: read_file, grep_search, run_in_terminal, file_search, list_dir
 | New workflow from scratch | `ofx flow init <name>` then edit the generated file |
 | Modify existing workflow | Read the file, apply edits, validate |
 | Validate a workflow | Run `ofx flow validate <file>` |
-| Use a built-in API module | Check `src/ofx/api/<category>/` for available modules |
-| Run on remote machines | Use `remote` step type with SSH/WinRM connection |
+| Use a built-in Lib module | Check `src/ofx/lib/<category>/` for available modules |
 | Run on cloud VPS | Add `cloud:` to job + `provider:` to step, configure profile |
 | Distribute across fleet | Use `strategy.fleet` with count + distribution mode |
 | Schema-aware editing | Ensure `# yaml-language-server: $schema=...` comment at top |
@@ -72,74 +71,32 @@ jobs:
 
 | Type | Key | Use Case |
 |---|---|---|
-| Shell | `run:` | Any shell command |
-| Python inline | `script:` | Multi-line Python logic |
-| Python file | `script_file:` | Path to `.py` file |
+| Shell | `module: shell` + `with.cmd` | Any shell command |
+| Python inline | `module: python` + `with.script` | Multi-line Python logic |
+| Python file | `module: python` + `with.script_file` | Path to `.py` file |
+| User-defined | `module: path/to.py::func` | Custom Python function (defaults to `run`) |
+| Local named | `module: local.<name>` | Workflow-local `modules/<name>.py` (defaults to `run`) |
+| Remote module | `module: <owner>.<repo>.<module>[@<ref>][::<func>]` | GitHub-published module (cloned to `~/.ofx/modules/`; arbitrary code — prefer pinned `@<tag>`) |
 | Subworkflow | `uses:` | Reference another workflow YAML |
-| Remote (SSH) | `remote:` | Run on remote host via SSH |
-| Remote (WinRM) | `remote:` | Run on remote host via WinRM |
+| Pipe (ETL) | `pipe:` | Declarative filter/map/sort/format transform of a previous step's outputs |
 
 ### Step Common Options
 
 ```yaml
 - name: Step name
-  run: echo hello
+  module: shell
+  with:
+    cmd: echo hello
   shell: /bin/bash          # default: /bin/bash
   working-directory: /tmp   # optional
   timeout: 5                # minutes, 0 = no timeout
   retry: 3                  # retry count
-  retry-delay: 10           # seconds between retries
+  retry-delay: 10           # seconds between retries (exponential backoff + jitter)
   continue-on-error: true   # don't fail job on error
-  if: success()             # success() | failure() | always()
+  if: success()             # success() | failure() | canceled() | always()
   log-command: true         # log the command itself
-  log-output: true          # log stdout/stderr
+  log-stdout: true          # save stdout to stdout_<job>_<step>.log
 ```
-
-## Remote Execution (SSH / WinRM)
-
-When a step targets a remote machine, use the `remote:` key with a connection object:
-
-```yaml
-jobs:
-  deploy:
-    steps:
-      - name: Run on remote Linux
-        remote:
-          host: '{{ inputs.target }}'
-          port: 22
-          username: '{{ inputs.user }}'
-          password: '{{ inputs.password }}'   # or use key
-          key-file: '{{ inputs.ssh_key }}'
-          command: |
-            whoami
-            hostname
-            uname -a && cat /etc/os-release
-
-      - name: Run on remote Windows
-        remote:
-          host: '{{ inputs.target }}'
-          port: 5986
-          username: '{{ inputs.user }}'
-          password: '{{ inputs.password }}'
-          protocol: winrm
-          use-ssl: true
-          command: |
-            whoami
-            systeminfo | findstr /B /C:"OS Name"
-```
-
-### Remote connection fields
-
-| Field | SSH | WinRM | Notes |
-|---|---|---|---|
-| `host` | ✅ | ✅ | Required |
-| `port` | ✅ | ✅ | SSH default 22, WinRM default 5986 |
-| `username` | ✅ | ✅ | Required |
-| `password` | ✅ | ✅ | Optional if using key |
-| `key-file` | ✅ | ❌ | Path to SSH private key |
-| `protocol` | ✅ | ✅ | `ssh` or `winrm` |
-| `use-ssl` | ❌ | ✅ | Default: true |
-| `command` | ✅ | ✅ | Multi-line shell commands |
 
 ## Cloud Execution
 
@@ -171,7 +128,9 @@ jobs:
     cloud: do-nyc              # references a cloud profile
     cloud-timeout: 30          # VPS teardown timeout in minutes
     steps:
-      - run: nmap -sV {{ inputs.target }}
+      - module: shell
+        with:
+          cmd: nmap -sV {{ inputs.target }}
 ```
 
 ### Fleet Distribution (Multi-VPS)
@@ -190,8 +149,10 @@ jobs:
         expand_cidrs: true             # expand CIDR ranges to individual IPs
         exclude: ['10.0.0.1']          # skip specific targets
     steps:
-      - run: |
-          cat $FLEET_INPUT_FILE | xargs -I{} nmap -p{{ matrix.port }} {}
+      - module: shell
+        with:
+          cmd: |
+            cat $FLEET_INPUT_FILE | xargs -I{} nmap -p{{ matrix.port }} {}
 ```
 
 `$FLEET_INPUT_FILE` is auto-uploaded to each VPS with its chunk of targets.
@@ -217,7 +178,9 @@ jobs:
           method: PATCH
           extra_header: 'X-Custom: 1'
     steps:
-      - run: 'curl -X {{ matrix.method }} https://{{ matrix.target }}'
+      - module: shell
+        with:
+          cmd: 'curl -X {{ matrix.method }} https://{{ matrix.target }}'
 ```
 
 Matrix variables are available as `{{ matrix.<key> }}` in templates.
@@ -233,7 +196,7 @@ Matrix variables are available as `{{ matrix.<key> }}` in templates.
 | Matrix | `{{ matrix.target }}` | Job-level |
 | Job outputs | `{{ jobs['scan'].outputs.hosts }}` | Cross-job |
 | Step outputs | `{{ steps['probe'].outputs.data }}` | Within job |
-| API modules | `{{ recon.portscan(...) }}` | Anywhere |
+| Lib modules | `{{ recon.portscan(...) }}` | Anywhere |
 
 ### Outputs and Data Passing
 
@@ -244,58 +207,66 @@ jobs:
       hosts: '{{ steps["nmap-scan"].outputs.hosts }}'
     steps:
       - name: nmap-scan
-        run: nmap -sL {{ inputs.range }} -oG -
-        # Use add_outputs() in script steps to set outputs:
+        module: shell
+        with:
+          cmd: nmap -sL {{ inputs.range }} -oG -
+        # Use add_outputs() in python module steps to set outputs:
       - name: parse
-        script: |
-          hosts = []
-          # ... parse logic ...
-          add_outputs(hosts='\n'.join(hosts), count=len(hosts))
+        module: python
+        with:
+          script: |
+            hosts = []
+            # ... parse logic ...
+            add_outputs(hosts='\n'.join(hosts), count=len(hosts))
 
   report:
     needs: scan
     steps:
-      - run: echo "Found {{ jobs['scan'].outputs.count }} hosts"
+      - module: shell
+        with:
+          cmd: echo "Found {{ jobs['scan'].outputs.count }} hosts"
 ```
 
-### API Module Access in Scripts
+### API Module Access in Python Modules
 
-Python `script:` steps can import `ofx.api` modules directly. They're auto-bundled for cloud execution:
+Python `module: python` steps can import `ofx.lib` modules directly. They're auto-bundled for cloud execution:
 
 ```yaml
 - name: DNS enumeration
-  script: |
-    from ofx.api.dns import resolve, bruteforce
-    records = resolve("example.com", record_type="A")
-    subs = bruteforce("example.com", wordlist="/usr/share/wordlists/subdomains.txt")
-    add_outputs(a_records=records, subdomains=subs)
+  module: python
+  with:
+    script: |
+      from ofx.lib.dns import resolve, bruteforce
+      records = resolve("example.com", record_type="A")
+      subs = bruteforce("example.com", wordlist="/usr/share/wordlists/subdomains.txt")
+      add_outputs(a_records=records, subdomains=subs)
 ```
 
 ## Built-in API Module Categories
 
 | Category | Path | Key Capabilities |
 |---|---|---|
-| `ad` | `ofx.api.ad` | AD enumeration, Kerberos, DCSync, LDAP queries, BloodHound |
-| `bundle` | `ofx.api.bundle` | Payload bundling, self-extracting archives |
-| `creds` | `ofx.api.creds` | Credential extraction, KeePass, token manipulation |
-| `dns` | `ofx.api.dns` | Resolution, bruteforce, zone transfer, reverse lookup |
-| `evasion` | `ofx.api.evasion` | AMSI bypass, obfuscation, packer detection |
-| `exfil` | `ofx.api.exfil` | DNS/HTTP/ICMP exfiltration, encoding/decoding |
-| `exploitation` | `ofx.api.exploitation` | Shellcode, webshells, exploit connectors |
-| `file` | `ofx.api.file` | File upload/download, hash, pack/unpack |
-| `http` | `ofx.api.http` | HTTP client, proxy, auth, sessions |
-| `httpserver` | `ofx.api.httpserver` | Payload delivery, exfil listener, file server |
-| `network` | `ofx.api.network` | Portscan, proxy, tunnel, pivot |
-| `oob` | `ofx.api.oob` | Out-of-band (DNS/HTTP) interaction testing |
-| `opsec` | `ofx.api.opsec` | Log cleanup, timestamp manipulation, artifact removal |
-| `packers` | `ofx.api.packers` | UPX, PE packers, binary manipulation |
-| `payloads` | `ofx.api.payloads` | Payload generation, encoding, staging |
-| `post` | `ofx.api.post` | Post-exploitation runners, persistence, pivoting |
-| `privesc` | `ofx.api.privesc` | Linux/Windows privilege escalation enumeration |
-| `recon` | `ofx.api.recon` | OSINT, port scanning, web fingerprinting, subdomain enum |
-| `search` | `ofx.api.search` | Shodan, Censys, Google dorking |
-| `service` | `ofx.api.service` | Service interaction (SMB, RDP, FTP, etc.) |
-| `strings` | `ofx.api.strings` | Encoding, decoding, hashing, transformation |
+| `ad` | `ofx.lib.ad` | AD enumeration, Kerberos, DCSync, LDAP queries, BloodHound |
+| `bundle` | `ofx.lib.bundle` | Payload bundling, self-extracting archives |
+| `creds` | `ofx.lib.creds` | Credential extraction, KeePass, token manipulation |
+| `dns` | `ofx.lib.dns` | Resolution, bruteforce, zone transfer, reverse lookup |
+| `evasion` | `ofx.lib.evasion` | AMSI bypass, obfuscation, packer detection |
+| `exfil` | `ofx.lib.exfil` | DNS/HTTP/ICMP exfiltration, encoding/decoding |
+| `exploitation` | `ofx.lib.exploitation` | Shellcode, webshells, exploit connectors |
+| `file` | `ofx.lib.file` | File upload/download, hash, pack/unpack |
+| `http` | `ofx.lib.http` | HTTP client, proxy, auth, sessions |
+| `httpserver` | `ofx.lib.httpserver` | Payload delivery, exfil listener, file server |
+| `network` | `ofx.lib.network` | Portscan, proxy, tunnel, pivot |
+| `oob` | `ofx.lib.oob` | Out-of-band (DNS/HTTP) interaction testing |
+| `opsec` | `ofx.lib.opsec` | Log cleanup, timestamp manipulation, artifact removal |
+| `packers` | `ofx.lib.packers` | UPX, PE packers, binary manipulation |
+| `payloads` | `ofx.lib.payloads` | Payload generation, encoding, staging |
+| `post` | `ofx.lib.post` | Post-exploitation runners, persistence, pivoting |
+| `privesc` | `ofx.lib.privesc` | Linux/Windows privilege escalation enumeration |
+| `recon` | `ofx.lib.recon` | OSINT, port scanning, web fingerprinting, subdomain enum |
+| `search` | `ofx.lib.search` | Shodan, Censys, Google dorking |
+| `service` | `ofx.lib.service` | Service interaction (SMB, RDP, FTP, etc.) |
+| `strings` | `ofx.lib.strings` | Encoding, decoding, hashing, transformation |
 
 ## Validation & Syntax Checking
 
@@ -386,7 +357,9 @@ jobs:
         target: '{{ inputs.targets | fromjson }}'
       max_parallel: 10
     steps:
-      - run: nmap -sV -p- {{ matrix.target }}
+      - module: shell
+        with:
+          cmd: nmap -sV -p- {{ matrix.target }}
 ```
 
 ### Conditional Cleanup
@@ -398,11 +371,9 @@ jobs:
     steps:
       - name: Clean artifacts
         if: success()
-        remote:
-          host: '{{ inputs.target }}'
-          username: '{{ inputs.user }}'
-          key-file: '{{ inputs.ssh_key }}'
-          command: rm -rf /tmp/ofx_* /dev/shm/ofx_*
+        module: shell
+        with:
+          cmd: rm -rf /tmp/ofx_* /dev/shm/ofx_*
 ```
 
 ## Pitfalls to Avoid
@@ -411,7 +382,7 @@ jobs:
 - **Job name collisions** — Job names must be unique within a workflow.
 - **Circular dependencies** — `needs` cycles cause validation errors.
 - **Unquoted template expressions** — Wrap `{{ }}` in quotes in YAML: `'{{ inputs.target }}'`.
-- **Step type ambiguity** — Each step must have exactly one of: `run`, `script`, `script_file`, `uses`, `remote`.
+- **Step type ambiguity** — Each step must have exactly one of: `module`, `uses`, `pipe`.
 - **Matrix variable clashes** — Don't name matrix variables the same as `dispatch.inputs` keys.
 - **Cloud without profile** — `cloud:` references must match an existing `ofx cloud profile` name.
 - **Fleet without cloud** — `strategy.fleet` requires `cloud:` on the job.

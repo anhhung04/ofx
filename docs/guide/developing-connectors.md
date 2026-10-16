@@ -19,7 +19,7 @@ Exploit connectors are inspired by [pocsuite3](https://pocsuite.org) and provide
 ### Base Class Structure
 
 ```python
-from ofx.api.exploitation.exploit import ExploitBase, ExploitResult, ExploitMode
+from ofx.lib.exploitation.exploit import ExploitBase, ExploitResult, ExploitMode
 
 class MyExploit(ExploitBase):
     def __init__(self):
@@ -130,7 +130,7 @@ Webmin Pre-Auth RCE (CVE-2019-15107)
 """
 
 import requests
-from ofx.api.exploitation.exploit import ExploitBase, ExploitResult
+from ofx.lib.exploitation.exploit import ExploitBase, ExploitResult
 
 class WebminRCEExploit(ExploitBase):
     def __init__(self):
@@ -214,7 +214,7 @@ class WebminRCEExploit(ExploitBase):
 ### Using Exploits
 
 ```python
-from ofx.api.exploitation.exploit import ExploitRunner, ExploitMode
+from ofx.lib.exploitation.exploit import ExploitRunner, ExploitMode
 
 # Create runner
 runner = ExploitRunner()
@@ -248,7 +248,7 @@ if result.success:
 
 Place exploit connectors in:
 
-- **Built-in**: `{package}/ofx/api/exploitation/exploit/connectors/`
+- **Built-in**: `{package}/ofx/lib/exploitation/exploit/connectors/`
 - **Custom**: `~/.ofx/exploits/`
 
 File naming: `cve_2023_1234.py` or `app_name_vulnerability.py`
@@ -263,7 +263,7 @@ and are auto-discovered on startup.
 ### Base Class
 
 ```python
-from ofx.api.exploitation.webshell.base import WebShell
+from ofx.lib.exploitation.webshell.base import WebShell
 
 class CustomWebShell(WebShell):
     def __init__(self, password="pass", encoder="default"):
@@ -314,7 +314,7 @@ code = shell.apply_template(template)
 Register custom templates:
 
 ```python
-from ofx.api.exploitation.webshell.shell.php import PhpShell
+from ofx.lib.exploitation.webshell.shell.php import PhpShell
 
 PhpShell.register_template(
     "mini",
@@ -336,7 +336,7 @@ and are auto-discovered on startup.
 ### Base Class
 
 ```python
-from ofx.api.exploitation.shellcode.base import ShellCode
+from ofx.lib.exploitation.shellcode.base import ShellCode
 
 class CustomShellcode(ShellCode):
     def __init__(self, connect_back_ip="127.0.0.1", connect_back_port=4444):
@@ -371,7 +371,7 @@ Available in shellcode templates:
 Apply encoders to avoid bad characters:
 
 ```python
-from ofx.api.exploitation.shellcode.encoder import encode_xor, encode_alphanum
+from ofx.lib.exploitation.shellcode.encoder import encode_xor, encode_alphanum
 
 shellcode = b"\\x90\\x90\\x90\\x00\\x41\\x41"
 bad_chars = ["\\x00", "\\x0a", "\\x0d"]
@@ -409,7 +409,7 @@ alpha = encode_alphanum(shellcode)
 
 ```python
 # Test exploit locally
-from ofx.api.exploitation.exploit import ExploitMode
+from ofx.lib.exploitation.exploit import ExploitMode
 
 class TestExploit(ExploitBase):
     def __init__(self):
@@ -439,18 +439,20 @@ jobs:
   scan:
     steps:
       - name: Run exploit
-        script: |
-          from ofx.api.exploitation.exploit import ExploitRunner, ExploitMode
-          
-          runner = ExploitRunner()
-          result = runner.run_exploit(
-              connector="webmin_rce",
-              target="{{ inputs.target }}",
-              mode=ExploitMode.VERIFY
-          )
-          
-          if result.success:
-              print("Vulnerable!")
+        module: python
+        with:
+          script: |
+            from ofx.lib.exploitation.exploit import ExploitRunner, ExploitMode
+
+            runner = ExploitRunner()
+            result = runner.run_exploit(
+                connector="webmin_rce",
+                target="{{ inputs.target }}",
+                mode=ExploitMode.VERIFY
+            )
+
+            if result.success:
+                print("Vulnerable!")
 ```
 
 ## Quick Reference
@@ -458,7 +460,7 @@ jobs:
 ### Exploit Connector Template
 
 ```python
-from ofx.api.exploitation.exploit import ExploitBase, ExploitResult
+from ofx.lib.exploitation.exploit import ExploitBase, ExploitResult
 
 class MyExploit(ExploitBase):
     def __init__(self):
@@ -534,7 +536,7 @@ return self.parse_output({
 
 ## See Also
 
-- [API Documentation](../cli/commands/docs-serve.md)
-- [Exploit API Reference](../api/overview.md)
-- [Webshell API Reference](../api/overview.md)
-- [Shellcode API Reference](../api/overview.md)
+- [API Documentation](../cli/commands/api-show.md)
+- [Exploit API Reference](../lib/overview.md)
+- [Webshell API Reference](../lib/overview.md)
+- [Shellcode API Reference](../lib/overview.md)

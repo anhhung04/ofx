@@ -14,19 +14,25 @@ jobs:
   setup:
     steps:
       - name: Prepare Environment
-        run: |
-          mkdir -p /tmp/exploit
-          cp ./vuln ./vuln.bak
+        module: shell
+        with:
+          cmd: |
+            mkdir -p /tmp/exploit
+            cp ./vuln ./vuln.bak
   debug:
     needs: setup
     steps:
       - name: GDB Session
-        run: gdb ./vuln
+        module: shell
+        with:
+          cmd: gdb ./vuln
         interactive: true
         timeout: 30
         working_directory: /tmp/exploit
       - name: Save GDB Log
-        run: cp gdb.txt /tmp/exploit/gdb.log
+        module: shell
+        with:
+          cmd: cp gdb.txt /tmp/exploit/gdb.log
 ```
 **Why:** Use for binary analysis, exploit dev, or live debugging. All stdin/stdout is passed through.
 
@@ -41,11 +47,15 @@ jobs:
   db:
     steps:
       - name: MySQL Shell
-        run: mysql -h {{ inputs.db_host }} -u {{ inputs.db_user }} -p{{ secrets.db_pass }}
+        module: shell
+        with:
+          cmd: mysql -h {{ inputs.db_host }} -u {{ inputs.db_user }} -p{{ secrets.db_pass }}
         interactive: true
         timeout: 15
       - name: Export Data
-        run: mysqldump {{ inputs.db_name }} > dump.sql
+        module: shell
+        with:
+          cmd: mysqldump {{ inputs.db_name }} > dump.sql
 ```
 **Why:** Use for manual queries, schema inspection, or troubleshooting.
 
@@ -60,11 +70,15 @@ jobs:
   netcat:
     steps:
       - name: Open Netcat
-        run: nc {{ inputs.target_ip }} {{ inputs.target_port }}
+        module: shell
+        with:
+          cmd: nc {{ inputs.target_ip }} {{ inputs.target_port }}
         interactive: true
         timeout: 10
       - name: Log
-        run: echo "Netcat session done"
+        module: shell
+        with:
+          cmd: echo "Netcat session done"
 ```
 
 SSH interactive session:
@@ -74,7 +88,9 @@ jobs:
   ssh:
     steps:
       - name: SSH Login
-        run: ssh user@{{ inputs.host }}
+        module: shell
+        with:
+          cmd: ssh user@{{ inputs.host }}
         interactive: true
         timeout: 20
 ```
@@ -90,10 +106,14 @@ jobs:
   py:
     steps:
       - name: Start Python
-        run: python3 -i
+        module: shell
+        with:
+          cmd: python3 -i
         interactive: true
       - name: Save Output
-        run: cp ~/.python_history python_history.txt
+        module: shell
+        with:
+          cmd: cp ~/.python_history python_history.txt
 ```
 
 Or use IPython for advanced features:
@@ -103,12 +123,16 @@ jobs:
   ipy:
     steps:
       - name: IPython
-        run: ipython3
+        module: shell
+        with:
+          cmd: ipython3
         interactive: true
         env:
           PYTHONPATH: /opt/custom
       - name: Save History
-        run: cp ~/.ipython/profile_default/history.sqlite ipython_history.db
+        module: shell
+        with:
+          cmd: cp ~/.ipython/profile_default/history.sqlite ipython_history.db
 ```
 
 ---
@@ -122,7 +146,9 @@ jobs:
   msf:
     steps:
       - name: Start msfconsole
-        run: msfconsole
+        module: shell
+        with:
+          cmd: msfconsole
         interactive: true
         timeout: 30
 ```
@@ -134,7 +160,9 @@ jobs:
   tool:
     steps:
       - name: Run Custom CLI
-        run: ./my_interactive_tool --shell
+        module: shell
+        with:
+          cmd: ./my_interactive_tool --shell
         interactive: true
 ```
 
@@ -148,11 +176,15 @@ jobs:
   shell:
     steps:
       - name: Bash
-        run: bash
+        module: shell
+        with:
+          cmd: bash
         interactive: true
         timeout: 10
       - name: After Shell
-        run: echo "Shell exited"
+        module: shell
+        with:
+          cmd: echo "Shell exited"
 ```
 *Exiting with `exit`, `Ctrl+D`, or `Ctrl+C` is treated as a clean exit. Nonzero exit codes (except 127/130) stop the job unless `continue-on-error: true` is set.*
 
@@ -166,9 +198,13 @@ jobs:
   test:
     steps:
       - name: Run Tests
-        run: pytest
+        module: shell
+        with:
+          cmd: pytest
       - name: Debug Shell
-        run: bash
+        module: shell
+        with:
+          cmd: bash
         interactive: true
         if: failure()
 ```

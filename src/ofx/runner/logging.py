@@ -77,6 +77,9 @@ class StructuredLogger:
         return f"{context.prefix} | {text}" if context.prefix else text
 
     def _log(self, level_name: str, message: Any) -> None:
+        level = getattr(logging, level_name.upper())
+        if level < self._runner.log_level:
+            return
         context = LogContext.from_runner(self._runner)
         getattr(self._logger, level_name)(
             self.format_message(message, context),

@@ -6,7 +6,6 @@ import json
 import re
 from typing import Any
 
-
 _PROFILE_ENV_ATTRS: tuple[tuple[str, str, object | None], ...] = (
     ("OFX_RATE_LIMIT", "rate_limit", None),
     ("OFX_THREADS", "threads", 10),

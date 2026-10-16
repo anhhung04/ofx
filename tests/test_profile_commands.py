@@ -1,12 +1,9 @@
 import importlib
 
-from types import SimpleNamespace
-
 from rich.console import Console
 from typer.testing import CliRunner
 
 from ofx.commands.flow.profile_commands import app
-
 
 runner = CliRunner()
 profile_commands = importlib.import_module("ofx.commands.flow.profile_commands")

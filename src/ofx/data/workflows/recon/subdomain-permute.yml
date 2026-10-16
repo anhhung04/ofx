@@ -21,40 +21,68 @@ dispatch:
       type: string
       default: 'true'
       description: Enable command logging
+call:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: File of known subdomains
+      alias: t
+    resolvers:
+      type: string
+      default: ''
+      description: Custom DNS resolver file
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+    output_dir:
+      type: string
+      default: '{{ env.OFX_RUN_DIR }}'
+      description: Directory for generated artifacts
+  outputs:
+    subdomains: "{{ jobs.permute.outputs.subdomains }}"
+    subdomain_count: "{{ jobs.permute.outputs.subdomain_count }}"
+    resolved_file: "{{ jobs.permute.outputs.resolved_file }}"
 jobs:
   permute:
     name: Subdomain Permutations
     outputs:
-      subdomains: '{{ steps.resolve.outputs.subdomain_file }}'
-      count: '{{ steps.resolve.outputs.subdomain_count }}'
+      subdomains: '{{ steps.resolve.outputs.output_file }}'
+      subdomain_count: '{{ steps.resolve.outputs.count }}'
+      resolved_file: '{{ inputs.output_dir or env.OFX_RUN_DIR }}/resolved_permutations.txt'
     steps:
     - name: alterx
-      run: alterx -l {{ inputs.target }} -o {{ env.OFX_RUN_DIR }}/permutations.txt
+      module: local.builtin.shell
+      with:
+        cmd: alterx -l {{ inputs.target }} -o {{ inputs.output_dir or env.OFX_RUN_DIR
+          }}/permutations.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
+      timeout: 120
     - name: dnsgen
-      run: dnsgen {{ inputs.target }} > {{ env.OFX_RUN_DIR }}/permutations_dnsgen.txt
+      module: local.builtin.shell
+      with:
+        cmd: dnsgen {{ inputs.target }} > {{ inputs.output_dir or env.OFX_RUN_DIR
+          }}/permutations_dnsgen.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
+      timeout: 120
     - name: resolve
-      script: |
-        import os
-        rd = os.environ["OFX_RUN_DIR"]
-        seen = set()
-        for name in ("permutations.txt", "permutations_dnsgen.txt"):
-            try:
-                with open(os.path.join(rd, name)) as fh:
-                    seen.update(line.strip() for line in fh if line.strip())
-            except FileNotFoundError:
-                pass
-        out = os.path.join(rd, "all_permutations.txt")
-        with open(out, "w") as fh:
-            fh.write("\n".join(sorted(seen)))
-        print(f"generated {len(seen)} permutations to resolve")
-        add_outputs(subdomain_file=out, subdomain_count=len(seen))
+      module: local.builtin.merge_lists
+      with:
+        files:
+          - '{{ inputs.output_dir or env.OFX_RUN_DIR }}/permutations.txt'
+          - '{{ inputs.output_dir or env.OFX_RUN_DIR }}/permutations_dnsgen.txt'
+        output: all_permutations.txt
+        output_dir: '{{ inputs.output_dir or env.OFX_RUN_DIR }}'
+        fail_if: all_missing
     - name: puredns-resolve
-      run: puredns resolve {{ env.OFX_RUN_DIR }}/all_permutations.txt -w {{ env.OFX_RUN_DIR
-        }}/resolved_permutations.txt{% if inputs.resolvers %} -r {{ inputs.resolvers }}{% endif %}
+      module: local.builtin.shell
+      with:
+        cmd: puredns resolve {{ inputs.output_dir or env.OFX_RUN_DIR }}/all_permutations.txt
+          -w {{ inputs.output_dir or env.OFX_RUN_DIR }}/resolved_permutations.txt{%
+          if inputs.resolvers %} -r {{ inputs.resolvers }}{% endif %}
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
       timeout: 240

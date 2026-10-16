@@ -8,12 +8,16 @@ jobs:
     name: Run Flow Tests
     steps:
       - name: Test Templates
-        run: echo "{{ file_read('/etc/passwd') }}"
+        module: shell
+        with:
+          cmd: echo "{{ file_read('/etc/passwd') }}"
 
       - name: Test Command
         log_stdout: true
-        run: |
-          echo "This is command test output"
+        module: shell
+        with:
+          cmd: |
+            echo "This is command test output"
   test2:
     name: Run Flow Tests in Subworkflow
     steps:

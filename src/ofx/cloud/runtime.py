@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any
 
+
 def is_windows_config(cfg: Any) -> bool:
     return (
         getattr(cfg, "connection_type", "") == "winrm"
@@ -61,7 +62,7 @@ def create_remote_runner(
     max_retries: int = 3,
 ) -> Any:
     """Create PostSSH/PostWinRM runner using shared cloud config conventions."""
-    from ofx.api.post import RunnerRegistry
+    from ofx.lib.post import RunnerRegistry
 
     if is_windows_config(cfg):
         return RunnerRegistry.create(

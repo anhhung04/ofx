@@ -4,6 +4,7 @@ import asyncio
 import json
 import re
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -16,6 +17,7 @@ from ofx.runner.templates.resolver import (
     _StepAccessor,
     _tojson_python,
 )
+
 
 @pytest.fixture
 def resolver():

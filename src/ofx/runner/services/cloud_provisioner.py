@@ -10,9 +10,14 @@ from __future__ import annotations
 from typing import Any
 
 from ofx.cloud.base import CloudProvider
-from ofx.cloud.runtime import build_provider_kwargs, create_remote_runner, is_windows_config
+from ofx.cloud.runtime import (
+    build_provider_kwargs,
+    create_remote_runner,
+    is_windows_config,
+)
 from ofx.models.cloud import CloudConfig
 from ofx.utils.tempfiles import remote_work_dir
+
 
 class CloudProvisioner:
     """Handles provisioning, connection, and cleanup of a cloud VPS.

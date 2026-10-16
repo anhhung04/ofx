@@ -3,6 +3,7 @@
 import json
 from enum import Enum
 
+
 class EnumEncoder(json.JSONEncoder):
     """Custom JSON encoder for Enums"""
 

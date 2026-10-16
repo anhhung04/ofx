@@ -1,8 +1,9 @@
-"""Tests for ofx.api.recon.targets classification helpers."""
+"""Tests for ofx.lib.recon.targets classification helpers."""
 
 import pytest
 
-from ofx.api.recon.targets import TARGET_TYPES, classify_target, split_targets
+from ofx.lib.recon.targets import TARGET_TYPES, classify_target, split_targets
+
 
 class TestClassifyTarget:
     @pytest.mark.parametrize(

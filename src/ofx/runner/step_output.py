@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -63,17 +62,10 @@ def save_output_file(
 
     output_flags = outputs or {}
     kind, value = step_source_kind_and_value(step_model)
-    if kind == "script":
-        encoded = base64.b64encode(str(value).encode()).decode()
-        header = [f">> script (base64): {encoded}"]
-    elif kind == "command":
-        header = [f">> command: {value}"]
+    if kind == "module":
+        header = [f">> module: {value}"]
     elif kind == "workflow":
         header = [f">> workflow: {value}"]
-    elif kind == "script_file":
-        header = [f">> script_file: {value}"]
-    elif kind == "task":
-        header = [f">> task: {value}"]
     else:
         header = [">> unknown step type"]
     header.extend(

@@ -20,7 +20,9 @@ jobs:
         python: ["3.10", "3.11", "3.12"]
     steps:
       - name: Run tests
-        run: echo "Testing on {{ matrix.os }} with Python {{ matrix.python }}"
+        module: shell
+        with:
+          cmd: echo "Testing on {{ matrix.os }} with Python {{ matrix.python }}"
 ```
 
 This creates 9 job instances (3 OS × 3 Python versions).
@@ -38,9 +40,11 @@ jobs:
         arch: [x64, arm64]
     steps:
       - name: Build
-        run: |
-          echo "Building version {{ matrix.version }}"
-          echo "Target architecture: {{ matrix.arch }}"
+        module: shell
+        with:
+          cmd: |
+            echo "Building version {{ matrix.version }}"
+            echo "Target architecture: {{ matrix.arch }}"
 ```
 
 ## Controlling Parallelism
@@ -57,7 +61,9 @@ jobs:
       matrix:
         region: [us-east, us-west, eu-central, ap-south]
     steps:
-      - run: echo "Deploying to {{ matrix.region }}"
+      - module: shell
+        with:
+          cmd: echo "Deploying to {{ matrix.region }}"
 ```
 
 Without `max_parallel`, all matrix jobs in a stage run concurrently (limited only by the global `workers` setting).
@@ -74,7 +80,9 @@ jobs:
       matrix:
         browser: [chrome, firefox, safari]
     steps:
-      - run: test_browser.sh {{ matrix.browser }}
+      - module: shell
+        with:
+          cmd: test_browser.sh {{ matrix.browser }}
 ```
 
 Set `fail_fast: false` to allow all matrix jobs to complete even if some fail:
@@ -87,7 +95,9 @@ jobs:
       matrix:
         browser: [chrome, firefox, safari]
     steps:
-      - run: test_browser.sh {{ matrix.browser }}
+      - module: shell
+        with:
+          cmd: test_browser.sh {{ matrix.browser }}
 ```
 
 ## Including Additional Combinations
@@ -110,11 +120,15 @@ jobs:
             node: 18
             experimental: true
     steps:
-      - run: node --version
-      - run: |
-          if [ "{{ matrix.experimental }}" = "true" ]; then
-            echo "Running experimental build"
-          fi
+      - module: shell
+        with:
+          cmd: node --version
+      - module: shell
+        with:
+          cmd: |
+            if [ "{{ matrix.experimental }}" = "true" ]; then
+              echo "Running experimental build"
+            fi
 ```
 
 The `include` field adds combinations that wouldn't be created by the base matrix.
@@ -138,7 +152,9 @@ jobs:
           - os: windows
             python: "3.11"
     steps:
-      - run: python --version
+      - module: shell
+        with:
+          cmd: python --version
 ```
 
 This creates 7 job instances instead of 9.
@@ -170,19 +186,27 @@ jobs:
     
     steps:
       - name: Checkout
-        run: git clone https://github.com/example/repo.git
+        module: shell
+        with:
+          cmd: git clone https://github.com/example/repo.git
       
       - name: Configure
-        run: |
-          cmake -B build \
-            -DCMAKE_BUILD_TYPE={{ matrix.build_type }} \
-            -DCMAKE_C_COMPILER={{ matrix.compiler }}
-      
+        module: shell
+        with:
+          cmd: |
+            cmake -B build \
+              -DCMAKE_BUILD_TYPE={{ matrix.build_type }} \
+              -DCMAKE_C_COMPILER={{ matrix.compiler }}
+
       - name: Build
-        run: cmake --build build --config {{ matrix.build_type }}
+        module: shell
+        with:
+          cmd: cmake --build build --config {{ matrix.build_type }}
       
       - name: Test
-        run: ctest --build-config {{ matrix.build_type }}
+        module: shell
+        with:
+          cmd: ctest --build-config {{ matrix.build_type }}
         working_directory: build
 ```
 
@@ -194,7 +218,9 @@ Matrix jobs respect dependencies like regular jobs:
 jobs:
   setup:
     steps:
-      - run: echo "Setting up infrastructure"
+      - module: shell
+        with:
+          cmd: echo "Setting up infrastructure"
   
   test:
     needs: setup
@@ -202,12 +228,16 @@ jobs:
       matrix:
         shard: [1, 2, 3, 4]
     steps:
-      - run: run_tests.sh --shard={{ matrix.shard }}/4
+      - module: shell
+        with:
+          cmd: run_tests.sh --shard={{ matrix.shard }}/4
   
   report:
     needs: test
     steps:
-      - run: echo "All test shards completed"
+      - module: shell
+        with:
+          cmd: echo "All test shards completed"
 ```
 
 The `report` job waits for all matrix instances of `test` to complete.
@@ -225,7 +255,9 @@ jobs:
         os: [ubuntu, windows]
         python: ["3.10", "3.11"]
     steps:
-      - run: python --version
+      - module: shell
+        with:
+          cmd: python --version
 ```
 
 ## Best Practices
@@ -264,7 +296,9 @@ jobs:
         platform: "{{ inputs.platforms }}"
         config: [debug, release]
     steps:
-      - run: echo "Building {{ matrix.config }} on {{ matrix.platform }}"
+      - module: shell
+        with:
+          cmd: echo "Building {{ matrix.config }} on {{ matrix.platform }}"
 ```
 
 ---
@@ -285,7 +319,9 @@ jobs:
         input: targets.txt
         distribution: chunk
     steps:
-      - run: nmap -p {{ matrix.ports }} -iL $FLEET_INPUT_FILE
+      - module: shell
+        with:
+          cmd: nmap -p {{ matrix.ports }} -iL $FLEET_INPUT_FILE
 ```
 
 ## Debugging Matrix Jobs

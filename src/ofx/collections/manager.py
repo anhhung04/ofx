@@ -376,18 +376,12 @@ class CollectionManager:
     def _authenticated_url(source: str) -> str:
         """Inject a GitHub token into HTTPS clone URLs for private repo access.
 
+        Thin wrapper around :func:`ofx.settings.authenticated_git_url`, kept
+        for the existing call sites and tests.
+
         If no token is available or the URL is not an HTTPS GitHub URL,
         the original URL is returned unchanged.
         """
-        from ofx.settings import get_github_token
+        from ofx.settings import authenticated_git_url
 
-        token = get_github_token()
-        if not token:
-            return source
-        if source.startswith("https://github.com/"):
-            return source.replace(
-                "https://github.com/",
-                f"https://x-access-token:{token}@github.com/",
-                1,
-            )
-        return source
+        return authenticated_git_url(source)

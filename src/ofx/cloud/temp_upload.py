@@ -9,6 +9,7 @@ from typing import Any
 
 from ofx.utils.file_cleanup import remove_file
 
+
 def upload_temp_content(
     remote: Any,
     content: str,

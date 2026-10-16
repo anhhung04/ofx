@@ -5,17 +5,16 @@ from __future__ import annotations
 import json
 import logging
 import tempfile
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from ofx.runner.context import context_copy
 from ofx.runner.executors import Executor
-from ofx.runner.registry_keys import RunnerRegistryKeys
 from ofx.runner.profile_env import (
     build_profile_env_overrides,
     build_profile_var_overrides,
 )
+from ofx.runner.registry_keys import RunnerRegistryKeys
 from ofx.settings import settings
 from ofx.utils.file_cleanup import remove_tree
 from ofx.utils.workflow_utils import workflow_dirs_with_path
@@ -59,6 +58,13 @@ class WorkflowExecutor(Executor):
         if active_message:
             runner._log_info(active_message)
 
+    @staticmethod
+    def _stop_time_guard(runner) -> None:
+        """Stop the time-window guard if one is active (post_run/on_failure)."""
+        time_guard = getattr(runner, "_time_guard", None)
+        if time_guard is not None:
+            time_guard.stop()
+
     async def pre_run(self, runner) -> None:
         await runner._resolve_template_fields(["name", "description", "tags", "env", "defaults"])
         runner._log_debug(
@@ -70,17 +76,14 @@ class WorkflowExecutor(Executor):
         if output_path:
             output_path.mkdir(parents=True, exist_ok=True)
 
-        try:
-            from ofx.commands.project.project_manager import ProjectManager
-            wf_name = runner.model.name or "workflow"
-            project_run_dir = ProjectManager.get_run_dir(wf_name)
-            runner._run_dir_is_temp = project_run_dir is None
-            if project_run_dir is not None:
-                runner._run_dir = project_run_dir
-            else:
-                runner._run_dir = Path(tempfile.mkdtemp(prefix="ofx_run_"))
-        except Exception:
-            runner._run_dir_is_temp = True
+        from ofx.utils.project_paths import get_project_run_dir
+
+        wf_name = getattr(runner.model, "name", None) or "workflow"
+        project_run_dir = get_project_run_dir(wf_name)
+        runner._run_dir_is_temp = project_run_dir is None
+        if project_run_dir is not None:
+            runner._run_dir = project_run_dir
+        else:
             runner._run_dir = Path(tempfile.mkdtemp(prefix="ofx_run_"))
 
         # Create organized subdirectories
@@ -90,7 +93,7 @@ class WorkflowExecutor(Executor):
 
         # Set output_path to run dir only if not explicitly set by caller
         if runner.ctx.output_path is None:
-            runner.ctx.output_path = runner._run_dir
+            runner.update_context(output_path=runner._run_dir)
 
         runner.update_env({"OFX_RUN_DIR": str(runner._run_dir)})
         logger.debug("Run directory: %s", runner._run_dir)
@@ -148,21 +151,34 @@ class WorkflowExecutor(Executor):
         )
         tools = getattr(runner.model, "tools", None)
         if tools:
+            from ofx.runner.install_guide import render_install_guide
             from ofx.runner.tool_installer import ToolInstallerRunner
 
+            auto_install = runner.ctx.vars.get("install_tools", False)
             installer = ToolInstallerRunner(
                 tools=tools,
                 ctx=context_copy(runner.ctx),
                 parent=runner,
                 show_console=False,
+                plan_only=not auto_install,
             )
             await installer.run()
 
+            planned = getattr(installer, "planned_steps", None) or []
+            if planned:
+                render_install_guide(planned)
+                if installer.failed_count == 0 and not auto_install:
+                    raise RuntimeError(
+                        "Workflow requires tools that are not installed. "
+                        "Install them manually (see guide above) or re-run "
+                        "with --install-tools."
+                    )
+
     async def do_run(self, runner) -> None:
         await self.plan_jobs(runner)
-        from ofx.runner.workflow_execution import WorkflowExecutionManager
-        from ofx.runner.runner import Runner
         from ofx.runner.error_helpers import extract_root_error
+        from ofx.runner.runner import Runner
+        from ofx.runner.workflow_execution import WorkflowExecutionManager
 
         result = await WorkflowExecutionManager(runner).run(
             runner._schedule,
@@ -171,6 +187,11 @@ class WorkflowExecutor(Executor):
         if result.failed_job_ids:
             for job_runner in runner._runners.values():
                 if not isinstance(job_runner, Runner):
+                    continue
+                # Completed jobs already ran post_run in their own lifecycle
+                # (e.g. cloud jobs downloaded outputs and destroyed their
+                # instance); re-running it would repeat those side effects.
+                if job_runner.is_success:
                     continue
                 try:
                     await job_runner._post_run()
@@ -198,8 +219,7 @@ class WorkflowExecutor(Executor):
             raise RuntimeError(message)
 
     async def post_run(self, runner) -> None:
-        if runner._time_guard:
-            runner._time_guard.stop()
+        self._stop_time_guard(runner)
         if runner._is_reused:
             failed_job_ids = [
                 job_runner.model.jid
@@ -223,7 +243,9 @@ class WorkflowExecutor(Executor):
                 }
                 await runner.reg_set(RunnerRegistryKeys.OUTPUTS, outputs)
         await self.store_summaries(runner)
-        runner._log_debug(f"result: {await runner.get_result()}")
+        # Avoid get_result() here: it deep-copies every output from the
+        # registry just to satisfy a debug log.
+        runner._log_debug(f"result: status={runner.status.value}")
 
         # Write summary.json to run directory
         await self._write_run_summary(runner)
@@ -237,6 +259,9 @@ class WorkflowExecutor(Executor):
             )
 
     async def on_failure(self, runner) -> None:
+        # Stop the time-window guard on the failure path too, so its poller
+        # does not leak when post_run never runs.
+        self._stop_time_guard(runner)
         # Write summary even on failure
         await self._write_run_summary(runner)
 
@@ -360,7 +385,7 @@ class WorkflowExecutor(Executor):
             for job in runner.model.jobs.values():
                 references_input = False
                 for step in job.steps:
-                    fields = [step.run, step.script, step.script_file]
+                    fields = [step.module]
                     if step.run_with:
                         fields.extend(step.run_with.values())
                     if any(field and needle in str(field) for field in fields):
@@ -369,12 +394,17 @@ class WorkflowExecutor(Executor):
                 if not references_input:
                     continue
 
-                if not job.strategy:
+                # Never mutate the shared Job.strategy in place: replace it
+                # with a copy carrying the merged matrix instead.
+                strategy = job.strategy
+                if strategy is None:
                     job.strategy = MatrixStrategy.model_validate(
                         {"matrix": {key: values}}
                     )
-                elif key not in job.strategy.matrix:
-                    job.strategy.matrix[key] = values
+                elif key not in strategy.matrix:
+                    job.strategy = strategy.model_copy(
+                        update={"matrix": {**strategy.matrix, key: values}}
+                    )
 
         runner.update_vars({"_matrix_input_keys": list(matrix_inputs)})
         runner.update_context(

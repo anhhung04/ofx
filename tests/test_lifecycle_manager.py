@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from types import SimpleNamespace
 
 import pytest
@@ -271,3 +270,33 @@ async def test_finalize_execution_emits_finish_and_cleans_registry(monkeypatch) 
     assert events == [("runner_finish", {"status": "failed", "error": "boom"})]
     assert cleaned == [manager._runner._registry]
     assert pushed == ["push"]
+
+
+@pytest.mark.asyncio
+async def test_finalize_execution_child_runner_keeps_shared_registry_open(monkeypatch) -> None:
+    manager = _manager()
+    shared_registry = object()
+    manager._runner._registry = shared_registry
+    manager._runner.parent = SimpleNamespace()  # child shares the parent's registry
+    manager._runner._error = "boom"
+    manager._runner._state_machine.set_state(RunnerStatus.FAILED)
+    cleaned: list[object] = []
+
+    async def _write_final_checkpoints(_self):
+        return None
+
+    async def _cleanup_registry(registry):
+        cleaned.append(registry)
+
+    async def _auto_commit_push(_self):
+        return None
+
+    monkeypatch.setattr(LifecycleManager, "_write_final_checkpoints", _write_final_checkpoints)
+    monkeypatch.setattr(type(manager._checkpoint_manager), "auto_commit_push", _auto_commit_push)
+    monkeypatch.setattr("ofx.runner.lifecycle.cleanup_registry", _cleanup_registry)
+
+    await manager._finalize_execution()
+
+    # Only the root runner owns the registry lifecycle; a child finishing
+    # must not close the registry it shares with its parent/siblings.
+    assert cleaned == []

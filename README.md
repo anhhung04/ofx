@@ -1,6 +1,6 @@
 # Offensive Flow Executor (OFX)
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: Source Available](https://img.shields.io/badge/License-Source%20Available-orange.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-blue)](https://www.python.org/)
 ![Build](https://img.shields.io/badge/build-passing-brightgreen)
 
@@ -24,16 +24,20 @@ jobs:
   scan:
     steps:
       - name: port-scan
-        run: nmap -sV -sC {{ inputs.target }} -oA {{ env.OFX_RUN_DIR }}/nmap
+        module: shell
+        with:
+          cmd: nmap -sV -sC {{ inputs.target }} -oA {{ env.OFX_RUN_DIR }}/nmap
       - name: web-probe
-        run: httpx -l {{ env.OFX_RUN_DIR }}/nmap.xml -tech-detect -silent
+        module: shell
+        with:
+          cmd: httpx -l {{ env.OFX_RUN_DIR }}/nmap.xml -tech-detect -silent
 ```
 
 ## Features
 
 - **YAML Workflows** — Define jobs with parallel execution and dependency chains
 - **Cross-platform** — Linux, macOS, Windows; arm64 and amd64
-- **Two step types** — `run:` for shell commands, `script:` for Python
+- **Module-based steps** — `module: shell` for shell commands, `module: python` for Python logic, plus user-defined modules and namespaced remote modules (`owner.repo.module[@ref]`)
 - **Jinja2 templating** — Access `inputs`, `secrets`, `env`, `matrix`, `ctx`
 - **Cloud execution** — AWS EC2 and DigitalOcean provisioning
 - **34 built-in workflows** — Recon, scan, vuln, exploit, post-exploit, utility
@@ -63,4 +67,4 @@ uv run --extra test pytest
 
 ## License
 
-MIT — see [LICENSE](LICENSE)
+Source Available — no commercial use; modifications must be distributed via public fork. See [LICENSE](LICENSE). For commercial licensing, open an issue.

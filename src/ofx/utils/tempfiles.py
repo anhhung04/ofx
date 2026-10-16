@@ -6,6 +6,7 @@ import os
 import tempfile
 from pathlib import Path
 
+
 def make_temp_file(*, prefix: str = ".tmp_", suffix: str = ".txt") -> Path:
     """Create a temporary file and return its path.
 

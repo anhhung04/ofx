@@ -19,8 +19,9 @@ dispatch:
 jobs:
   parse:
     name: Parse Targets
+    outputs:
+      target_files: '{{ steps.parse.outputs.target_files }}'
+      counts: '{{ steps.parse.outputs.counts }}'
     steps:
     - name: parse
-      run: cat {{ inputs.target }} | grep -E "^[0-9]" | sort -u > {{ env.OFX_RUN_DIR
-        }}/ips.txt; cat {{ inputs.target }} | grep -vE "^[0-9]" | sort -u > {{ env.OFX_RUN_DIR
-        }}/domains.txt; echo Done
+      module: local.parse_targets

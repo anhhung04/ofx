@@ -29,10 +29,12 @@ These functions are available as shell helpers in your commands:
 
 **Usage Example:**
 ```yaml
-- run: |
-  fapt python3
-  go_install github.com/projectdiscovery/httpx/cmd/httpx
-  $OFX_TOOLS_BIN_DIR/httpx -u https://{{ inputs.target }}
+- module: shell
+  with:
+    cmd: |
+      fapt python3
+      go_install github.com/projectdiscovery/httpx/cmd/httpx
+      $OFX_TOOLS_BIN_DIR/httpx -u https://{{ inputs.target }}
 ```
 
 ---
@@ -145,26 +147,34 @@ These functions are available as shell helpers in your commands:
 
 ```yaml
 - name: Scan with encoded payload
-  run: |
-    PAYLOAD="{{ b64encode(inputs.payload) }}"
-    curl -X POST -d "$PAYLOAD" https://{{ inputs.target }}
+  module: shell
+  with:
+    cmd: |
+      PAYLOAD="{{ b64encode(inputs.payload) }}"
+      curl -X POST -d "$PAYLOAD" https://{{ inputs.target }}
 
 - name: Generate temp file with unique name
-  run: |
-    OUTPUT="{{ join_path(temp_dir, random_string(8) + '.txt') }}"
-    echo "Results" > "$OUTPUT"
+  module: shell
+  with:
+    cmd: |
+      OUTPUT="{{ join_path(temp_dir, random_string(8) + '.txt') }}"
+      echo "Results" > "$OUTPUT"
 
 - name: Platform-aware command
-  run: |
-    {% if is_windows %}
-    netstat -an | findstr LISTEN
-    {% else %}
-    netstat -tlnp
-    {% endif %}
+  module: shell
+  with:
+    cmd: |
+      {% if is_windows %}
+      netstat -an | findstr LISTEN
+      {% else %}
+      netstat -tlnp
+      {% endif %}
 
 - name: Get local IP for reverse shell
-  run: |
-    echo "Callback: {{ local_ip() }}:{{ random_port() }}"
+  module: shell
+  with:
+    cmd: |
+      echo "Callback: {{ local_ip() }}:{{ random_port() }}"
 ```
 
 ## Tips

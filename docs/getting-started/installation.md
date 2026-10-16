@@ -33,8 +33,8 @@ uv run ofx --version
 After installing via package manager, OFX is available as a Python library:
 
 ```python
-from ofx.api.post import RunnerRegistry, PostSSH
-from ofx.api.exploitation.webshell import WebShellClient
+from ofx.lib.post import RunnerRegistry, PostSSH
+from ofx.lib.exploitation.webshell import WebShellClient
 
 # List available runners
 print(RunnerRegistry.list_runners())

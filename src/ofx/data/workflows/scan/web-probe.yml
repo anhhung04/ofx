@@ -26,27 +26,75 @@ dispatch:
       type: string
       default: 'true'
       description: Enable command logging
+call:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target file of hosts/subdomains
+      alias: t
+    ports:
+      type: string
+      default: 80,443,8080,8443,3000,5000,8000,8888,9090
+      description: Ports to probe
+    threads:
+      type: number
+      default: 50
+      description: Concurrent threads
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+    output_dir:
+      type: string
+      default: '{{ env.OFX_RUN_DIR }}'
+      description: Directory for generated artifacts
+  outputs:
+    probe_file: "{{ jobs['http-probe'].outputs.probe_file }}"
+    live_url_count: "{{ jobs['http-probe'].outputs.live_url_count }}"
+    whatweb_file: "{{ jobs['http-probe'].outputs.whatweb_file }}"
+    screenshot_dir: "{{ jobs.screenshots.outputs.screenshot_dir }}"
 jobs:
   http-probe:
     name: HTTP Probing
+    outputs:
+      probe_file: '{{ steps.collect.outputs.probe_file }}'
+      live_url_count: '{{ steps.collect.outputs.live_url_count }}'
+      whatweb_file: '{{ inputs.output_dir or env.OFX_RUN_DIR }}/whatweb_results.json'
     steps:
     - name: httpx-probe
-      run: httpx -l {{ inputs.target }} -ports {{ inputs.ports }} -tech-detect -status-code
-        -title -web-server -content-type -silent -threads {{ inputs.threads }} -o
-        {{ env.OFX_RUN_DIR }}/httpx_results.txt
+      module: local.builtin.shell
+      with:
+        cmd: httpx -l {{ inputs.target }} -ports {{ inputs.ports }} -tech-detect -status-code
+          -title -web-server -content-type -silent -threads {{ inputs.threads }} -o
+          {{ inputs.output_dir or env.OFX_RUN_DIR }}/httpx_results.txt
       log-command: '{{ inputs.log_command }}'
+      timeout: 30
     - name: whatweb
-      run: whatweb -i {{ inputs.target }} --log-json={{ env.OFX_RUN_DIR }}/whatweb_results.json
-        --color=never -q 2>&1
+      module: local.builtin.shell
+      with:
+        cmd: whatweb -i {{ inputs.target }} --log-json={{ inputs.output_dir or env.OFX_RUN_DIR
+          }}/whatweb_results.json --color=never -q 2>&1
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
+    - name: collect
+      module: local.probe_report
+      with:
+        output_dir: '{{ inputs.output_dir or env.OFX_RUN_DIR }}'
   screenshots:
     name: Screenshot Capture
     needs:
     - http-probe
+    outputs:
+      screenshot_dir: '{{ inputs.output_dir or env.OFX_RUN_DIR }}/screenshots'
     steps:
     - name: gowitness
-      run: gowitness file -f {{ env.OFX_RUN_DIR }}/httpx_results.txt --destination
-        {{ env.OFX_RUN_DIR }}/screenshots/ --no-http 2>&1
+      module: local.builtin.shell
+      with:
+        cmd: gowitness file -f {{ inputs.output_dir or env.OFX_RUN_DIR }}/httpx_results.txt
+          --destination {{ inputs.output_dir or env.OFX_RUN_DIR }}/screenshots/ --no-http
+          2>&1
+      run_if: "{{ jobs['http-probe'].outputs.live_url_count | int > 0 }}"
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
+      timeout: 120

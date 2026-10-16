@@ -31,10 +31,8 @@ class ValidationResult:
     has_call: bool = False
     tags: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
-    task_refs: list[str] = field(default_factory=list)
-    unknown_tasks: list[str] = field(default_factory=list)
 
-def _validate_one(path: Path, check_tasks: bool) -> ValidationResult:
+def _validate_one(path: Path) -> ValidationResult:
     """Validate a single workflow file and return diagnostics."""
     import yaml
 
@@ -71,27 +69,20 @@ def _validate_one(path: Path, check_tasks: bool) -> ValidationResult:
         if not job.steps:
             result.warnings.append(f"Job '{jid}' has no steps")
 
-        for step in job.steps:
-            pass  # Step validation is handled by the Step model
-
     if not result.has_dispatch and not result.has_call:
         result.warnings.append("No dispatch or call trigger defined")
 
-    if check_tasks and result.task_refs:
-        result.warnings.append(
-            "Task validation is no longer supported (task system removed). "
-            "Use 'script:' or 'run:' steps instead."
-        )
-
     return result
+
+
 def validate_workflows(
     workflow_name: str = "",
     all_workflows: bool = False,
-    check_tasks: bool = False,
 ) -> None:
     """Validate one or all workflows with detailed diagnostics."""
-    from ofx.commands.ui_helpers import error_exit, print_info, print_warning
     from rich.table import Table
+
+    from ofx.commands.ui_helpers import error_exit, print_info, print_warning
 
     console = get_console()
 
@@ -133,7 +124,7 @@ def validate_workflows(
         print_info("Bulk Validation", f"Validating [cyan]{len(files)}[/] workflows…")
         console.print()
 
-        results = [_validate_one(f, check_tasks=check_tasks) for f in files]
+        results = [_validate_one(f) for f in files]
         passed = sum(1 for result in results if result.valid)
         failed = sum(1 for result in results if not result.valid)
         warned = sum(1 for result in results if result.valid and result.warnings)
@@ -204,7 +195,7 @@ def validate_workflows(
 
     print_info("Validating", f"[cyan]{workflow_name}[/]")
     console.print()
-    result = _validate_one(path, check_tasks=check_tasks)
+    result = _validate_one(path)
     if not result.valid:
         error_exit("Validation Failed", f"[cyan]{result.path}[/]", result.error)
 

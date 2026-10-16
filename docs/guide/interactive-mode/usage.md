@@ -17,7 +17,9 @@ jobs:
   shell_session:
     steps:
       - name: Start Bash Shell
-        run: bash
+        module: shell
+        with:
+          cmd: bash
         interactive: true
         timeout: 10  # Optional timeout in minutes
 ```
@@ -29,10 +31,14 @@ jobs:
   python_session:
     steps:
       - name: Start Python REPL
-        run: python3
+        module: shell
+        with:
+          cmd: python3
         interactive: true
       - name: Continue After REPL
-        run: echo "Session completed"
+        module: shell
+        with:
+          cmd: echo "Session completed"
 ```
 
 ### Interactive Tool
@@ -42,7 +48,9 @@ jobs:
   exploit_tool:
     steps:
       - name: Use Metasploit Console
-        run: msfconsole
+        module: shell
+        with:
+          cmd: msfconsole
         interactive: true
         timeout: 30
 ```

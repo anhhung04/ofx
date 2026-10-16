@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -14,6 +14,7 @@ from ofx.runner import RunContext, RunnerRegistryKeys
 from ofx.runner.executors.workflow import (
     WorkflowExecutor,
 )
+
 
 class _ProcessRunner:
     def __init__(self) -> None:
@@ -128,6 +129,7 @@ class _PostRunRunner:
         self._time_guard = SimpleNamespace(stop=lambda: stops.append("stop"))
         self._is_reused = is_reused
         self._run_dir = Path("/tmp/ofx-run")
+        self.status = SimpleNamespace(value="COMPLETED")
         self.debug_messages: list[str] = []
 
     async def get_result(self):
@@ -311,7 +313,6 @@ async def test_process_inputs_resolves_defaults_and_templates() -> None:
     }
 
 def test_expand_list_inputs_to_matrix_updates_only_referenced_jobs() -> None:
-    from ofx.models.strategy import MatrixStrategy
 
     workflow = Workflow.model_validate(
         {
@@ -326,12 +327,12 @@ def test_expand_list_inputs_to_matrix_updates_only_referenced_jobs() -> None:
                 "scan": {
                     "strategy": {"matrix": {"region": ["us"]}},
                     "steps": [
-                        {"run": "echo {{ inputs.target }}"},
+                        {"module": "shell", "with": {"cmd": "echo {{ inputs.target }}"}},
                     ]
                 },
                 "report": {
                     "steps": [
-                        {"run": "echo done"},
+                        {"module": "shell", "with": {"cmd": "echo done"}},
                     ]
                 },
             },
@@ -357,7 +358,7 @@ def test_expand_list_inputs_to_matrix_skips_reused_or_non_matrix_inputs() -> Non
         {
             "name": "Dispatch Matrix",
             "dispatch": {"inputs": {"target": {"type": "string"}}},
-            "jobs": {"scan": {"steps": [{"run": "echo {{ inputs.target }}"}]}},
+            "jobs": {"scan": {"steps": [{"module": "shell", "with": {"cmd": "echo {{ inputs.target }}"}}]}},
         }
     )
 
@@ -523,6 +524,7 @@ async def test_do_run_cleans_up_and_stores_error_payload_on_failed_jobs(monkeypa
             self.model = SimpleNamespace(jid=jid)
             self._error = error
             self._fail_cleanup = fail_cleanup
+            self.is_success = False
 
         async def _post_run(self) -> None:
             cleanup_calls.append(self.model.jid)
@@ -1205,7 +1207,8 @@ async def test_pre_run_initializes_run_context(monkeypatch, tmp_path) -> None:
         {"FOO": "bar"},
     ]
     assert runner.var_updates == [{"working_directory": Path("/tmp/work")}]
-    assert runner.context_updates[0] == {"workflow_dir": Path("/tmp/workflow")}
+    assert runner.context_updates[0] == {"output_path": tmp_path / "run-dir"}
+    assert runner.context_updates[1] == {"workflow_dir": Path("/tmp/workflow")}
 @pytest.mark.asyncio
 async def test_post_run_finalizes_reused_workflow_then_summaries_and_cleanup(monkeypatch) -> None:
     global stops
@@ -1231,7 +1234,7 @@ async def test_post_run_finalizes_reused_workflow_then_summaries_and_cleanup(mon
 
     assert stops == ["stop"]
     assert calls == ["summaries", "cleanup"]
-    assert runner.debug_messages == ["result: done"]
+    assert runner.debug_messages == ["result: status=COMPLETED"]
 
 @pytest.mark.asyncio
 async def test_post_run_skips_reused_finalization_for_normal_workflow(monkeypatch) -> None:

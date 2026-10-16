@@ -12,14 +12,17 @@ from ofx.cloud.sessions.script_builder import (
 from ofx.models.step import Step
 from ofx.utils.shell import bash_dquote_escape
 
+
 def _make_step(
     run: str | None = None, script: str | None = None, name: str = "s"
 ) -> Step:
     data: dict = {"name": name}
     if run is not None:
-        data["run"] = run
+        data["module"] = "shell"
+        data["with"] = {"cmd": run}
     elif script is not None:
-        data["script"] = script
+        data["module"] = "python"
+        data["with"] = {"script": script}
     return Step.model_validate(data)
 
 class TestBashDquoteEscape:
@@ -123,7 +126,9 @@ class TestBashStepUsesWorkDirVar:
         assert "/some/path" not in lines[0]
 
     def test_script_file_step_uses_work_dir_var(self):
-        step = Step.model_validate({"name": "sf", "script_file": "worker.py"})
+        step = Step.model_validate(
+            {"name": "sf", "module": "python", "with": {"script_file": "worker.py"}}
+        )
         script = build_session_script([step], session_id="s1", work_dir="/some/path")
         lines = [line for line in script.split("\n") if '".ofx_step_0.py"' in line]
         assert lines
@@ -232,7 +237,11 @@ class TestPowerShellInlineScriptHereString:
         assert '$__ofx_py = Join-Path $WORK_DIR ".ofx_step_0.py"' in script
 
     def test_script_file_escapes_ps_path(self):
-        data = {"name": "sf", "script_file": 'C:\\Temp\\x`"$env:T.ps1'}
+        data = {
+            "name": "sf",
+            "module": "python",
+            "with": {"script_file": 'C:\\Temp\\x`"$env:T.ps1'},
+        }
         step = Step.model_validate(data)
         script = build_session_script(
             [step], session_id="s1", work_dir='C:\\work`"$env:W', os_type="windows"
@@ -241,7 +250,9 @@ class TestPowerShellInlineScriptHereString:
         assert '$__ofx_py = Join-Path $WORK_DIR ".ofx_step_0.py"' in script
 
     def test_script_file_uses_python_temp_file(self):
-        step = Step.model_validate({"name": "sf", "script_file": "worker.py"})
+        step = Step.model_validate(
+            {"name": "sf", "module": "python", "with": {"script_file": "worker.py"}}
+        )
         script = build_session_script(
             [step], session_id="s1", work_dir="C:\\work", os_type="windows"
         )

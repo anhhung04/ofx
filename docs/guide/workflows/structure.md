@@ -35,12 +35,16 @@ outputs:
 jobs:
   scan:
     steps:
-      - run: nmap -sV {{ inputs.target }}
+      - module: shell
+        with:
+          cmd: nmap -sV {{ inputs.target }}
 
   analyze:
     needs: [scan]
     steps:
-      - run: python analyze.py
+      - module: shell
+        with:
+          cmd: python analyze.py
 ```
 
 ---
@@ -108,23 +112,57 @@ See [Reusable Workflows](reusable.md) for details.
 
 ---
 
-## `tools` — Pre-Run Tool Installation
+## `tools` — Tool Dependencies
 
-Install binaries into `~/Tools/bin` before jobs execute. Each entry is either a simple install command or a full config:
+Declare the external binaries your workflow needs. By default OFX **does not auto-install** them — it prints a detailed install guide and stops. Pass `--install-tools` to install automatically (works for local runs, remote sessions, and fleet instances).
+
+Each entry is either a simple install command or a full config:
 
 ```yaml
 tools:
-  # Simple string form
+  # Simple string form (shell install command)
   subfinder: go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+
+  # Prebuilt binary download (preferred — fastest, no package manager needed)
+  ffuf:
+    url: https://github.com/ffuf/ffuf/releases/download/v{version}/ffuf_{version}_{os}_{arch}.tar.gz
+    version: "2.1.0"
+    sha256: "d0e1f2..."          # optional integrity check
+    archive_path: ffuf           # binary path inside the archive (omit if the download IS the binary)
 
   # Full config with check and post-install
   naabu:
     install: go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest
     check: naabu -version
     post_install: echo "naabu installed"
+
+  # Custom install instructions shown in the guide when auto-install is off
+  mytool:
+    install: cargo install mytool
+    install_guide: "Build from source: git clone … && cargo install --path ."
 ```
 
-The `check` command verifies the tool is already installed (skips re-install if it succeeds). `post_install` runs after a successful install.
+**Fields:**
+
+| Field | Description |
+|-------|-------------|
+| `url` | Prebuilt binary/archive URL; `{os}`, `{arch}`, `{version}` placeholders are substituted (e.g. `linux`/`amd64`) |
+| `sha256` | Expected SHA-256 of the download; the install fails on mismatch |
+| `version` | Version string for the `{version}` placeholder (default `latest`) |
+| `archive_path` | Path of the binary inside a `.tar.*`/`.zip` archive |
+| `method` | `auto` (default), `binary` (url only), or `shell` (install command only) |
+| `install` | Shell install command (fallback when no `url`, or when the download fails and `method: auto`) |
+| `check` | Command that exits 0 when the tool is already installed |
+| `post_install` | Command run after a successful install |
+| `install_guide` | Human-readable instructions for the guide |
+
+**Behavior:**
+
+- `ofx flow run wf.yml` → prints the install guide for missing tools and exits with an error
+- `ofx flow run wf.yml --install-tools` → installs missing tools (binary download first, shell fallback), then runs
+- `ofx flow tools wf.yml` → explicitly install a workflow's tools
+- `ofx cloud fleet run wf.yml --install-tools` → installs tools on every fleet instance before the run
+- Remote/cloud sessions install via the prebuilt-binary path only (no package-manager assumptions on remote hosts)
 
 ---
 
@@ -137,7 +175,7 @@ defaults:
   shell: /bin/bash
   working-directory: /opt/scans
   profile: stealth              # Execution profile (rate limits, proxy, etc.)
-  store-creds: true             # Auto-store UserAccount credentials from tasks
+  store-creds: true             # Auto-store user_account credentials from modules
   durable:
     enabled: true
     resume: true

@@ -8,6 +8,10 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
+from ofx.commands._session_helpers import (
+    _resolve_session_manager_cls,
+    _resolve_session_store_cls,
+)
 from ofx.commands.cloud.helpers import create_cloud_provider, run_cloud_sync
 from ofx.commands.project.project_manager import ProjectManager
 from ofx.commands.ui_helpers import session_status_style
@@ -46,16 +50,11 @@ async def _refresh_sessions(mgr, sessions: list):
     return refreshed
 
 def _get_session_store_cls():
-    session_store_cls = SessionStore
-    if session_store_cls is None:
-        from ofx.cloud.sessions import SessionStore as session_store_cls
-    return session_store_cls
+    return _resolve_session_store_cls(SessionStore)
+
 
 def _get_session_manager_cls():
-    session_manager_cls = SessionManager
-    if session_manager_cls is None:
-        from ofx.cloud.sessions import SessionManager as session_manager_cls
-    return session_manager_cls
+    return _resolve_session_manager_cls(SessionManager)
 
 def _get_session_target_cls():
     session_target_cls = SessionTarget
@@ -78,11 +77,13 @@ def _get_fleet_run_deps():
 
     fleet_input_parser_cls = FleetInputParser
     if fleet_input_parser_cls is None:
-        from ofx.cloud.fleet_input import FleetInputParser as fleet_input_parser_cls
+        from ofx.cloud.fleet.input import FleetInputParser as fleet_input_parser_cls
 
     fleet_distributor_cls = FleetDistributor
     if fleet_distributor_cls is None:
-        from ofx.cloud.fleet_distributor import FleetDistributor as fleet_distributor_cls
+        from ofx.cloud.fleet.distributor import (
+            FleetDistributor as fleet_distributor_cls,
+        )
 
     return (
         key_value_parser,
@@ -113,7 +114,8 @@ def _get_fleet_temp_dir_deps():
     temp_dir = TEMP_DIR
     ensure_dir_fn = ensure_dir
     if temp_dir is None or ensure_dir_fn is None:
-        from ofx.settings import TEMP_DIR as temp_dir, ensure_dir as ensure_dir_fn
+        from ofx.settings import TEMP_DIR as temp_dir
+        from ofx.settings import ensure_dir as ensure_dir_fn
 
     return temp_dir, ensure_dir_fn
 
@@ -502,13 +504,20 @@ def fleet_run(
     name: Annotated[str, typer.Option("--name", help="Fleet run name")] = "",
     inputs: Annotated[
         list[str], typer.Option("--input", "-i", help="Input key=value pairs")
-    ] = [],
+    ] = [],  # noqa: B006 — typer requires a list default for multi options
     target_var: Annotated[
         str,
         typer.Option(
             "--target-var", help="Input variable name for the target chunk file"
         ),
     ] = "targets_file",
+    install_tools: Annotated[
+        bool,
+        typer.Option(
+            "--install-tools",
+            help="Auto-install missing workflow tools on each fleet instance.",
+        ),
+    ] = False,
 ):
     """Submit a workflow across multiple fleet instances with target distribution.
 
@@ -535,6 +544,8 @@ def fleet_run(
 
     parsed_inputs: dict = key_value_parser(inputs)
     parsed_env: dict = cli_env_getter()
+    if install_tools:
+        parsed_env["install_tools"] = "1"
 
     fleet_project = _resolve_fleet_project(project_getter)
 

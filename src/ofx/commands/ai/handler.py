@@ -17,6 +17,7 @@ from ofx.commands.ui_helpers import (
 )
 from ofx.settings import get_console
 
+
 def _ai_config(model_override: str | None = None) -> dict:
     """Return resolved AI config dict from settings + env."""
     import os

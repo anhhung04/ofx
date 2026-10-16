@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+
 class TestCloudConfig:
     def test_parse_cloud_field_string(self):
         from ofx.models.cloud import parse_cloud_field
@@ -101,21 +102,21 @@ class TestMatrixStrategyFleet:
 
 class TestFleetInputParser:
     def test_parse_single_ip(self):
-        from ofx.cloud.fleet_input import FleetInputParser
+        from ofx.cloud.fleet.input import FleetInputParser
 
         parser = FleetInputParser()
         result = parser.parse("192.168.1.1")
         assert result == ["192.168.1.1"]
 
     def test_parse_comma_separated(self):
-        from ofx.cloud.fleet_input import FleetInputParser
+        from ofx.cloud.fleet.input import FleetInputParser
 
         parser = FleetInputParser()
         result = parser.parse("192.168.1.1,192.168.1.2,192.168.1.3")
         assert len(result) == 3
 
     def test_parse_cidr(self):
-        from ofx.cloud.fleet_input import FleetInputParser
+        from ofx.cloud.fleet.input import FleetInputParser
 
         parser = FleetInputParser()
         result = parser.parse("10.0.0.0/30")
@@ -124,7 +125,7 @@ class TestFleetInputParser:
         assert "10.0.0.2" in result
 
     def test_parse_range_full(self):
-        from ofx.cloud.fleet_input import FleetInputParser
+        from ofx.cloud.fleet.input import FleetInputParser
 
         parser = FleetInputParser()
         result = parser.parse("10.0.0.1-10.0.0.5")
@@ -133,7 +134,7 @@ class TestFleetInputParser:
         assert "10.0.0.5" in result
 
     def test_parse_range_short(self):
-        from ofx.cloud.fleet_input import FleetInputParser
+        from ofx.cloud.fleet.input import FleetInputParser
 
         parser = FleetInputParser()
         result = parser.parse("10.0.0.1-5")
@@ -142,14 +143,14 @@ class TestFleetInputParser:
         assert "10.0.0.5" in result
 
     def test_parse_hostname(self):
-        from ofx.cloud.fleet_input import FleetInputParser
+        from ofx.cloud.fleet.input import FleetInputParser
 
         parser = FleetInputParser()
         result = parser.parse("server1.example.com")
         assert result == ["server1.example.com"]
 
     def test_parse_file(self, tmp_path):
-        from ofx.cloud.fleet_input import FleetInputParser
+        from ofx.cloud.fleet.input import FleetInputParser
 
         targets = tmp_path / "targets.txt"
         targets.write_text("10.0.0.1\n10.0.0.2\n# comment\n\n10.0.0.3\n")
@@ -159,14 +160,14 @@ class TestFleetInputParser:
         assert len(result) == 3
 
     def test_parse_deduplication(self):
-        from ofx.cloud.fleet_input import FleetInputParser
+        from ofx.cloud.fleet.input import FleetInputParser
 
         parser = FleetInputParser()
         result = parser.parse("10.0.0.1,10.0.0.1,10.0.0.2")
         assert len(result) == 2
 
     def test_parse_exclusion(self):
-        from ofx.cloud.fleet_input import FleetInputParser
+        from ofx.cloud.fleet.input import FleetInputParser
 
         parser = FleetInputParser(exclude=["10.0.0.2"])
         result = parser.parse("10.0.0.1,10.0.0.2,10.0.0.3")
@@ -174,14 +175,14 @@ class TestFleetInputParser:
         assert "10.0.0.2" not in result
 
     def test_split_subnet(self):
-        from ofx.cloud.fleet_input import split_subnet
+        from ofx.cloud.fleet.input import split_subnet
 
         result = split_subnet("10.0.0.0/24", count=4, min_prefix=26)
         assert len(result) == 4
 
 class TestFleetDistributor:
     def test_chunk_distribution(self):
-        from ofx.cloud.fleet_distributor import FleetDistributor
+        from ofx.cloud.fleet.distributor import FleetDistributor
 
         dist = FleetDistributor()
         targets = [f"10.0.0.{i}" for i in range(1, 11)]
@@ -191,7 +192,7 @@ class TestFleetDistributor:
         assert total == 10
 
     def test_round_robin_distribution(self):
-        from ofx.cloud.fleet_distributor import FleetDistributor
+        from ofx.cloud.fleet.distributor import FleetDistributor
 
         dist = FleetDistributor()
         targets = [f"10.0.0.{i}" for i in range(1, 7)]
@@ -200,7 +201,7 @@ class TestFleetDistributor:
         assert all(len(chunk) == 2 for chunk in result)
 
     def test_line_distribution(self):
-        from ofx.cloud.fleet_distributor import FleetDistributor
+        from ofx.cloud.fleet.distributor import FleetDistributor
 
         dist = FleetDistributor()
         targets = ["line1", "line2", "line3", "line4"]
@@ -208,7 +209,7 @@ class TestFleetDistributor:
         assert len(result) == 4
 
     def test_expand_fleet_writes_chunk_files(self):
-        from ofx.cloud.fleet_distributor import expand_fleet_to_matrix
+        from ofx.cloud.fleet.distributor import expand_fleet_to_matrix
 
         combos, chunk_files = expand_fleet_to_matrix(
             fleet_config={
@@ -225,7 +226,7 @@ class TestFleetDistributor:
         chunk_files[0].parent.rmdir()
 
     def test_expand_fleet_to_matrix(self):
-        from ofx.cloud.fleet_distributor import expand_fleet_to_matrix
+        from ofx.cloud.fleet.distributor import expand_fleet_to_matrix
 
         result, chunk_files = expand_fleet_to_matrix(
             fleet_config={
@@ -242,7 +243,7 @@ class TestFleetDistributor:
 
     def test_subnet_distribution_with_min_prefix(self):
         """Subnet mode groups IPs by configurable prefix length."""
-        from ofx.cloud.fleet_distributor import FleetDistributor
+        from ofx.cloud.fleet.distributor import FleetDistributor
 
         dist = FleetDistributor()
         targets = [
@@ -259,7 +260,7 @@ class TestFleetDistributor:
 
     def test_expand_fleet_min_prefix_passed_through(self):
         """min_prefix from fleet_config is used for subnet grouping."""
-        from ofx.cloud.fleet_distributor import expand_fleet_to_matrix
+        from ofx.cloud.fleet.distributor import expand_fleet_to_matrix
 
         combos, chunk_files = expand_fleet_to_matrix(
             fleet_config={
@@ -465,7 +466,9 @@ jobs:
         tool: [nmap, masscan]
         target: [10.0.0.1, 10.0.0.2]
     steps:
-      - run: echo test
+      - module: shell
+        with:
+          cmd: echo test
 """
         wf = Workflow.model_validate(yaml.safe_load(wf_yaml))
         job = wf.jobs["scan"]
@@ -496,7 +499,9 @@ jobs:
         input: "10.0.0.1,10.0.0.2,10.0.0.3"
         distribution: round-robin
     steps:
-      - run: echo test
+      - module: shell
+        with:
+          cmd: echo test
 """
         wf = Workflow.model_validate(yaml.safe_load(wf_yaml))
         job = wf.jobs["recon"]
@@ -527,7 +532,9 @@ jobs:
         input: "10.0.0.1,10.0.0.2,10.0.0.3,10.0.0.4"
         distribution: chunk
     steps:
-      - run: echo test
+      - module: shell
+        with:
+          cmd: echo test
 """
         wf = Workflow.model_validate(yaml.safe_load(wf_yaml))
         job = wf.jobs["multi"]
@@ -541,7 +548,7 @@ class TestJobCloudField:
     def test_job_with_cloud_string(self):
         from ofx.models.job import Job
 
-        job = Job(jid="test", cloud="my-profile", steps=[{"run": "echo hi"}])
+        job = Job(jid="test", cloud="my-profile", steps=[{"module": "shell", "with": {"cmd": "echo hi"}}])
         assert job.cloud is not None
         assert job.cloud.profile == "my-profile"
 
@@ -551,7 +558,7 @@ class TestJobCloudField:
         job = Job(
             jid="test",
             cloud={"provider": "aws", "region": "us-west-2"},
-            steps=[{"run": "echo hi"}],
+            steps=[{"module": "shell", "with": {"cmd": "echo hi"}}],
         )
         assert job.cloud is not None
         assert job.cloud.provider == "aws"
@@ -559,7 +566,7 @@ class TestJobCloudField:
     def test_job_without_cloud(self):
         from ofx.models.job import Job
 
-        job = Job(jid="test", steps=[{"run": "echo hi"}])
+        job = Job(jid="test", steps=[{"module": "shell", "with": {"cmd": "echo hi"}}])
         assert job.cloud is None
 
 class TestWaitForLogin:
@@ -685,7 +692,7 @@ class TestWaitForLogin:
 
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr("asyncio.to_thread", mock_to_thread)
-            mp.setattr("ofx.api.post.runners.winrm.PostWinRM", _FakeWinRM)
+            mp.setattr("ofx.lib.post.runners.winrm.PostWinRM", _FakeWinRM)
             result = await wait_for_login("10.0.0.2", cfg, timeout=30)
 
         assert result is True
@@ -696,20 +703,20 @@ class TestFleetDistributorEdgeCases:
     """Tests for edge cases in FleetDistributor and expand_fleet_to_matrix."""
 
     def test_distribute_zero_count_returns_empty(self):
-        from ofx.cloud.fleet_distributor import FleetDistributor
+        from ofx.cloud.fleet.distributor import FleetDistributor
 
         d = FleetDistributor()
         assert d.distribute(["10.0.0.1", "10.0.0.2"], count=0) == []
 
     def test_distribute_no_targets_returns_empty(self):
-        from ofx.cloud.fleet_distributor import FleetDistributor
+        from ofx.cloud.fleet.distributor import FleetDistributor
 
         d = FleetDistributor()
         assert d.distribute([], count=3) == []
 
     def test_distribute_never_returns_empty_chunks(self):
         """After distribution, no chunk in the result should be empty."""
-        from ofx.cloud.fleet_distributor import FleetDistributor
+        from ofx.cloud.fleet.distributor import FleetDistributor
 
         d = FleetDistributor()
         chunks = d.distribute(["a", "b"], count=5)
@@ -718,7 +725,7 @@ class TestFleetDistributorEdgeCases:
 
     def test_expand_fleet_to_matrix_no_input_returns_empty(self):
         """expand_fleet_to_matrix with no input should raise, not spawn VPSes."""
-        from ofx.cloud.fleet_distributor import expand_fleet_to_matrix
+        from ofx.cloud.fleet.distributor import expand_fleet_to_matrix
 
         with pytest.raises(ValueError, match="no targets to distribute"):
             expand_fleet_to_matrix(
@@ -727,7 +734,7 @@ class TestFleetDistributorEdgeCases:
 
     def test_expand_fleet_to_matrix_no_matching_targets(self):
         """All targets excluded → raises error, no chunk files created."""
-        from ofx.cloud.fleet_distributor import expand_fleet_to_matrix
+        from ofx.cloud.fleet.distributor import expand_fleet_to_matrix
 
         with pytest.raises(ValueError, match="no targets to distribute"):
             expand_fleet_to_matrix(
@@ -743,7 +750,7 @@ class TestFleetDistributorEdgeCases:
         """Chunk files written by expand_fleet_to_matrix contain the targets."""
         import shutil
 
-        from ofx.cloud.fleet_distributor import expand_fleet_to_matrix
+        from ofx.cloud.fleet.distributor import expand_fleet_to_matrix
 
         combos, files = expand_fleet_to_matrix(
             {"count": 2, "input": "10.0.0.1,10.0.0.2,10.0.0.3", "distribution": "chunk"}

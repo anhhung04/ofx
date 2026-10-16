@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections.abc import Callable
 
 from ofx.models.cloud import CloudConfig
 
@@ -113,7 +112,7 @@ async def wait_for_connectivity(
     return await wait_for_ssh(host, ssh_port, timeout)
 
 def _probe_ssh_login(host: str, cfg: CloudConfig) -> None:
-    from ofx.api.post.runners.ssh import PostSSH
+    from ofx.lib.post.runners.ssh import PostSSH
 
     runner = PostSSH(
         host=host,
@@ -126,7 +125,7 @@ def _probe_ssh_login(host: str, cfg: CloudConfig) -> None:
     runner.run("id")
 
 def _probe_winrm_login(host: str, cfg: CloudConfig) -> None:
-    from ofx.api.post.runners.winrm import PostWinRM
+    from ofx.lib.post.runners.winrm import PostWinRM
 
     runner = PostWinRM(
         host=host,
@@ -151,9 +150,14 @@ async def wait_for_login(
     """
     start_time = time.time()
     if cfg.connection_type == "winrm" or getattr(cfg, "os_type", "") == "windows":
-        probe: Callable[[], None] = lambda: _probe_winrm_login(host, cfg)
+
+        def probe() -> None:
+            _probe_winrm_login(host, cfg)
+
     else:
-        probe = lambda: _probe_ssh_login(host, cfg)
+
+        def probe() -> None:
+            _probe_ssh_login(host, cfg)
     last_error: Exception | None = None
 
     while time.time() - start_time < timeout:

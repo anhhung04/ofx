@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from ofx.settings import DEFAULT_SHELL
+
 
 def model_field_is_explicitly_set(model: Any, field: str) -> bool:
     """Return whether a pydantic-backed model field was explicitly provided."""

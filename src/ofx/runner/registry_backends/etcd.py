@@ -1,7 +1,6 @@
 """etcd-based registry adapter for distributed coordination"""
 
 import warnings
-from typing import Any
 
 from ofx.runner.registry_adapter import SerializedPrefixedRegistryAdapter
 

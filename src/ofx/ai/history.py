@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+
 @dataclass
 class ChatHistory:
     """Wraps LLM message list with token estimation and auto-compaction.

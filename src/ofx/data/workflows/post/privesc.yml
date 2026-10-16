@@ -1,6 +1,8 @@
 name: privesc
-description: Privilege escalation — enumerate escalation vectors on compromised Linux
-  and Windows hosts.
+description: 'Privilege escalation enumeration — runs linpeas or linux-smart-enumeration
+  (Linux) / winPEAS (Windows) LOCALLY on the host executing OFX and aggregates the
+  results; remote execution over SSH is not implemented. Requires explicit authorization
+  (approved input).'
 tags:
 - post
 - privesc
@@ -10,14 +12,19 @@ tags:
 dispatch:
   inputs:
     target:
-      required: true
       type: string
-      description: Target host or SSH connection string
+      default: ''
+      description: Target host label recorded in the run artifacts (remote execution
+        is not supported — enumeration runs locally on this host)
       alias: t
     os_type:
       type: string
       default: linux
       description: 'Target OS: linux, windows'
+    approved:
+      required: true
+      type: boolean
+      description: Explicit authorization for this action (required)
     log_command:
       type: string
       default: 'true'
@@ -25,24 +32,60 @@ dispatch:
 jobs:
   linux-privesc:
     name: Linux Privilege Escalation
-    run_if: '{{ inputs.os_type == ''linux'' }}'
+    run_if: '{{ inputs.approved and inputs.os_type == ''linux'' }}'
     steps:
     - name: linpeas
-      run: linpeas.sh -a 2>&1 | tee {{ env.OFX_RUN_DIR }}/linpeas_results.txt
+      module: local.builtin.shell
+      with:
+        cmd: set -o pipefail; linpeas.sh -a 2>&1 | tee {{ env.OFX_RUN_DIR }}/linpeas_results.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
       timeout: 120
+    # lse.sh is pinned to release tag 4.14nw and verified against its SHA256 before
+    # execution; the digest is that of the tagged file at that URL.
+    - name: linux-smart-download
+      module: local.builtin.shell
+      with:
+        cmd: set -o pipefail; curl -fsSL -o {{ env.OFX_RUN_DIR }}/lse.sh https://raw.githubusercontent.com/diego-treitos/linux-smart-enumeration/4.14nw/lse.sh
+          && echo "a0c526f560189c81bc66303b81e828edabc68deed7e7bd28aed55a792c6d25c3  {{
+          env.OFX_RUN_DIR }}/lse.sh" | sha256sum -c -
+      retry: 2
+      retry-delay: 10
+      continue-on-error: false
+      log-command: '{{ inputs.log_command }}'
+      timeout: 10
     - name: linux-smart
-      run: curl -sL https://raw.githubusercontent.com/diego-treitos/linux-smart-enumeration/master/lse.sh
-        | bash 2>&1 | tee {{ env.OFX_RUN_DIR }}/lse_results.txt
+      module: local.builtin.shell
+      with:
+        cmd: set -o pipefail; bash {{ env.OFX_RUN_DIR }}/lse.sh -l 1 2>&1 | tee {{ env.OFX_RUN_DIR
+          }}/lse_results.txt
+      if: success()
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
+      timeout: 60
+    - name: aggregate
+      module: local.aggregate_recon
+      with:
+        os_type: linux
+      continue-on-error: false
+      log-command: '{{ inputs.log_command }}'
+      timeout: 5
   windows-privesc:
     name: Windows Privilege Escalation
-    run_if: '{{ inputs.os_type == ''windows'' }}'
+    run_if: '{{ inputs.approved and inputs.os_type == ''windows'' }}'
     steps:
     - name: winpeas
-      run: winPEASx64.exe 2>&1 | tee {{ env.OFX_RUN_DIR }}/winpeas_results.txt
+      module: local.builtin.shell
+      with:
+        cmd: winPEASx64.exe 2>&1 | Tee-Object -FilePath (Join-Path $env:OFX_RUN_DIR
+          'winpeas_results.txt')
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
       timeout: 120
+    - name: aggregate
+      module: local.aggregate_recon
+      with:
+        os_type: windows
+      continue-on-error: false
+      log-command: '{{ inputs.log_command }}'
+      timeout: 5

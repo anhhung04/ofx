@@ -8,12 +8,11 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from ofx.models.step import Step
+from ofx.cloud.runners.step import CloudStepRunner
+from ofx.models.step import RunType, Step
 from ofx.runner import RunContext, RunnerStatus
-from ofx.runner.cloud_step import CloudStepRunner
-from ofx.runner.handlers.registry import registry
+from ofx.runner.executors.step import _create_step_child_runner as _create
 from ofx.runner.step import StepRunner
-from ofx.models.step import RunType
 
 
 def _capture_save_runner_output(monkeypatch):
@@ -64,7 +63,7 @@ def _make_pre_run_step_runner(step: Step, ctx: RunContext) -> StepRunner:
 
 def _make_run_if_step_runner(step_index: int = 0):
     runner = object.__new__(StepRunner)
-    runner.model = Step(run="echo hi", step_index=step_index)
+    runner.model = Step(module="shell", run_with={"cmd": "echo hi"}, step_index=step_index)
     runner.ctx = RunContext()
     runner.parent = SimpleNamespace(_runners={})
     return runner
@@ -72,7 +71,7 @@ def _make_run_if_step_runner(step_index: int = 0):
 
 def test_resolve_working_dir_uses_context_default_when_step_omits_field(tmp_path):
     runner = object.__new__(StepRunner)
-    runner.model = Step(script="print('hi')")
+    runner.model = Step(module="python", run_with={"script": "print('hi')"})
     runner.ctx = RunContext(vars={"working_directory": tmp_path / "workspace"})
 
     assert runner._resolve_working_dir() == (tmp_path / "workspace")
@@ -80,7 +79,7 @@ def test_resolve_working_dir_uses_context_default_when_step_omits_field(tmp_path
 
 def test_resolve_working_dir_resolves_relative_context_path(tmp_path, monkeypatch):
     runner = object.__new__(StepRunner)
-    runner.model = Step(script="print('hi')")
+    runner.model = Step(module="python", run_with={"script": "print('hi')"})
     monkeypatch.chdir(tmp_path)
     runner.ctx = RunContext(vars={"working_directory": Path("nested")})
 
@@ -89,7 +88,9 @@ def test_resolve_working_dir_resolves_relative_context_path(tmp_path, monkeypatc
 
 def test_resolve_working_dir_resolves_relative_step_path_against_context(tmp_path):
     runner = object.__new__(StepRunner)
-    runner.model = Step(script="print('hi')", **{"working-directory": "nested"})
+    runner.model = Step(
+        module="python", run_with={"script": "print('hi')"}, **{"working-directory": "nested"}
+    )
     runner.ctx = RunContext(vars={"working_directory": tmp_path / "workspace"})
 
     assert runner._resolve_working_dir() == (tmp_path / "workspace" / "nested").resolve()
@@ -97,7 +98,7 @@ def test_resolve_working_dir_resolves_relative_step_path_against_context(tmp_pat
 
 def test_resolve_remote_work_dir_ignores_default_local_working_directory():
     runner = object.__new__(CloudStepRunner)
-    runner.model = Step(script="print('hi')")
+    runner.model = Step(module="python", run_with={"script": "print('hi')"})
     runner.parent = SimpleNamespace(model=SimpleNamespace(defaults=SimpleNamespace(run=None)))
     runner._work_dir = "/tmp/ofx-run"
 
@@ -106,7 +107,9 @@ def test_resolve_remote_work_dir_ignores_default_local_working_directory():
 
 def test_resolve_remote_work_dir_honors_explicit_step_working_directory():
     runner = object.__new__(CloudStepRunner)
-    runner.model = Step(script="print('hi')", **{"working-directory": "/opt/custom"})
+    runner.model = Step(
+        module="python", run_with={"script": "print('hi')"}, **{"working-directory": "/opt/custom"}
+    )
     runner.parent = SimpleNamespace(model=SimpleNamespace(defaults=SimpleNamespace(run=None)))
     runner._work_dir = "/tmp/ofx-run"
 
@@ -115,7 +118,7 @@ def test_resolve_remote_work_dir_honors_explicit_step_working_directory():
 
 def test_script_handler_uses_resolved_working_directory(tmp_path):
     step_runner = SimpleNamespace(
-        model=Step(script="print('hi')"),
+        model=Step(module="python", run_with={"script": "print('hi')"}),
         ctx=RunContext(
             vars={"working_directory": tmp_path / "workspace"},
             workflow_dir=tmp_path,
@@ -126,7 +129,8 @@ def test_script_handler_uses_resolved_working_directory(tmp_path):
         _resolve_shell=lambda: "/bin/sh",
     )
 
-    runner = registry.get(RunType.SCRIPT)(step_runner)
+    step_runner._run_type = RunType.MODULE
+    runner = _create(step_runner)
 
     assert runner.model.working_directory == (tmp_path / "workspace").resolve()
 
@@ -135,7 +139,11 @@ def test_script_file_handler_uses_resolved_working_directory(tmp_path):
     script_path = tmp_path / "worker.py"
     script_path.write_text("print('hi')\n")
     step_runner = SimpleNamespace(
-        model=Step(script_file="worker", **{"working-directory": "nested"}),
+        model=Step(
+            module="python",
+            run_with={"script_file": "worker"},
+            **{"working-directory": "nested"},
+        ),
         ctx=RunContext(workflow_dir=tmp_path),
         parent=None,
         _child_context=lambda update=None: RunContext(),
@@ -143,14 +151,15 @@ def test_script_file_handler_uses_resolved_working_directory(tmp_path):
         _resolve_shell=lambda: "/bin/sh",
     )
 
-    runner = registry.get(RunType.SCRIPT_FILE)(step_runner)
+    step_runner._run_type = RunType.MODULE
+    runner = _create(step_runner)
 
     assert runner.model.working_directory == (tmp_path / "workspace" / "nested").resolve()
 
 
 def test_command_handler_uses_resolved_shell():
     step_runner = SimpleNamespace(
-        model=Step(run="echo hi"),
+        model=Step(module="shell", run_with={"cmd": "echo hi"}),
         ctx=RunContext(),
         parent=SimpleNamespace(
             model=SimpleNamespace(
@@ -161,14 +170,15 @@ def test_command_handler_uses_resolved_shell():
         _resolve_working_dir=lambda: Path.cwd(),
     )
 
-    runner = registry.get(RunType.COMMAND)(step_runner)
+    step_runner._run_type = RunType.MODULE
+    runner = _create(step_runner)
 
     assert runner.model.shell == "/bin/sh"
 
 
 def test_command_handler_honors_explicit_step_shell():
     step_runner = SimpleNamespace(
-        model=Step(run="echo hi", shell="/bin/zsh"),
+        model=Step(module="shell", run_with={"cmd": "echo hi"}, shell="/bin/zsh"),
         ctx=RunContext(),
         parent=SimpleNamespace(
             model=SimpleNamespace(
@@ -179,13 +189,14 @@ def test_command_handler_honors_explicit_step_shell():
         _resolve_working_dir=lambda: Path.cwd(),
     )
 
-    runner = registry.get(RunType.COMMAND)(step_runner)
+    step_runner._run_type = RunType.MODULE
+    runner = _create(step_runner)
 
     assert runner.model.shell == "/bin/zsh"
 
 def test_script_handler_uses_resolved_shell():
     step_runner = SimpleNamespace(
-        model=Step(script="print('hi')"),
+        model=Step(module="python", run_with={"script": "print('hi')"}),
         ctx=RunContext(workflow_dir=Path.cwd()),
         parent=SimpleNamespace(
             model=SimpleNamespace(
@@ -196,7 +207,8 @@ def test_script_handler_uses_resolved_shell():
         _resolve_working_dir=lambda: Path.cwd(),
     )
 
-    runner = registry.get(RunType.SCRIPT)(step_runner)
+    step_runner._run_type = RunType.MODULE
+    runner = _create(step_runner)
 
     assert runner.model.shell == "/bin/sh"
 def test_run_if_context_defaults_when_no_previous_step_runner():
@@ -278,7 +290,7 @@ def test_format_typed_outputs_renders_when_payload_present(monkeypatch):
 def test_emit_result_outputs_logs_streams_and_saves_stdout(tmp_path):
     runner = _make_run_if_step_runner(step_index=1)
     runner.ctx = RunContext(output_path=tmp_path)
-    runner.model = Step(run="echo hi", **{"log-stdout": True})
+    runner.model = Step(module="shell", run_with={"cmd": "echo hi"}, **{"log-stdout": True})
     logs: list[tuple[str, str]] = []
     saves: list[tuple[str, dict[str, str]]] = []
     runner._format_typed_outputs = lambda _result: False
@@ -313,7 +325,9 @@ def test_emit_result_outputs_logs_streams_and_saves_stdout(tmp_path):
 
 @pytest.mark.asyncio
 async def test_pre_run_injects_runner_and_ofx_outputs_for_command_steps():
-    runner = _make_pre_run_step_runner(Step(run="echo hi"), RunContext())
+    runner = _make_pre_run_step_runner(
+        Step(module="shell", run_with={"cmd": "echo hi"}), RunContext()
+    )
 
     await runner._pre_run()
 
@@ -326,7 +340,7 @@ async def test_pre_run_injects_runner_and_ofx_outputs_for_command_steps():
 @pytest.mark.asyncio
 async def test_pre_run_skips_outputs_file_for_interactive_command_steps():
     runner = _make_pre_run_step_runner(
-        Step(run="echo hi", interactive=True),
+        Step(module="shell", run_with={"cmd": "echo hi"}, interactive=True),
         RunContext(),
     )
 
@@ -341,7 +355,7 @@ def test_cloud_save_output_uses_shared_runner_output_helper(monkeypatch, tmp_pat
     runner = object.__new__(CloudStepRunner)
     runner.ctx = RunContext(output_path=tmp_path)
     runner.parent = SimpleNamespace(model=SimpleNamespace(jid="job-1"))
-    runner.model = Step(run="echo hi")
+    runner.model = Step(module="shell", run_with={"cmd": "echo hi"})
     runner._log_info = lambda _message: None
     runner._log_warning = lambda _message: None
 
@@ -359,7 +373,7 @@ def test_save_runner_output_warns_when_output_path_missing():
     warnings: list[str] = []
     runner.ctx = RunContext(output_path=None)
     runner.parent = SimpleNamespace(model=SimpleNamespace(jid="job-1"))
-    runner.model = Step(run="echo hi")
+    runner.model = Step(module="shell", run_with={"cmd": "echo hi"})
     runner._log_info = lambda _message: None
     runner._log_warning = warnings.append
 
@@ -383,7 +397,7 @@ def test_save_runner_output_skips_missing_job_id(monkeypatch, tmp_path):
     runner = object.__new__(CloudStepRunner)
     runner.ctx = RunContext(output_path=tmp_path)
     runner.parent = None
-    runner.model = Step(run="echo hi")
+    runner.model = Step(module="shell", run_with={"cmd": "echo hi"})
     runner._log_info = lambda _message: None
     runner._log_warning = lambda _message: None
 

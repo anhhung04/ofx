@@ -12,6 +12,7 @@ from ofx.runner.step_descriptors import step_type_label
 from ofx.settings import get_console, get_workflow_search_dirs
 from ofx.utils.workflow_utils import find_workflow
 
+
 def _find_workflow_fuzzy(name: str) -> Workflow:
     """Find workflow by name, with recursive fallback for bare names."""
     dirs = tuple(get_workflow_search_dirs())
@@ -36,6 +37,7 @@ def show_info(workflow_name: str, detailed: bool = False) -> None:
     """Display detailed information about a workflow."""
     from rich.table import Table
     from rich.tree import Tree
+
     from ofx.runner.workflow_scheduler import WorkflowScheduler
 
     console = get_console()

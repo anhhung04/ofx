@@ -128,9 +128,10 @@ class ProjectManager:
                 )
             )
 
-        # Create .gitignore
+        # Create .gitignore (never clobber an existing one)
         gitignore = project_path / ".gitignore"
-        gitignore.write_text(PROJECT_GITIGNORE)
+        if not gitignore.exists():
+            gitignore.write_text(PROJECT_GITIGNORE)
 
         # Init git repo
         try:

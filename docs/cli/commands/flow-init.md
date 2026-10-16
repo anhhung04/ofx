@@ -79,7 +79,9 @@ jobs:
   job1:
     steps:
       - name: step1
-        run: echo "hello"
+        module: shell
+        with:
+          cmd: echo "hello"
 ```
 
 ---
@@ -96,6 +98,6 @@ With the schema comment in place:
 
 ## See Also
 
-- [flow schema](schema.md) — Export the JSON schema manually or view model trees
+- [flow dump](schema.md) — Export the JSON schema manually or view model trees
 - [flow validate](validate.md) — Validate a workflow file against the schema
 - [Workflows Guide](../../guide/workflows.md) — Full workflow syntax reference

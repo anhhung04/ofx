@@ -10,6 +10,7 @@ from ofx.runner.output_formatter import (
     format_typed_outputs,
 )
 
+
 def _capture_console() -> tuple[Console, io.StringIO]:
     """Return a Console that writes to a StringIO buffer."""
     buf = io.StringIO()

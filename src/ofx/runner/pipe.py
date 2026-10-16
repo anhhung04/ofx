@@ -18,6 +18,7 @@ from ofx.runner.executors.pipe import (
 )
 from ofx.runner.runner import Runner
 
+
 class PipeExecution(BaseModel):
     """Execution model wrapping a [`PipeConfig`](src/ofx/models/pipe.py)."""
 
@@ -34,7 +35,13 @@ class PipeRunner(Runner[PipeExecution]):
         parent: Runner | None = None,
         executor: PipeExecutor | None = None,
     ):
-        super().__init__(model, ctx, parent, None, executor=executor or PipeExecutor())
+        super().__init__(
+            model,
+            ctx,
+            parent,
+            parent.registry if parent is not None else None,
+            executor=executor or PipeExecutor(),
+        )
         self._temp_file: Path | None = None
 
 __all__ = [

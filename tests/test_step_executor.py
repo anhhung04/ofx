@@ -102,9 +102,12 @@ async def test_post_run_logs_timeline_when_log_command_enabled(tmp_path, monkeyp
         _build_timeline_params=lambda _result: {"source_host": "host-a", "tags": "cloud"},
     )
 
+    async def _log_step_async(**kwargs):
+        timeline_calls.append(kwargs)
+
     monkeypatch.setattr(
-        "ofx.runner.timeline.log_step",
-        lambda **kwargs: timeline_calls.append(kwargs),
+        "ofx.runner.timeline.log_step_async",
+        _log_step_async,
     )
 
     await StepExecutor().post_run(runner)
@@ -203,10 +206,11 @@ async def test_do_run_retries_then_succeeds(monkeypatch) -> None:
     await StepExecutor().do_run(runner)
 
     assert sleep_delays == [0.5]
-    assert calls[0] == (
+    assert calls[0].startswith(
         "Retry 2/2 in 0.5s - Step execution failed with status: "
         "RunnerStatus.FAILED, error: boom"
     )
+    assert "Remediation:" in calls[0]
     assert calls[-1] == "result: namespace(status=<RunnerStatus.COMPLETED: 'completed'>)"
 
 
@@ -260,6 +264,11 @@ async def test_do_run_warns_and_uses_registry_for_workflow_interactive_step() ->
             )
         ),
     )
+
+    def _fake_create():
+        created.append(runner)
+        return child_runner
+
     runner = SimpleNamespace(
         model=SimpleNamespace(
             retry=0,
@@ -271,13 +280,7 @@ async def test_do_run_warns_and_uses_registry_for_workflow_interactive_step() ->
         ),
         ctx=SimpleNamespace(vars={}, allow_interactive=True),
         _run_type=RunType.WORKFLOW,
-        _handler_registry=SimpleNamespace(
-            get=lambda run_type: (
-                (lambda current_runner: created.append(current_runner) or child_runner)
-                if run_type == RunType.WORKFLOW
-                else None
-            )
-        ),
+        _create_runner=_fake_create,
         _log_warning=warnings.append,
         _log_debug=lambda _message: None,
         reg_set=AsyncMock(side_effect=lambda key, value: results.append((key, value))),

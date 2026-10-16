@@ -6,6 +6,7 @@ from ofx.cloud.base import CloudProvider, CloudProviderRegistry
 from ofx.cloud.config import CloudProfileManager
 from ofx.models.cloud import CloudConfig
 
+
 class TestCloudProviderRegistry:
     def setup_method(self):
         """Save and restore registry state to avoid test pollution."""

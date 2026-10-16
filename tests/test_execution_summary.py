@@ -9,7 +9,9 @@ import yaml
 from ofx.models.workflow import Workflow
 from ofx.runner import RunContext, RunnerRegistryKeys, RunnerStatus
 from ofx.runner.execution_summary import ExecutionSummaryReporter
-from ofx.runner.runner_refs import runner_leaf_descendants
+from ofx.runner.execution_summary import (
+    _runner_leaf_descendants as runner_leaf_descendants,
+)
 from ofx.runner.workflow import WorkflowRunner
 
 
@@ -39,12 +41,20 @@ name: Summary Workflow
 jobs:
   job1:
     steps:
-      - run: echo "ok"
-      - run: echo "ok2"
+      - module: shell
+        with:
+          cmd: echo "ok"
+      - module: shell
+        with:
+          cmd: echo "ok2"
   job2:
     steps:
-      - run: exit 1
-      - run: echo "ok3"
+      - module: shell
+        with:
+          cmd: exit 1
+      - module: shell
+        with:
+          cmd: echo "ok3"
         run_if: failure()
 """
     workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
@@ -76,7 +86,9 @@ jobs:
       matrix:
         target: [a, b, c]
     steps:
-      - run: echo "{{ matrix.target }}"
+      - module: shell
+        with:
+          cmd: echo "{{ matrix.target }}"
 """
     workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
     runner = WorkflowRunner(workflow, RunContext())
@@ -123,7 +135,7 @@ async def test_job_summaries_fall_back_to_runner_state_when_result_fails():
     )
 
     with patch(
-        "ofx.runner.execution_summary.runner_leaf_descendants",
+        "ofx.runner.execution_summary._runner_leaf_descendants",
         return_value=[step_runner],
     ):
         summaries = await reporter._job_summaries()

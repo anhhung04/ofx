@@ -8,7 +8,8 @@ app = typer.Typer(
     invoke_without_command=True,
 )
 
-from ofx.commands import (
+# Deferred: subcommand modules import after `app` exists to avoid cycles.
+from ofx.commands import (  # noqa: E402
     ai,
     api,
     cloud,

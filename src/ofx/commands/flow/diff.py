@@ -9,6 +9,7 @@ from ofx.commands.flow.info import _find_workflow_fuzzy
 from ofx.runner.step_descriptors import step_type_label
 from ofx.settings import get_console
 
+
 def show_diff(name_a: str, name_b: str) -> None:
     """Compare two workflows and display structural differences."""
     console = get_console()

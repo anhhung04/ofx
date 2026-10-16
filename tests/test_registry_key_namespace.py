@@ -1,11 +1,11 @@
 """Tests for registry key namespacing."""
 
-from types import SimpleNamespace
 
 import pytest
 from pydantic import BaseModel
 
 from ofx.runner import RunContext, Runner
+
 
 class _Model(BaseModel):
     name: str = "m"

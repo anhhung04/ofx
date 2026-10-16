@@ -24,13 +24,17 @@ jobs:
     name: Interactive Job
     steps:
       - name: Launch bash shell
-        run: bash
+        module: shell
+        with:
+          cmd: bash
         interactive: true  # Disabled if job2 runs in parallel
   job2:  # No 'needs' - runs in parallel with job1
     name: Parallel Job
     steps:
       - name: Print message
-        run: echo "parallel"
+        module: shell
+        with:
+          cmd: echo "parallel"
 ```
 
 **Solution:** Use job dependencies to ensure jobs run sequentially:
@@ -42,12 +46,16 @@ jobs:
     name: Interactive Job
     steps:
       - name: Launch bash shell
-        run: bash
+        module: shell
+        with:
+          cmd: bash
         interactive: true  # ✓ Works
   job2:
     name: Follow-up Job
     needs: job1  # Runs after job1 completes
     steps:
       - name: Print message
-        run: echo "sequential"
+        module: shell
+        with:
+          cmd: echo "sequential"
 ```

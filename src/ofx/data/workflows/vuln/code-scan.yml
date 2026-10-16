@@ -17,7 +17,7 @@ dispatch:
     languages:
       type: string
       default: python,javascript,go,java
-      description: Languages to scan
+      description: Languages to scan (semgrep include filters)
     log_command:
       type: string
       default: 'true'
@@ -25,14 +25,23 @@ dispatch:
 jobs:
   sast:
     name: Static Analysis
+    outputs:
+      semgrep_results: '{{ steps.semgrep.outputs.results_file }}'
+      gitleaks_results: '{{ steps.gitleaks.outputs.results_file }}'
+      gitleaks_findings: '{{ steps.gitleaks.outputs.findings_count }}'
     steps:
+    - name: resolve-source
+      module: local.resolve_source
     - name: semgrep
-      run: semgrep --config auto --json -o {{ env.OFX_RUN_DIR }}/semgrep_results.json
-        {{ inputs.target }} 2>&1
-      continue-on-error: true
+      module: local.scan_semgrep
+      with:
+        source_path: "{{ steps['resolve-source'].outputs.source_path }}"
       log-command: '{{ inputs.log_command }}'
       timeout: 120
     - name: gitleaks
-      run: gitleaks detect --source {{ inputs.target }} --no-git -v 2>&1
-      continue-on-error: true
+      module: local.scan_gitleaks
+      with:
+        source_path: "{{ steps['resolve-source'].outputs.source_path }}"
+        no_git: true
       log-command: '{{ inputs.log_command }}'
+      timeout: 120

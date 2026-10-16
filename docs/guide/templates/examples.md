@@ -7,7 +7,9 @@ Practical examples of Jinja2 templates in OFX workflows.
 ## Basic Variable Substitution
 
 ```yaml
-run: echo "Target is {{ inputs.target }}"
+module: shell
+with:
+  cmd: echo "Target is {{ inputs.target }}"
 ```
 
 ---
@@ -17,9 +19,11 @@ run: echo "Target is {{ inputs.target }}"
 ```yaml
 steps:
   - name: Save scan results
-    run: |
-      nmap {{ inputs.target }} -oX {{ ctx.output_path }}/scan_{{ ctx.run_id }}.xml
-      echo "Saved to {{ ctx.output_path }}"
+    module: shell
+    with:
+      cmd: |
+        nmap {{ inputs.target }} -oX {{ ctx.output_path }}/scan_{{ ctx.run_id }}.xml
+        echo "Saved to {{ ctx.output_path }}"
 ```
 
 ---
@@ -29,38 +33,44 @@ steps:
 ```yaml
 steps:
   - name: find-target
-    run: |
-      target=$(dig +short {{ inputs.domain }} | head -1)
-      echo "target_ip=$target" >> $OFX_OUTPUTS
+    module: shell
+    with:
+      cmd: |
+        target=$(dig +short {{ inputs.domain }} | head -1)
+        echo "target_ip=$target" >> $OFX_OUTPUTS
 
   - name: scan-target
-    run: nmap -sV {{ steps['find-target'].outputs.target_ip }}
+    module: shell
+    with:
+      cmd: nmap -sV {{ steps['find-target'].outputs.target_ip }}
 ```
 
 ---
 
 ## Typed Output Chaining
 
-Chain task outputs between steps using helper functions:
+Chain module outputs between steps using helper functions. User-defined modules (see [Modules](../jobs-steps/steps.md#modules)) can run a tool and emit `typed_outputs` via `ctx.add_outputs()`:
 
 ```yaml
 steps:
-  - task: nmap
+  - module: modules/port_scan.py
     name: port-scan
     with:
       target: "{{ inputs.target }}"
       ports: "1-10000"
 
-  - task: httpx
+  - module: modules/http_probe.py
     name: http-probe
     with:
       target: "{{ inputs.target }}"
       ports: "{{ ports(steps['port-scan'].outputs.typed_outputs) | map(attribute='port') | join(',') }}"
 
-  - run: |
-      echo "=== Results ==="
-      echo "Open ports: {{ ports(steps['port-scan'].outputs.typed_outputs) | map(attribute='host_port') | join(', ') }}"
-      echo "Live URLs: {{ urls(steps['http-probe'].outputs.typed_outputs) | map(attribute='url') | join(', ') }}"
+  - module: shell
+    with:
+      cmd: |
+        echo "=== Results ==="
+        echo "Open ports: {{ ports(steps['port-scan'].outputs.typed_outputs) | map(attribute='host_port') | join(', ') }}"
+        echo "Live URLs: {{ urls(steps['http-probe'].outputs.typed_outputs) | map(attribute='url') | join(', ') }}"
 ```
 
 ---
@@ -70,14 +80,16 @@ steps:
 ```yaml
 steps:
   - name: scan
-    run: |
-      {% if inputs.mode == "stealth" %}
-      nmap -sS -T2 -Pn {{ inputs.target }}
-      {% elif inputs.mode == "aggressive" %}
-      nmap -A -T4 {{ inputs.target }}
-      {% else %}
-      nmap -sV {{ inputs.target }}
-      {% endif %}
+    module: shell
+    with:
+      cmd: |
+        {% if inputs.mode == "stealth" %}
+        nmap -sS -T2 -Pn {{ inputs.target }}
+        {% elif inputs.mode == "aggressive" %}
+        nmap -A -T4 {{ inputs.target }}
+        {% else %}
+        nmap -sV {{ inputs.target }}
+        {% endif %}
 ```
 
 ---
@@ -87,12 +99,14 @@ steps:
 ```yaml
 steps:
   - name: install-tool
-    run: |
-      {% if is_windows %}
-      choco install nmap
-      {% else %}
-      {{ sudo("apt-get install -y nmap") }}
-      {% endif %}
+    module: shell
+    with:
+      cmd: |
+        {% if is_windows %}
+        choco install nmap
+        {% else %}
+        {{ sudo("apt-get install -y nmap") }}
+        {% endif %}
 ```
 
 ---
@@ -102,11 +116,13 @@ steps:
 ```yaml
 steps:
   - name: scan-all
-    run: |
-      {% for host in jobs.discover.outputs.hosts.split(",") %}
-      echo "--- Scanning {{ host }} ({{ loop.index }}/{{ loop.length }}) ---"
-      nmap -sV {{ host }} -oN {{ ctx.output_path }}/{{ host }}.txt
-      {% endfor %}
+    module: shell
+    with:
+      cmd: |
+        {% for host in jobs.discover.outputs.hosts.split(",") %}
+        echo "--- Scanning {{ host }} ({{ loop.index }}/{{ loop.length }}) ---"
+        nmap -sV {{ host }} -oN {{ ctx.output_path }}/{{ host }}.txt
+        {% endfor %}
 ```
 
 ---
@@ -116,10 +132,9 @@ steps:
 ```yaml
 steps:
   - name: comprehensive-scan
-    task: nmap
+    module: shell
     with:
-      target: "{{ inputs.target }}"
-      ports: "1-65535"
+      cmd: nmap -sV -p 1-65535 {{ inputs.target }}
     timeout: "{{ (inputs.target_count | int / 50) | int * 1 + 15 }}"
 ```
 
@@ -130,14 +145,18 @@ steps:
 ```yaml
 steps:
   - name: prepare-targets
-    run: |
-      {{ file_write(inputs.targets, ctx.output_path ~ "/targets.txt") }}
-      echo "Wrote {{ inputs.targets.split('\n') | length }} targets"
+    module: shell
+    with:
+      cmd: |
+        {{ file_write(inputs.targets, ctx.output_path ~ "/targets.txt") }}
+        echo "Wrote {{ inputs.targets.split('\n') | length }} targets"
 
   - name: read-results
-    run: |
-      {% set content = file_read(ctx.output_path ~ "/scan.txt") %}
-      echo "Results: {{ content | length }} bytes"
+    module: shell
+    with:
+      cmd: |
+        {% set content = file_read(ctx.output_path ~ "/scan.txt") %}
+        echo "Results: {{ content | length }} bytes"
 ```
 
 ---
@@ -147,10 +166,12 @@ steps:
 ```yaml
 steps:
   - name: prepare-payload
-    run: |
-      echo "Base64: {{ b64encode(inputs.payload) }}"
-      echo "URL-encoded: {{ url_encode(inputs.target) }}"
-      echo "SHA256: {{ sha256(inputs.target) }}"
+    module: shell
+    with:
+      cmd: |
+        echo "Base64: {{ b64encode(inputs.payload) }}"
+        echo "URL-encoded: {{ url_encode(inputs.target) }}"
+        echo "SHA256: {{ sha256(inputs.target) }}"
 ```
 
 ---
@@ -160,10 +181,12 @@ steps:
 ```yaml
 steps:
   - name: setup-listener
-    run: |
-      PORT={{ random_port() }}
-      TOKEN={{ random_string(32) }}
-      echo "Listener on $PORT with token $TOKEN"
+    module: shell
+    with:
+      cmd: |
+        PORT={{ random_port() }}
+        TOKEN={{ random_string(32) }}
+        echo "Listener on $PORT with token $TOKEN"
 ```
 
 ---
@@ -179,7 +202,9 @@ jobs:
         port: [80, 443]
     steps:
       - name: "scan-{{ matrix.target }}-{{ matrix.port }}"
-        run: nmap -p {{ matrix.port }} {{ matrix.target }} -oN {{ ctx.output_path }}/{{ matrix.target }}_{{ matrix.port }}.txt
+        module: shell
+        with:
+          cmd: nmap -p {{ matrix.port }} {{ matrix.target }} -oN {{ ctx.output_path }}/{{ matrix.target }}_{{ matrix.port }}.txt
 ```
 
 ---
@@ -188,20 +213,22 @@ jobs:
 
 ```yaml
 steps:
-  - task: nuclei
+  - module: modules/nuclei_scan.py
     name: vuln-scan
     with:
       target: "{{ inputs.target }}"
 
   - name: report
-    run: |
-      {% set all_vulns = vulns(steps['vuln-scan'].outputs.typed_outputs) %}
-      {% set critical = all_vulns | selectattr('severity', 'eq', 'critical') | list %}
-      {% set high = all_vulns | selectattr('severity', 'eq', 'high') | list %}
-      echo "=== Vulnerability Summary ==="
-      echo "Critical: {{ critical | length }}"
-      echo "High: {{ high | length }}"
-      echo "Total: {{ all_vulns | length }}"
+    module: shell
+    with:
+      cmd: |
+        {% set all_vulns = vulns(steps['vuln-scan'].outputs.typed_outputs) %}
+        {% set critical = all_vulns | selectattr('severity', 'eq', 'critical') | list %}
+        {% set high = all_vulns | selectattr('severity', 'eq', 'high') | list %}
+        echo "=== Vulnerability Summary ==="
+        echo "Critical: {{ critical | length }}"
+        echo "High: {{ high | length }}"
+        echo "Total: {{ all_vulns | length }}"
 ```
 
 ---

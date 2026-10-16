@@ -6,6 +6,7 @@ from pydantic import Field, field_validator
 
 from ofx.models.base import OFXBaseModel
 
+
 class FleetStrategy(OFXBaseModel):
     """Fleet distribution strategy for running across multiple VPS instances."""
 

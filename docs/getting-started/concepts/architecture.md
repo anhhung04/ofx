@@ -23,7 +23,7 @@ OFX is designed as a modular, extensible workflow engine for red teaming, automa
 ---
 
 ## Extending OFX
-- Add new API modules in `src/ofx/api/`
+- Add new API modules in `src/ofx/lib/`
 - Add custom connectors for new data sources
 - Use templates for advanced logic
 

@@ -8,6 +8,7 @@ import os
 import shutil
 import tarfile
 import textwrap
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -24,11 +25,47 @@ from ofx.cloud.sessions.store import SessionStore
 from ofx.models.step import Step
 
 
+def _wait_until(cond, *, timeout: float = 10.0, interval: float = 0.05) -> bool:
+    """Poll *cond* until it returns True or *timeout* seconds elapse."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if cond():
+            return True
+        time.sleep(interval)
+    return False
+
+
 @pytest.fixture(autouse=True)
 def _restore_workflow_dirs():
     original = list(_settings_mod.DEFAULT_WORKFLOWS_DIRS)
     yield
     _settings_mod.DEFAULT_WORKFLOWS_DIRS = original
+
+
+@pytest.fixture(autouse=True)
+def _isolate_session_env(monkeypatch, tmp_path):
+    """Isolate all session-relevant env vars and settings so subprocesses don't see stale state."""
+    home = tmp_path / "home"
+    home.mkdir()
+    ofx_dir = home / ".ofx"
+    projects_dir = ofx_dir / "projects"
+    projects_dir.mkdir(parents=True, exist_ok=True)
+    config_path = ofx_dir / "config.yml"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("OFX_PROJECTS_PATH", str(projects_dir))
+    monkeypatch.setattr(_settings_mod, "CONFIG_YAML", config_path)
+    # Point Settings to a fresh config so subprocesses don't see a stale active_project
+    monkeypatch.setattr(
+        _settings_mod.Settings,
+        "model_config",
+        {**_settings_mod.Settings.model_config, "yaml_file": config_path},
+    )
+    # Clear any leaked OFX_ACTIVE_PROJECT env var from project tests
+    monkeypatch.delenv("OFX_ACTIVE_PROJECT", raising=False)
+    original = getattr(_settings_mod.settings, "active_project", None)
+    _settings_mod.settings.active_project = None
+    yield
+    _settings_mod.settings.active_project = original
 
 class TestSessionModel:
     def test_create_minimal(self):
@@ -231,6 +268,18 @@ class TestScriptBuilder:
         """Create a minimal Step-like object."""
         from ofx.models.step import Step
 
+        run = kwargs.pop("run", None)
+        script = kwargs.pop("script", None)
+        script_file = kwargs.pop("script_file", None)
+        if run is not None:
+            kwargs["module"] = "shell"
+            kwargs["with"] = {"cmd": run}
+        elif script is not None:
+            kwargs["module"] = "python"
+            kwargs["with"] = {"script": script}
+        elif script_file is not None:
+            kwargs["module"] = "python"
+            kwargs["with"] = {"script_file": script_file}
         return Step(**kwargs)
 
     def test_bash_single_command(self):
@@ -255,14 +304,14 @@ class TestScriptBuilder:
             self._make_step(name="step2", run="echo world"),
         ]
         script = build_session_script(steps, session_id="aabb", work_dir="/tmp/test")
-        assert "step1 [command]" in script
-        assert "step2 [command]" in script
+        assert "step1 [module]" in script
+        assert "step2 [module]" in script
         assert script.count(">>> Step") == 2
 
     def test_bash_log_descriptor_includes_run_type(self):
         steps = [self._make_step(name="py-inline", script='print("ok")')]
         script = build_session_script(steps, session_id="aabb", work_dir="/tmp/test")
-        assert "py-inline [script]" in script
+        assert "py-inline [module]" in script
         assert "FAILED" in script
 
     def test_bash_env_vars(self):
@@ -320,7 +369,7 @@ class TestScriptBuilder:
         assert "$ErrorActionPreference" in script
         assert "SESSION_ID" in script
         assert "Get-Process" in script
-        assert "wincheck [command]" in script
+        assert "wincheck [module]" in script
         assert "workflow=wf-win job=win-job" in script
         assert "__TASK_OK__" in script
 
@@ -480,9 +529,13 @@ class TestSessionManagerLocal:
               echo-job:
                 steps:
                   - name: greet
-                    run: echo "Hello from session"
+                    module: shell
+                    with:
+                      cmd: echo "Hello from session"
                   - name: write-output
-                    run: echo "result data" > output/result.txt
+                    module: shell
+                    with:
+                      cmd: echo "result data" > output/result.txt
         """)
         )
         return wf
@@ -497,12 +550,16 @@ class TestSessionManagerLocal:
               first-job:
                 steps:
                   - name: first
-                    run: echo "FIRST_JOB" >> output/trace.txt
+                    module: shell
+                    with:
+                      cmd: echo "FIRST_JOB" >> output/trace.txt
               second-job:
                 needs: [first-job]
                 steps:
                   - name: second
-                    run: echo "SECOND_JOB" >> output/trace.txt
+                    module: shell
+                    with:
+                      cmd: echo "SECOND_JOB" >> output/trace.txt
         """)
         )
         return wf
@@ -541,17 +598,19 @@ class TestSessionManagerLocal:
 
         session = asyncio.run(mgr.submit(str(wf_path), target=SessionTarget.LOCAL))
 
-        import time
 
-        for _ in range(50):
-            time.sleep(0.1)
-            try:
-                os.kill(session.remote_pid, 0)
-            except ProcessLookupError:
-                break
+        def _is_done():
+            nonlocal session
+            session = asyncio.run(mgr.status(session.id))
+            return session.is_done()
+
+        assert _wait_until(_is_done, timeout=30), "session did not complete in time"
 
         session = asyncio.run(mgr.status(session.id))
-        assert session.status == SessionStatus.COMPLETED
+        assert session.status == SessionStatus.COMPLETED, (
+            f"session failed: {session.error}"
+            + chr(10) + asyncio.run(mgr.logs(session.id, tail=20))
+        )
 
         work = Path(session.remote_work_dir)
         assert (work / "output.enc").exists(), (
@@ -570,15 +629,17 @@ class TestSessionManagerLocal:
         session = asyncio.run(mgr.submit(str(wf_path), target=SessionTarget.LOCAL))
         assert session.job_id == ""
 
-        import time
-
-        for _ in range(60):
-            time.sleep(0.1)
+        def _is_done():
+            nonlocal session
             session = asyncio.run(mgr.status(session.id))
-            if session.is_done():
-                break
+            return session.is_done()
 
-        assert session.status == SessionStatus.COMPLETED
+        assert _wait_until(_is_done, timeout=20), "session did not complete in time"
+
+        assert session.status == SessionStatus.COMPLETED, (
+            f"session failed: {session.error}"
+            + chr(10) + asyncio.run(mgr.logs(session.id, tail=20))
+        )
         results_path = asyncio.run(mgr.fetch(session.id))
         trace = (results_path / "trace.txt").read_text()
         assert "FIRST_JOB" in trace
@@ -594,15 +655,17 @@ class TestSessionManagerLocal:
         )
         assert session.job_id == "second-job"
 
-        import time
-
-        for _ in range(60):
-            time.sleep(0.1)
+        def _is_done():
+            nonlocal session
             session = asyncio.run(mgr.status(session.id))
-            if session.is_done():
-                break
+            return session.is_done()
 
-        assert session.status == SessionStatus.COMPLETED
+        assert _wait_until(_is_done, timeout=20), "session did not complete in time"
+
+        assert session.status == SessionStatus.COMPLETED, (
+            f"session failed: {session.error}"
+            + chr(10) + asyncio.run(mgr.logs(session.id, tail=20))
+        )
         results_path = asyncio.run(mgr.fetch(session.id))
         trace = (results_path / "trace.txt").read_text()
         assert "FIRST_JOB" not in trace
@@ -617,8 +680,10 @@ class TestSessionManagerLocal:
               py-job:
                 steps:
                   - name: inline-python
-                    script: |
-                      print("INLINE_SCRIPT_OK")
+                    module: python
+                    with:
+                      script: |
+                        print("INLINE_SCRIPT_OK")
         """)
         )
         store = SessionStore(base_dir=tmp_path / "sessions")
@@ -670,15 +735,17 @@ class TestSessionManagerLocal:
 
         session = asyncio.run(mgr.submit(str(wf_path), target=SessionTarget.LOCAL))
 
-        import time
-
-        for _ in range(50):
-            time.sleep(0.1)
+        def _is_done():
+            nonlocal session
             session = asyncio.run(mgr.status(session.id))
-            if session.is_done():
-                break
+            return session.is_done()
 
-        assert session.status == SessionStatus.COMPLETED
+        assert _wait_until(_is_done, timeout=20), "session did not complete in time"
+
+        assert session.status == SessionStatus.COMPLETED, (
+            f"session failed: {session.error}"
+            + chr(10) + asyncio.run(mgr.logs(session.id, tail=20))
+        )
 
     def test_logs_returns_output(self, tmp_path):
         wf_path = self._create_test_workflow(tmp_path)
@@ -687,13 +754,12 @@ class TestSessionManagerLocal:
 
         session = asyncio.run(mgr.submit(str(wf_path), target=SessionTarget.LOCAL))
 
-        import time
-
-        for _ in range(50):
-            time.sleep(0.1)
+        def _is_done():
+            nonlocal session
             session = asyncio.run(mgr.status(session.id))
-            if session.is_done():
-                break
+            return session.is_done()
+
+        assert _wait_until(_is_done, timeout=20), "session did not complete in time"
 
         logs = asyncio.run(mgr.logs(session.id))
         assert "Session" in logs or "started" in logs
@@ -749,15 +815,17 @@ class TestSessionManagerLocal:
 
         session = asyncio.run(mgr.submit(str(wf_path), target=SessionTarget.LOCAL))
 
-        import time
-
-        for _ in range(50):
-            time.sleep(0.1)
+        def _is_done():
+            nonlocal session
             session = asyncio.run(mgr.status(session.id))
-            if session.is_done():
-                break
+            return session.is_done()
 
-        assert session.status == SessionStatus.COMPLETED
+        assert _wait_until(_is_done, timeout=20), "session did not complete in time"
+
+        assert session.status == SessionStatus.COMPLETED, (
+            f"session failed: {session.error}"
+            + chr(10) + asyncio.run(mgr.logs(session.id, tail=20))
+        )
 
         results_path = asyncio.run(mgr.fetch(session.id))
         assert results_path.exists()
@@ -776,13 +844,12 @@ class TestSessionManagerLocal:
 
         session = asyncio.run(mgr.submit(str(wf_path), target=SessionTarget.LOCAL))
 
-        import time
-
-        for _ in range(50):
-            time.sleep(0.1)
+        def _is_done():
+            nonlocal session
             session = asyncio.run(mgr.status(session.id))
-            if session.is_done():
-                break
+            return session.is_done()
+
+        assert _wait_until(_is_done, timeout=20), "session did not complete in time"
 
         enc_path = asyncio.run(mgr.fetch(session.id, passphrase="s3cret"))
         assert enc_path.exists()
@@ -802,7 +869,9 @@ class TestSessionManagerLocal:
               wait-job:
                 steps:
                   - name: wait
-                    run: sleep 30
+                    module: shell
+                    with:
+                      cmd: sleep 30
         """)
         )
         store = SessionStore(base_dir=tmp_path / "sessions")
@@ -811,13 +880,18 @@ class TestSessionManagerLocal:
         session = asyncio.run(mgr.submit(str(wf), target=SessionTarget.LOCAL))
         assert session.remote_pid is not None
 
-        import time
+        def _proc_running():
+            try:
+                os.kill(session.remote_pid, 0)
+                return True
+            except ProcessLookupError:
+                return False
 
-        time.sleep(0.2)
+        assert _wait_until(_proc_running, timeout=5), "session process did not start"
         session = asyncio.run(mgr.cancel(session.id))
         assert session.status == SessionStatus.CANCELED
 
-        time.sleep(0.2)
+        assert _wait_until(lambda: not _proc_running(), timeout=5), "session process did not stop"
         try:
             os.kill(session.remote_pid, 0)
         except ProcessLookupError:
@@ -831,13 +905,12 @@ class TestSessionManagerLocal:
         session = asyncio.run(mgr.submit(str(wf_path), target=SessionTarget.LOCAL))
         work_dir = Path(session.remote_work_dir)
 
-        import time
-
-        for _ in range(50):
-            time.sleep(0.1)
+        def _is_done():
+            nonlocal session
             session = asyncio.run(mgr.status(session.id))
-            if session.is_done():
-                break
+            return session.is_done()
+
+        assert _wait_until(_is_done, timeout=20), "session did not complete in time"
 
         assert work_dir.exists()
 
@@ -852,13 +925,12 @@ class TestSessionManagerLocal:
         mgr = _make_manager(store, tmp_path)
 
         session = asyncio.run(mgr.submit(str(wf_path), target=SessionTarget.LOCAL))
-        import time
-
-        for _ in range(50):
-            time.sleep(0.1)
+        def _is_done():
+            nonlocal session
             session = asyncio.run(mgr.status(session.id))
-            if session.is_done():
-                break
+            return session.is_done()
+
+        assert _wait_until(_is_done, timeout=20), "session did not complete in time"
 
         asyncio.run(mgr.fetch(session.id))
         bundle = asyncio.run(mgr.bundle_artifacts(session.id))
@@ -871,13 +943,12 @@ class TestSessionManagerLocal:
         mgr = _make_manager(store, tmp_path)
 
         session = asyncio.run(mgr.submit(str(wf_path), target=SessionTarget.LOCAL))
-        import time
-
-        for _ in range(60):
-            time.sleep(0.1)
+        def _is_done():
+            nonlocal session
             session = asyncio.run(mgr.status(session.id))
-            if session.is_done():
-                break
+            return session.is_done()
+
+        assert _wait_until(_is_done, timeout=20), "session did not complete in time"
 
         asyncio.run(mgr.fetch(session.id))
         bundle = asyncio.run(mgr.bundle_artifacts(session.id))
@@ -897,13 +968,12 @@ class TestSessionManagerLocal:
         session = asyncio.run(
             mgr.submit(str(wf_path), target=SessionTarget.LOCAL, job_id="second-job")
         )
-        import time
-
-        for _ in range(60):
-            time.sleep(0.1)
+        def _is_done():
+            nonlocal session
             session = asyncio.run(mgr.status(session.id))
-            if session.is_done():
-                break
+            return session.is_done()
+
+        assert _wait_until(_is_done, timeout=20), "session did not complete in time"
 
         asyncio.run(mgr.fetch(session.id))
         bundle = asyncio.run(mgr.bundle_artifacts(session.id))
@@ -982,7 +1052,9 @@ class TestSessionManagerLocal:
               wait-job:
                 steps:
                   - name: wait
-                    run: sleep 30
+                    module: shell
+                    with:
+                      cmd: sleep 30
         """)
         )
         store = SessionStore(base_dir=tmp_path / "sessions")
@@ -1035,7 +1107,7 @@ class TestSessionInputInjection:
 
         wf_file = tmp_path / "scan.yml"
         wf_file.write_text(
-            "name: scan\njobs:\n  scan:\n    steps:\n      - run: echo $INPUT_MODE\n"
+            "name: scan\njobs:\n  scan:\n    steps:\n      - module: shell\n        with:\n          cmd: echo $INPUT_MODE\n"
         )
 
         try:
@@ -1069,7 +1141,7 @@ class TestSessionInputInjection:
 
         wf_file = tmp_path / "scan.yml"
         wf_file.write_text(
-            "name: scan\njobs:\n  scan:\n    steps:\n      - run: cat $INPUT_TARGETS_FILE\n"
+            "name: scan\njobs:\n  scan:\n    steps:\n      - module: shell\n        with:\n          cmd: cat $INPUT_TARGETS_FILE\n"
         )
 
         try:
@@ -1105,7 +1177,7 @@ class TestSessionInputInjection:
 
         wf_file = tmp_path / "scan.yml"
         wf_file.write_text(
-            "name: scan\njobs:\n  scan:\n    steps:\n      - run: cat $INPUT_TARGETS_FILE\n"
+            "name: scan\njobs:\n  scan:\n    steps:\n      - module: shell\n        with:\n          cmd: cat $INPUT_TARGETS_FILE\n"
         )
 
         real_copy2 = shutil.copy2
@@ -1173,7 +1245,7 @@ class TestSessionInputInjection:
             mp.setattr("ofx.cloud.runtime.create_remote_runner", lambda *_args, **_kwargs: remote)
             with pytest.raises(RuntimeError, match="Failed to upload session input file"):
                 mgr._start_cloud_remote_submit(
-                    [Step(run="echo ok")],
+                    [Step(module="shell", run_with={"cmd": "echo ok"})],
                     target=target,
                     runtime=runtime,
                     workflow_dir=None,
@@ -1254,7 +1326,7 @@ class TestSessionSubmitHelpers:
         mgr = _make_manager(store, tmp_path)
         wf_file = tmp_path / "scan.yml"
         wf_file.write_text(
-            "name: scan\njobs:\n  scan:\n    steps:\n      - run: echo ok\n"
+            "name: scan\njobs:\n  scan:\n    steps:\n      - module: shell\n        with:\n          cmd: echo ok\n"
         )
         captured_env: dict[str, str] = {}
 
@@ -1336,7 +1408,7 @@ class TestSessionSubmitHelpers:
             job_id="job-1",
             inputs={"targets_file": "/tmp/hosts.txt", "count": 5},
         )
-        steps = [Step(run="echo ok")]
+        steps = [Step(module="shell", run_with={"cmd": "echo ok"})]
 
         prepared = mgr._prepare_cloud_submit_runtime(
             steps,
@@ -1372,7 +1444,7 @@ class TestSessionSubmitHelpers:
             inputs={"targets_file": str(tmp_path / "local-targets.txt")},
         )
         Path(session.inputs["targets_file"]).write_text("10.0.0.1\n")
-        steps = [Step(run="echo ok")]
+        steps = [Step(module="shell", run_with={"cmd": "echo ok"})]
         uploads: list[tuple[str, str]] = []
         temp_uploads: list[tuple[str, str]] = []
         target = SimpleNamespace(
@@ -1451,7 +1523,7 @@ class TestSessionSubmitHelpers:
         store = SessionStore(base_dir=tmp_path / "sessions")
         mgr = SessionManager(store=store)
         session = Session(id="cloudtmux", workflow_file="wf.yml")
-        steps = [Step(run="echo ok")]
+        steps = [Step(module="shell", run_with={"cmd": "echo ok"})]
         target = SimpleNamespace(
             resolved="resolved-config",
             instance=SimpleNamespace(ip="10.0.0.8"),
@@ -1507,7 +1579,7 @@ class TestSessionSubmitHelpers:
         store = SessionStore(base_dir=tmp_path / "sessions")
         mgr = SessionManager(store=store)
         session = Session(id="cloudwin", workflow_file="wf.yml")
-        steps = [Step(run="echo ok")]
+        steps = [Step(module="shell", run_with={"cmd": "echo ok"})]
         target = SimpleNamespace(
             resolved="resolved-config",
             instance=SimpleNamespace(ip="10.0.0.8"),
@@ -1559,7 +1631,7 @@ class TestSessionSubmitHelpers:
         store = SessionStore(base_dir=tmp_path / "sessions")
         mgr = SessionManager(store=store)
         session = Session(id="cloudsubmit", workflow_file="wf.yml")
-        steps = [Step(run="echo ok")]
+        steps = [Step(module="shell", run_with={"cmd": "echo ok"})]
         target = SimpleNamespace(
             session=session,
             resolved="resolved-config",
@@ -2352,6 +2424,18 @@ class TestCloudStatusBackoff:
 
 class TestSessionManagerScriptBundling:
     def _make_step(self, **kwargs) -> Step:
+        run = kwargs.pop("run", None)
+        script = kwargs.pop("script", None)
+        script_file = kwargs.pop("script_file", None)
+        if run is not None:
+            kwargs["module"] = "shell"
+            kwargs["with"] = {"cmd": run}
+        elif script is not None:
+            kwargs["module"] = "python"
+            kwargs["with"] = {"script": script}
+        elif script_file is not None:
+            kwargs["module"] = "python"
+            kwargs["with"] = {"script_file": script_file}
         return Step.model_validate(kwargs)
 
     def test_stage_script_files_writes_bundle_for_inline_script(self, tmp_path):
@@ -2401,7 +2485,7 @@ class TestSessionManagerScriptBundling:
         mgr = SessionManager(store=SessionStore(base_dir=tmp_path / "sessions"))
         work_dir = tmp_path / "work"
         work_dir.mkdir(parents=True, exist_ok=True)
-        steps = [self._make_step(name="s0", script_file="relative")]
+        steps = [self._make_step(name="s0", script_file="relative.py")]
 
         mgr._stage_script_files(steps, work_dir, workflow_dir=workflow_dir)
 
@@ -2455,7 +2539,7 @@ class TestSessionManagerScriptBundling:
         src = workflow_dir / "relative.py"
         src.write_text('print("RELATIVE_UPLOAD_OK")\n')
         mgr = SessionManager(store=SessionStore(base_dir=tmp_path / "sessions"))
-        steps = [self._make_step(name="s0", script_file="relative")]
+        steps = [self._make_step(name="s0", script_file="relative.py")]
 
         mgr._upload_script_files(
             steps,

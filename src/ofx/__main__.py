@@ -1,5 +1,6 @@
 import typer
 
+
 def main():
     try:
         from ofx.commands import main

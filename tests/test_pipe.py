@@ -17,6 +17,7 @@ from ofx.runner.pipe import (
     _safe_eval,
 )
 
+
 class TestPipeConfig:
     def test_minimal(self):
         cfg = PipeConfig(input="{{ steps.0.outputs.data }}")
@@ -60,7 +61,7 @@ class TestStepPipe:
 
     def test_pipe_exclusive(self):
         with pytest.raises(ValueError, match="exactly one"):
-            Step(pipe={"input": "{{ x }}"}, run="echo hi")
+            Step(pipe={"input": "{{ x }}"}, module="shell")
 
     def test_pipe_config_validated(self):
         step = Step(pipe={"input": "{{ x }}", "filter": "port > 80"})
@@ -452,12 +453,12 @@ class TestStepPipeEdgeCases:
     """Validate pipe step model constraints."""
 
     def test_pipe_task_mutual_exclusivity(self):
-        with pytest.raises(ValueError, match="Extra inputs are not permitted"):
-            Step(pipe={"input": "{{ x }}"}, task="nmap")
+        with pytest.raises(ValueError, match="exactly one"):
+            Step(pipe={"input": "{{ x }}"}, module="shell")
 
     def test_pipe_script_mutual_exclusivity(self):
         with pytest.raises(ValueError, match="exactly one"):
-            Step(pipe={"input": "{{ x }}"}, script="print(1)")
+            Step(pipe={"input": "{{ x }}"}, module="python")
 
     def test_pipe_uses_mutual_exclusivity(self):
         with pytest.raises(ValueError, match="exactly one"):
@@ -465,4 +466,4 @@ class TestStepPipeEdgeCases:
 
     def test_pipe_script_file_mutual_exclusivity(self):
         with pytest.raises(ValueError, match="exactly one"):
-            Step(pipe={"input": "{{ x }}"}, script_file="test.py")
+            Step(pipe={"input": "{{ x }}"}, module="python")

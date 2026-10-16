@@ -5,6 +5,7 @@ from collections.abc import Callable
 from ofx.cloud.base import CloudProvider
 from ofx.commands.ui_helpers import error_exit
 
+
 def resolve_provider(profile: str = "", provider: str = "") -> str:
     """Resolve a cloud provider name from a profile or explicit --provider flag.
 

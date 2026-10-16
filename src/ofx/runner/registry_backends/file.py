@@ -95,9 +95,10 @@ class FileRegistry(RegistryAdapter):
 
     async def _set(self, key: str, value: Any) -> None:
         """Store data in file"""
-        registry = await self._read_registry()
-        registry[key] = self._clone_value(value)
-        await self._write_registry(registry)
+        with self._lock:
+            registry = await self._read_registry()
+            registry[key] = self._clone_value(value)
+            await self._write_registry(registry)
         self._log_backend_key_action("Set", key)
 
     async def _get(self, key: str) -> Any | None:
@@ -108,19 +109,21 @@ class FileRegistry(RegistryAdapter):
 
     async def _update(self, key: str, updates: dict[str, Any]) -> None:
         """Update specific fields in data"""
-        registry = await self._read_registry()
-        registry[key] = self._merged_updated_value(registry.get(key), updates)
-        await self._write_registry(registry)
+        with self._lock:
+            registry = await self._read_registry()
+            registry[key] = self._merged_updated_value(registry.get(key), updates)
+            await self._write_registry(registry)
         self._log_backend_key_action("Updated", key)
 
     async def _delete(self, key: str) -> bool:
         """Remove data from file"""
-        registry = await self._read_registry()
-        if key in registry:
-            del registry[key]
-            await self._write_registry(registry)
-            self._log_backend_key_action("Deleted", key)
-            return True
+        with self._lock:
+            registry = await self._read_registry()
+            if key in registry:
+                del registry[key]
+                await self._write_registry(registry)
+                self._log_backend_key_action("Deleted", key)
+                return True
         return False
 
     async def _exists(self, key: str) -> bool:

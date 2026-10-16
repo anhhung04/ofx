@@ -12,7 +12,7 @@ Custom connectors allow you to extend OFX with your own data sources, APIs, or i
 ---
 
 ## How to Implement
-1. Create a new Python module in `src/ofx/api/connectors/` (or similar)
+1. Create a new Python module in `src/ofx/lib/connectors/` (or similar)
 2. Define a class with methods for fetching or transforming data
 3. Register your connector in the workflow or as a step
 
@@ -20,7 +20,7 @@ Custom connectors allow you to extend OFX with your own data sources, APIs, or i
 
 ## Example: Custom Asset Fetcher
 ```python
-# src/ofx/api/connectors/myassets.py
+# src/ofx/lib/connectors/myassets.py
 class MyAssetConnector:
 		def fetch_assets(self, query):
 				# Connect to internal API
@@ -31,15 +31,16 @@ class MyAssetConnector:
 **YAML usage:**
 ```yaml
 steps:
-	- name: Fetch Assets
-		run: |
-			from ofx.api.connectors.myassets import MyAssetConnector
-			assets = MyAssetConnector().fetch_assets("prod")
-			for host in assets:
-					print(host)
-		script:
-		outputs:
-			hosts: "{{ step.stdout_lines }}"
+  - name: Fetch Assets
+    module: python
+    with:
+      script: |
+        from ofx.lib.connectors.myassets import MyAssetConnector
+        assets = MyAssetConnector().fetch_assets("prod")
+        for host in assets:
+            print(host)
+    outputs:
+      hosts: "{{ step.stdout_lines }}"
 ```
 
 ---

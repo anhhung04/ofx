@@ -16,11 +16,15 @@ jobs:
   interactive_shell:
     steps:
       - name: Start Interactive Bash
-        run: bash
+        module: shell
+        with:
+          cmd: bash
         interactive: true
         timeout: 10
       - name: After Shell
-        run: echo "Shell session ended cleanly!"
+        module: shell
+        with:
+          cmd: echo "Shell session ended cleanly!"
 ```
 
 If you type `exit` or press `Ctrl+D` in the shell, the workflow will continue to the next step. If you run an invalid command, you'll see an error, but you can still exit cleanly.
@@ -50,7 +54,9 @@ Look for log messages indicating parallel execution. If jobs run in parallel, ad
 **Solution:** Increase timeout:
 ```yaml
 - name: Long Session
-  run: tool
+  module: shell
+  with:
+    cmd: tool
   interactive: true
   timeout: 60  # Increase from default
 ```
@@ -61,6 +67,8 @@ Look for log messages indicating parallel execution. If jobs run in parallel, ad
 **Solution:** Ensure the command itself supports interactive mode. Some tools need flags:
 ```yaml
 - name: Python Interactive
-  run: python3 -i  # -i flag for interactive
+  module: shell
+  with:
+    cmd: python3 -i  # -i flag for interactive
   interactive: true
 ```

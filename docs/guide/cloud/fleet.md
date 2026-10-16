@@ -45,10 +45,14 @@ jobs:
         input: "{{ inputs.targets }}"
         distribution: chunk
     steps:
-      - run: apt install nmap -y
-      - run: |
-          nmap -iL $FLEET_INPUT_FILE \
-               -oA output/scan-$FLEET_INDEX
+      - module: shell
+        with:
+          cmd: apt install nmap -y
+      - module: shell
+        with:
+          cmd: |
+            nmap -iL $FLEET_INPUT_FILE \
+                 -oA output/scan-$FLEET_INDEX
 ```
 
 ```bash
@@ -179,9 +183,11 @@ jobs:
         count: 3
         input: targets.txt
     steps:
-      - run: |
-          {{ matrix.tool }} -iL $FLEET_INPUT_FILE \
-            -oA output/{{ matrix.tool }}-$FLEET_INDEX
+      - module: shell
+        with:
+          cmd: |
+            {{ matrix.tool }} -iL $FLEET_INPUT_FILE \
+              -oA output/{{ matrix.tool }}-$FLEET_INDEX
 ```
 
 This creates `2 tools x 3 chunks = 6 VPS instances`, each running one tool against one chunk.
@@ -208,7 +214,9 @@ jobs:
         input: targets.txt
         distribution: round-robin
     steps:
-      - run: masscan -iL $FLEET_INPUT_FILE -p 1-65535 --rate 10000
+      - module: shell
+        with:
+          cmd: masscan -iL $FLEET_INPUT_FILE -p 1-65535 --rate 10000
 ```
 
 Static fleet instances are never destroyed — only SSH connectivity is verified.
@@ -242,21 +250,27 @@ jobs:
       NONINTERACTIVE: "1"
     steps:
       - name: install-tools
-        run: apt-get update && apt-get install -y nmap
+        module: shell
+        with:
+          cmd: apt-get update && apt-get install -y nmap
 
       - name: scan
-        run: |
-          echo "Instance $FLEET_INDEX scanning $FLEET_TARGET_COUNT targets"
-          nmap -iL $FLEET_INPUT_FILE -sV \
-               -oA output/scan-$FLEET_INDEX
-          echo "Scan complete"
+        module: shell
+        with:
+          cmd: |
+            echo "Instance $FLEET_INDEX scanning $FLEET_TARGET_COUNT targets"
+            nmap -iL $FLEET_INPUT_FILE -sV \
+                 -oA output/scan-$FLEET_INDEX
+            echo "Scan complete"
 
       - name: summary
-        run: |
-          echo "=== Results ==="
-          if [ -f output/scan-$FLEET_INDEX.gnmap ]; then
-            grep "open" output/scan-$FLEET_INDEX.gnmap | wc -l
-          fi
+        module: shell
+        with:
+          cmd: |
+            echo "=== Results ==="
+            if [ -f output/scan-$FLEET_INDEX.gnmap ]; then
+              grep "open" output/scan-$FLEET_INDEX.gnmap | wc -l
+            fi
 ```
 
 ```bash

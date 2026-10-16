@@ -5,12 +5,12 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from ofx.runner.context import RunResult
 from ofx.runner.executors.base import Executor
 from ofx.runner.executors.parallel import (
     parallel_run_settings,
     run_parallel_runner_items,
 )
+
 
 class MatrixExecutor(Executor):
     async def pre_run(self, runner) -> None:
@@ -73,7 +73,11 @@ class MatrixExecutor(Executor):
             if key in matrix_values
         }
 
-        from ofx.runner.job import JobRunner, attach_indexed_job_runner, build_indexed_job_context
+        from ofx.runner.job import (
+            JobRunner,
+            attach_indexed_job_runner,
+            build_indexed_job_context,
+        )
 
         job_ctx = build_indexed_job_context(
             runner,

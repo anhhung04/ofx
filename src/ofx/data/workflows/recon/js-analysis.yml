@@ -17,38 +17,65 @@ dispatch:
       type: string
       default: 'true'
       description: Enable command logging
+call:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: File of live web hosts/URLs
+      alias: t
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+    output_dir:
+      type: string
+      default: '{{ env.OFX_RUN_DIR }}'
+      description: Directory for generated artifacts
+  outputs:
+    js_file: "{{ jobs.js.outputs.js_file }}"
+    js_count: "{{ jobs.js.outputs.js_count }}"
+    secrets_report: "{{ jobs.js.outputs.secrets_report }}"
 jobs:
   js:
     name: JavaScript Analysis
+    outputs:
+      js_file: "{{ steps['merge-js'].outputs.output_file }}"
+      js_count: "{{ steps['merge-js'].outputs.count }}"
+      secrets_report: '{{ inputs.output_dir or env.OFX_RUN_DIR }}/js_secrets.html'
     steps:
     - name: subjs
-      run: cat {{ inputs.target }} | subjs -silent > {{ env.OFX_RUN_DIR }}/js_files_subjs.txt
+      module: local.builtin.shell
+      with:
+        cmd: cat {{ inputs.target }} | subjs -silent > {{ inputs.output_dir or env.OFX_RUN_DIR
+          }}/js_files_subjs.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
+      timeout: 120
+      retry: 2
     - name: katana-js
-      run: katana -list {{ inputs.target }} -em js -silent -o {{ env.OFX_RUN_DIR }}/js_files_katana.txt
+      module: local.builtin.shell
+      with:
+        cmd: katana -list {{ inputs.target }} -em js -silent -o {{ inputs.output_dir
+          or env.OFX_RUN_DIR }}/js_files_katana.txt
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
       timeout: 120
     - name: merge-js
-      script: |
-        import os
-        rd = os.environ["OFX_RUN_DIR"]
-        seen = set()
-        for name in ("js_files_subjs.txt", "js_files_katana.txt"):
-            try:
-                with open(os.path.join(rd, name)) as fh:
-                    seen.update(line.strip() for line in fh if line.strip())
-            except FileNotFoundError:
-                pass
-        out = os.path.join(rd, "js_files.txt")
-        with open(out, "w") as fh:
-            fh.write("\n".join(sorted(seen)))
-        print(f"collected {len(seen)} JS files")
-        add_outputs(js_file=out, js_count=len(seen))
+      module: local.builtin.merge_lists
+      with:
+        files:
+        - js_files_subjs.txt
+        - js_files_katana.txt
+        required:
+        - js_files_subjs.txt
+        output: js_files.txt
+        output_dir: '{{ inputs.output_dir or env.OFX_RUN_DIR }}'
     - name: secretfinder
-      run: python3 SecretFinder.py -i {{ env.OFX_RUN_DIR }}/js_files.txt -o {{ env.OFX_RUN_DIR
-        }}/js_secrets.html
+      module: local.builtin.shell
+      with:
+        cmd: python3 SecretFinder.py -i {{ inputs.output_dir or env.OFX_RUN_DIR }}/js_files.txt
+          -o {{ inputs.output_dir or env.OFX_RUN_DIR }}/js_secrets.html
       continue-on-error: true
       log-command: '{{ inputs.log_command }}'
       timeout: 120

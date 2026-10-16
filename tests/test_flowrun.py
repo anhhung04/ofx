@@ -194,7 +194,9 @@ class TestFlowRun:
             jobs:
               scan:
                 steps:
-                  - run: "echo ${{ secrets.DB_PASS }} ${{ secrets['TOKEN'] }}"
+                  - module: shell
+                    with:
+                      cmd: "echo ${{ secrets.DB_PASS }} ${{ secrets['TOKEN'] }}"
             """,
             tmp_path / "flows" / "wf.yml",
         )
@@ -237,7 +239,9 @@ class TestFlowRun:
                 jobs:
                   a:
                     steps:
-                      - run: "echo ${{ secrets.API_KEY }}"
+                      - module: shell
+                        with:
+                          cmd: "echo ${{ secrets.API_KEY }}"
                 """,
                 {"API_KEY"},
             ),
@@ -247,7 +251,9 @@ class TestFlowRun:
                 jobs:
                   a:
                     steps:
-                      - run: 'echo ${{ secrets["DB_PASS"] }}'
+                      - module: shell
+                        with:
+                          cmd: 'echo ${{ secrets["DB_PASS"] }}'
                 """,
                 {"DB_PASS"},
             ),
@@ -257,10 +263,14 @@ class TestFlowRun:
                 jobs:
                   a:
                     steps:
-                      - run: "curl -H 'Authorization: ${{ secrets.TOKEN }}' ${{ secrets.URL }}"
+                      - module: shell
+                        with:
+                          cmd: "curl -H 'Authorization: ${{ secrets.TOKEN }}' ${{ secrets.URL }}"
                   b:
                     steps:
-                      - run: "psql ${{ secrets.DB_CONN }}"
+                      - module: shell
+                        with:
+                          cmd: "psql ${{ secrets.DB_CONN }}"
                 """,
                 {"TOKEN", "URL", "DB_CONN"},
             ),
@@ -272,7 +282,9 @@ class TestFlowRun:
                 jobs:
                   a:
                     steps:
-                      - run: echo $API_KEY
+                      - module: shell
+                        with:
+                          cmd: echo $API_KEY
                 """,
                 {"MY_API_KEY"},
             ),
@@ -282,7 +294,9 @@ class TestFlowRun:
                 jobs:
                   a:
                     steps:
-                      - run: echo $TOKEN
+                      - module: shell
+                        with:
+                          cmd: echo $TOKEN
                         env:
                           TOKEN: "${{ secrets.GH_TOKEN }}"
                 """,
@@ -294,10 +308,14 @@ class TestFlowRun:
                 jobs:
                   a:
                     steps:
-                      - run: "${{ secrets.KEY }} and ${{ secrets.KEY }}"
+                      - module: shell
+                        with:
+                          cmd: "${{ secrets.KEY }} and ${{ secrets.KEY }}"
                   b:
                     steps:
-                      - run: "${{ secrets.KEY }}"
+                      - module: shell
+                        with:
+                          cmd: "${{ secrets.KEY }}"
                 """,
                 {"KEY"},
             ),
@@ -353,7 +371,9 @@ class TestFlowRun:
             jobs:
               scan:
                 steps:
-                  - run: "echo ${{ secrets.API_KEY }}"
+                  - module: shell
+                    with:
+                      cmd: "echo ${{ secrets.API_KEY }}"
             """,
             tmp_path / "flows" / "wf.yml",
         )
@@ -506,7 +526,9 @@ class TestFlowRun:
             jobs:
               scan:
                 steps:
-                  - run: "echo ${{ secrets.API_KEY }}"
+                  - module: shell
+                    with:
+                      cmd: "echo ${{ secrets.API_KEY }}"
             """,
             tmp_path / "flows" / "wf.yml",
         )
@@ -604,7 +626,9 @@ class TestFlowRun:
             jobs:
               scan:
                 steps:
-                  - run: "echo hi"
+                  - module: shell
+                    with:
+                      cmd: "echo hi"
             """,
             tmp_path / "flows" / "wf.yml",
         )
@@ -662,9 +686,13 @@ class TestFlowRun:
                 runner = WorkflowRunner(workflow=workflow, ctx=ctx)
                 result = await runner.run()
 
-                assert "command test output" in caplog.text, "Expected output in logs"
-
                 assert result.status == RunnerStatus.COMPLETED
+                # M3 (log_level honoring) suppresses step INFO stdout display when
+                # step_runner.log_level == CRITICAL; assert via captured outputs.
+                test_job = runner.runners["test"]
+                command_step = test_job.runners["1"]
+                step_outputs = (await command_step.get_result()).outputs
+                assert "command test output" in step_outputs["stdout"]
             finally:
                 import shutil
 
@@ -699,10 +727,14 @@ name: test-parallel
 jobs:
   job1:
     steps:
-      - run: echo "job1"
+      - module: shell
+        with:
+          cmd: echo "job1"
   job2:
     steps:
-      - run: echo "job2"
+      - module: shell
+        with:
+          cmd: echo "job2"
 """
             )
         )
@@ -724,11 +756,15 @@ name: test-deps
 jobs:
   setup:
     steps:
-      - run: echo "setup done"
+      - module: shell
+        with:
+          cmd: echo "setup done"
   main:
     needs: [setup]
     steps:
-      - run: echo "main done"
+      - module: shell
+        with:
+          cmd: echo "main done"
 """
             )
         )
@@ -750,8 +786,12 @@ name: test-failure
 jobs:
   failing:
     steps:
-      - run: exit 1
-      - run: echo "should not reach"
+      - module: shell
+        with:
+          cmd: exit 1
+      - module: shell
+        with:
+          cmd: echo "should not reach"
 """
             )
         )
@@ -773,9 +813,13 @@ name: test-continue
 jobs:
   resilient:
     steps:
-      - run: exit 1
+      - module: shell
+        with:
+          cmd: exit 1
         continue-on-error: true
-      - run: echo "continued"
+      - module: shell
+        with:
+          cmd: echo "continued"
 """
             )
         )
@@ -785,9 +829,7 @@ jobs:
         assert result.status == RunnerStatus.COMPLETED
 
     @pytest.mark.asyncio
-    async def test_step_outputs(self, tmp_path, caplog):
-        import logging
-
+    async def test_step_outputs(self, tmp_path):
         import yaml
 
         from ofx.models.workflow import Workflow
@@ -800,18 +842,25 @@ jobs:
   outputs_job:
     steps:
       - name: produce
-        run: echo "greeting=hello" >> "$OFX_OUTPUTS"
+        module: shell
+        with:
+          cmd: echo "greeting=hello" >> "$OFX_OUTPUTS"
       - name: consume
-        run: echo "Got {{ steps.0.outputs.greeting }}"
+        module: shell
+        with:
+          cmd: echo "Got {{ steps.0.outputs.greeting }}"
 """
             )
         )
         ctx = RunContext(output_path=tmp_path)
         runner = WorkflowRunner(workflow=workflow, ctx=ctx)
-        with caplog.at_level(logging.DEBUG):
-            result = await runner.run()
+        result = await runner.run()
         assert result.status == RunnerStatus.COMPLETED
-        assert "Got hello" in caplog.text
+        # M3 (log_level honoring) suppresses step INFO stdout display when
+        # step_runner.log_level == CRITICAL; assert via captured outputs instead.
+        consume_runner = runner.runners["outputs_job"].runners["1"]
+        consume_outputs = (await consume_runner.get_result()).outputs
+        assert "Got hello" in consume_outputs["stdout"]
 
     @pytest.mark.asyncio
     async def test_matrix_expansion(self, tmp_path):
@@ -829,7 +878,9 @@ jobs:
       matrix:
         target: [a, b, c]
     steps:
-      - run: echo "target={{ matrix.target }}"
+      - module: shell
+        with:
+          cmd: echo "target={{ matrix.target }}"
 """
             )
         )
@@ -839,9 +890,7 @@ jobs:
         assert result.status == RunnerStatus.COMPLETED
 
     @pytest.mark.asyncio
-    async def test_env_vars(self, tmp_path, caplog):
-        import logging
-
+    async def test_env_vars(self, tmp_path):
         import yaml
 
         from ofx.models.workflow import Workflow
@@ -855,16 +904,21 @@ env:
 jobs:
   check_env:
     steps:
-      - run: echo "$MY_VAR"
+      - module: shell
+        with:
+          cmd: echo "$MY_VAR"
 """
             )
         )
         ctx = RunContext(output_path=tmp_path)
         runner = WorkflowRunner(workflow=workflow, ctx=ctx)
-        with caplog.at_level(logging.DEBUG):
-            result = await runner.run()
+        result = await runner.run()
         assert result.status == RunnerStatus.COMPLETED
-        assert "hello_world" in caplog.text
+        # M3 (log_level honoring) suppresses step INFO stdout display when
+        # step_runner.log_level == CRITICAL; assert via captured outputs instead.
+        step_runner = runner.runners["check_env"].runners["0"]
+        step_outputs = (await step_runner.get_result()).outputs
+        assert "hello_world" in step_outputs["stdout"]
 
     @pytest.mark.asyncio
     async def test_run_if_false_skips(self, tmp_path):
@@ -879,8 +933,12 @@ name: test-runif
 jobs:
   conditional:
     steps:
-      - run: echo "always runs"
-      - run: echo "skipped"
+      - module: shell
+        with:
+          cmd: echo "always runs"
+      - module: shell
+        with:
+          cmd: echo "skipped"
         run_if: "False"
 """
             )
@@ -903,8 +961,10 @@ name: test-script
 jobs:
   script_job:
     steps:
-      - script: |
-          print("hello from python")
+      - module: python
+        with:
+          script: |
+            print("hello from python")
 """
             )
         )
@@ -926,7 +986,9 @@ name: test-workdir
 jobs:
   wd_job:
     steps:
-      - run: pwd
+      - module: shell
+        with:
+          cmd: pwd
         working-directory: /tmp
 """
             )

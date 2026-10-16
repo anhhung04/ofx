@@ -111,7 +111,7 @@ This directory is used for:
 - Step execution (`cd <work_dir> && <command>`)
 - Fleet input file upload (`<work_dir>/fleet_targets.txt`)
 - Output file collection (`<work_dir>/output/`)
-- Script file upload (for `script:` and `script_file:` steps)
+- Script file upload (for `module: python` steps with `script_file`)
 
 Steps can create an `output/` subdirectory inside the work dir. Any files in `<work_dir>/output/` are automatically downloaded to local storage after the job completes.
 
@@ -149,10 +149,12 @@ To have files downloaded, write them to `output/` inside the working directory:
 
 ```yaml
 steps:
-  - run: |
-      mkdir -p output
-      nmap -sV target.com -oA output/scan
-      echo "done" > output/status.txt
+  - module: shell
+    with:
+      cmd: |
+        mkdir -p output
+        nmap -sV target.com -oA output/scan
+        echo "done" > output/status.txt
 ```
 
 ## VPS Destruction
@@ -175,7 +177,9 @@ jobs:
       profile: do-small
       auto_destroy: false
     steps:
-      - run: ./setup-tool.sh
+      - module: shell
+        with:
+          cmd: ./setup-tool.sh
 ```
 
 ### Static provider
@@ -224,23 +228,25 @@ ofx cloud fleet destroy --prefix ofx --provider digitalocean
 - Use `max_parallel` to limit concurrent VPS count
 - Consider `auto_destroy: true` (the default) — only disable for debugging
 
-## Python Script Steps on VPS
+## Python Modules on VPS
 
-For `script:` and `script_file:` steps, OFX:
+For `module: python` steps, OFX:
 
 1. **Discovers Python** on the remote host (probes `python3`, `python`, and common absolute paths)
-2. **Bundles OFX API dependencies** — analyzes imports, collects required `ofx.api` module sources
+2. **Bundles OFX API dependencies** — analyzes imports, collects required `ofx.lib` module sources
 3. **Creates a self-extracting bootstrap** — base64-encoded zip of OFX modules + user script
 4. **Uploads the bootstrap** to the VPS
 5. **Executes** via the discovered Python interpreter
 6. **Cleans up** the bootstrap file
 
-This means `ofx.api` functions are available on the VPS without installing the OFX package:
+This means `ofx.lib` functions are available on the VPS without installing the OFX package:
 
 ```yaml
 steps:
-  - script: |
-      from ofx.api.recon import nmap_scan
-      cmd = nmap_scan("10.0.0.0/24", ports="1-1000")
-      print(cmd)
+  - module: python
+    with:
+      script: |
+        from ofx.lib.recon import nmap_scan
+        cmd = nmap_scan("10.0.0.0/24", ports="1-1000")
+        print(cmd)
 ```

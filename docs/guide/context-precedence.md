@@ -31,7 +31,9 @@ jobs:
       ENV: "job"
       PATH: "/job"
     steps:
-      - run: echo "$ENV $PATH $GLOBAL"
+      - module: shell
+        with:
+          cmd: echo "$ENV $PATH $GLOBAL"
         env:
           ENV: "step"
 ```

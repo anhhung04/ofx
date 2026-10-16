@@ -15,6 +15,7 @@ from ofx.settings import (
     get_console,
 )
 
+
 def show_search(
     *,
     query: str = "",

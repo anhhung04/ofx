@@ -60,6 +60,8 @@ class MemoryJobRegistry(RegistryAdapter):
     async def _update(self, key: str, updates: dict[str, Any]) -> None:
         """Update specific fields in data (atomic read-modify-write)."""
         async with self._lock:
+            if key not in self._registry:
+                self._check_capacity()
             self._registry[key] = self._merged_updated_value(
                 self._registry.get(key),
                 updates,

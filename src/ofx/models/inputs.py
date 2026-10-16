@@ -7,6 +7,7 @@ from pydantic import Field, model_validator
 
 from ofx.models.base import OFXBaseModel
 
+
 class WorkflowInput(OFXBaseModel):
     """Input parameter definition for workflows."""
 

@@ -20,9 +20,9 @@ logger = logging.getLogger("ofx")
 app = typer.Typer()
 
 def discover_api_modules() -> dict[str, dict[str, str]]:
-    """Auto-discover all API modules from ofx.api package."""
+    """Auto-discover all API modules from ofx.lib package."""
     try:
-        api_package = importlib.import_module("ofx.api")
+        api_package = importlib.import_module("ofx.lib")
         api_file = api_package.__file__
         if not api_file:
             return {}
@@ -33,7 +33,7 @@ def discover_api_modules() -> dict[str, dict[str, str]]:
         for file in api_path.glob("*.py"):
             if file.name == "__init__.py":
                 continue
-            _try_register_module(f"ofx.api.{file.stem}", file.stem, modules)
+            _try_register_module(f"ofx.lib.{file.stem}", file.stem, modules)
 
         for subdir in api_path.iterdir():
             if (
@@ -42,7 +42,7 @@ def discover_api_modules() -> dict[str, dict[str, str]]:
                 and (subdir / "__init__.py").exists()
             ):
                 _try_register_module(
-                    f"ofx.api.{subdir.name}", subdir.name, modules, require_all=True
+                    f"ofx.lib.{subdir.name}", subdir.name, modules, require_all=True
                 )
 
         return modules
@@ -631,12 +631,12 @@ def show_api(
             show_details = function is not None or module is None
 
             tree = create_function_tree(
-                functions, f"ofx.api.{mod_name}", full_detail=show_details
+                functions, f"ofx.lib.{mod_name}", full_detail=show_details
             )
 
             console.print(
                 Panel(
-                    f"API Documentation for [bold]ofx.api.{mod_name}[/bold]",
+                    f"API Documentation for [bold]ofx.lib.{mod_name}[/bold]",
                     style="bold white on blue",
                 )
             )

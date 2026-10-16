@@ -6,7 +6,7 @@ OFX is a workflow engine for red team operations — define attack chains as YAM
 
 - **Workflow-driven** — YAML-defined jobs with dependency-aware parallel scheduling.
 - **Cross-platform** — runs on Linux, macOS, and Windows; supports arm64 and amd64.
-- **Two step types** — `run:` for shell commands, `script:` for Python logic.
+- **Module-based steps** — `module: shell` for shell commands, `module: python` for Python logic, plus user-defined modules.
 - **Jinja2 templating** — access `inputs`, `secrets`, `env`, `matrix`, and `ctx` in your workflows.
 - **Cloud execution** — provision AWS/DigitalOcean instances and run workflows remotely.
 - **Detached sessions** — long-running background jobs with status polling.
@@ -19,9 +19,13 @@ jobs:
   scan:
     steps:
       - name: port-scan
-        run: nmap -sV -sC {{ inputs.target }} -oA {{ env.OFX_RUN_DIR }}/nmap
+        module: shell
+        with:
+          cmd: nmap -sV -sC {{ inputs.target }} -oA {{ env.OFX_RUN_DIR }}/nmap
       - name: web-probe
-        run: httpx -l {{ env.OFX_RUN_DIR }}/nmap.xml -tech-detect -silent
+        module: shell
+        with:
+          cmd: httpx -l {{ env.OFX_RUN_DIR }}/nmap.xml -tech-detect -silent
 ```
 
 ```bash
@@ -55,14 +59,20 @@ OFX ships with **34 built-in workflows** organized by pentest phase:
 ```yaml
 steps:
   - name: cli-tool
-    run: nmap -sV {{ inputs.target }}              # shell command
+    module: shell
+    with:
+      cmd: nmap -sV {{ inputs.target }}              # shell command
 
   - name: python-logic
-    script: |
-      import os, json
-      data = json.load(open("results.json"))
-      print(f"Found {len(data)} items")
+    module: python
+    with:
+      script: |
+        import os, json
+        data = json.load(open("results.json"))
+        print(f"Found {len(data)} items")
 ```
+
+Each step uses exactly one of: `module` (built-in or user-defined), `uses:` (reusable workflow), or `pipe:` (ETL pipeline).
 
 ## Start Here
 

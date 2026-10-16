@@ -6,9 +6,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from ofx.runner import RunContext
-from ofx.runner.handlers.registry import registry
 from ofx.models.step import RunType
+from ofx.runner import RunContext
+from ofx.runner.executors.step import _create_step_child_runner as _create
 
 
 def test_create_workflow_runner_uses_parent_dirs_for_search_and_child_context() -> None:
@@ -37,7 +37,8 @@ def test_create_workflow_runner_uses_parent_dirs_for_search_and_child_context() 
     with patch("ofx.utils.workflow_utils.find_workflow", _find_workflow), patch(
         "ofx.runner.workflow.WorkflowRunner", _WorkflowRunner
     ):
-        result = registry.get(RunType.WORKFLOW)(step_runner)
+        step_runner._run_type = RunType.WORKFLOW
+        result = _create(step_runner)
 
     assert isinstance(result, _WorkflowRunner)
     assert calls["find_workflow"] == (

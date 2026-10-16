@@ -33,9 +33,9 @@ def checkpoint_list(
     ] = "file",
 ):
     """List durable checkpoints in an output directory."""
-    from ofx.runner.services.checkpoint import list_checkpoints
     from ofx.commands import get_cli_project
     from ofx.commands.project.project_manager import ProjectManager
+    from ofx.runner.services.checkpoint import list_checkpoints
 
     config = DurableRunConfig(enabled=True, backend=backend)
     if output:
@@ -125,9 +125,9 @@ def checkpoint_show(
     """Show details of a specific checkpoint or all checkpoints as JSON."""
     import json
 
-    from ofx.runner.services.checkpoint import get_checkpoint, list_checkpoints
     from ofx.commands import get_cli_project
     from ofx.commands.project.project_manager import ProjectManager
+    from ofx.runner.services.checkpoint import get_checkpoint, list_checkpoints
 
     config = DurableRunConfig(enabled=True, backend=backend)
     if output:
@@ -214,14 +214,14 @@ def checkpoint_clean(
     ] = False,
 ):
     """Clean durable checkpoints from an output directory."""
+    from ofx.commands import get_cli_project
+    from ofx.commands.project.project_manager import ProjectManager
     from ofx.runner.services.checkpoint import (
         clean_all_checkpoints,
         clean_checkpoints,
         clean_stale_checkpoints,
         list_checkpoints,
     )
-    from ofx.commands import get_cli_project
-    from ofx.commands.project.project_manager import ProjectManager
 
     config = DurableRunConfig(enabled=True, backend=backend)
     if output:

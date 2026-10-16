@@ -21,7 +21,7 @@ def test_job_log_bubbles_prefixed_message_to_parent():
     result = bubble_context_log(
         parent,
         "hello",
-        model_jid=Job(jid="job-1", steps=[{"run": "echo hi"}]).jid,
+        model_jid=Job(jid="job-1", steps=[{"module": "shell", "with": {"cmd": "echo hi"}}]).jid,
     )
 
     assert parent.received == "job=job-1 › hello"
@@ -30,7 +30,7 @@ def test_job_log_bubbles_prefixed_message_to_parent():
 
 def test_job_and_matrix_runners_share_job_log_formatting():
     parent = ParentStub()
-    job = Job(jid="build", steps=[{"run": "echo hi"}])
+    job = Job(jid="build", steps=[{"module": "shell", "with": {"cmd": "echo hi"}}])
 
     job_runner = object.__new__(JobRunner)
     job_runner.model = job
